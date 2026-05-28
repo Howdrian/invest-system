@@ -129,6 +129,7 @@ class StockAnalysisPipeline:
         self.trend_analyzer = StockTrendAnalyzer()  # 技术分析器
         self.analyzer = GeminiAnalyzer(config=self.config, skills=self.analysis_skills)
         self.notifier = NotificationService(source_message=source_message)
+        self._governed_orchestrator = None  # lazy init when governed mode is active
         self._single_stock_notify_lock = threading.Lock()
         
         # 初始化搜索服务（可选，初始化失败不应阻断主分析流程）
@@ -182,6 +183,94 @@ class StockAnalysisPipeline:
                 exc_info=True,
             )
             self.social_sentiment_service = None
+
+    def _should_use_governed(self) -> bool:
+        """Return True when governed orchestrator mode should be used."""
+        return (
+            getattr(self.config, 'agent_mode', False)
+            and getattr(self.config, 'agent_arch', 'single') == 'multi'
+            and getattr(self.config, 'agent_orchestrator_mode', 'standard') == 'governed'
+        )
+
+    def _get_governed_orchestrator(self):
+        """Lazy-init and return the governed-mode orchestrator."""
+        if self._governed_orchestrator is not None:
+            return self._governed_orchestrator
+
+        from src.agent.llm_adapter import LLMToolAdapter
+        from src.agent.orchestrator import AgentOrchestrator
+        from src.agent.factory import _get_registry
+
+        registry = _get_registry()
+        llm_adapter = LLMToolAdapter(config=self.config)
+        self._governed_orchestrator = AgentOrchestrator(
+            tool_registry=registry,
+            llm_adapter=llm_adapter,
+            skill_instructions="",
+            technical_skill_policy="",
+            max_steps=getattr(self.config, 'agent_max_steps', 4),
+            mode="governed",
+            config=self.config,
+        )
+        logger.info("[Pipeline] Governed orchestrator initialized")
+        return self._governed_orchestrator
+
+    def _run_governed_analysis(self, code, stock_name, enhanced_context, news_context,
+                               trend_result, fundamental_context, realtime_quote):
+        """Run the full governed pipeline and return an AnalysisResult."""
+        from src.agent.protocols import AgentContext
+        from src.analyzer import AnalysisResult
+
+        orchestrator = self._get_governed_orchestrator()
+
+        ctx = AgentContext(
+            query=f"分析 {stock_name}({code})",
+            stock_code=code,
+            stock_name=stock_name,
+        )
+        ctx.set_data("realtime_quote", realtime_quote or enhanced_context.get("realtime", {}))
+        ctx.set_data("daily_history", enhanced_context.get("history"))
+        ctx.set_data("trend_result", trend_result.__dict__ if trend_result else {})
+        ctx.set_data("news_context", news_context)
+        if isinstance(fundamental_context, dict):
+            ctx.set_data("fundamental_context", fundamental_context)
+        ctx.meta["report_language"] = "zh"
+
+        self._emit_progress(66, f"{stock_name}：治理层 RedBlue 红蓝对抗中...")
+        orch_result = orchestrator.run(
+            task=f"分析 {stock_name}({code})",
+            context={
+                "stock_code": code,
+                "stock_name": stock_name,
+                "report_language": "zh",
+            },
+        )
+
+        result = AnalysisResult()
+        result.success = orch_result.success
+        result.stock_code = code
+        result.stock_name = stock_name
+
+        if orch_result.dashboard:
+            d = orch_result.dashboard
+            result.decision_type = d.get("decision_type", "hold")
+            result.sentiment_score = d.get("sentiment_score", 50)
+            result.analysis_summary = d.get("analysis_summary", orch_result.content[:200] if orch_result.content else "")
+            result.operation_advice = d.get("operation_advice", "")
+            result.trend_prediction = d.get("trend_prediction", "")
+            result.risk_warning = d.get("risk_warning", "")
+            result.key_points = d.get("key_points", [])
+            result.dashboard = d
+            result.model_used = orch_result.model or "governed/gemini-2.5-flash"
+        else:
+            result.decision_type = "hold"
+            result.sentiment_score = 50
+            result.analysis_summary = orch_result.content[:500] if orch_result.content else "Governed analysis completed"
+            result.operation_advice = "观望"
+            result.trend_prediction = "治理层审查完成"
+            result.model_used = orch_result.model or "governed/gemini-2.5-flash"
+
+        return result
 
     def _emit_progress(self, progress: int, message: str) -> None:
         """Best-effort bridge from pipeline stages to task SSE progress."""
@@ -552,15 +641,34 @@ class StockAnalysisPipeline:
 
             self._emit_progress(64, f"{stock_name}：正在请求 LLM 生成报告")
             llm_started_at = time.monotonic()
-            try:
-                result = self.analyzer.analyze(
-                    enhanced_context,
-                    news_context=news_context,
-                    progress_callback=self._emit_progress,
-                    stream_progress_callback=_on_llm_stream,
-                    analysis_context_pack_summary=analysis_context_pack_summary,
+
+            if self._should_use_governed():
+                # --- Governed Mode: RedBlue → Scoring → CIO → Decision ---
+                result = self._run_governed_analysis(
+                    code, stock_name, enhanced_context, news_context,
+                    trend_result, fundamental_context, realtime_quote,
                 )
-                llm_duration_ms = int((time.monotonic() - llm_started_at) * 1000)
+            else:
+                try:
+                    result = self.analyzer.analyze(
+                        enhanced_context,
+                        news_context=news_context,
+                        progress_callback=self._emit_progress,
+                        stream_progress_callback=_on_llm_stream,
+                        analysis_context_pack_summary=analysis_context_pack_summary,
+                    )
+                except Exception as exc:
+                    record_llm_run(
+                        success=False,
+                        model=getattr(self.config, "litellm_model", None),
+                        call_type="analysis",
+                        duration_ms=int((time.monotonic() - llm_started_at) * 1000),
+                        error_type=type(exc).__name__,
+                        error_message=exc,
+                    )
+                    raise
+            llm_duration_ms = int((time.monotonic() - llm_started_at) * 1000)
+            try:
                 record_llm_run(
                     success=bool(result and getattr(result, "success", True)),
                     model=getattr(result, "model_used", None) if result else None,
