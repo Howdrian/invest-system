@@ -215,6 +215,73 @@ class StockAnalysisPipeline:
         logger.info("[Pipeline] Governed orchestrator initialized")
         return self._governed_orchestrator
 
+    def _build_governed_result_from_context(self, ctx, code, stock_name, orch_result):
+        """Build AnalysisResult from partial orchestrator output (governance agents completed)."""
+        from src.analyzer import AnalysisResult
+        result = AnalysisResult()
+        result.success = True
+        result.stock_code = code
+        result.stock_name = stock_name
+        result.model_used = "governed/gemini-2.5-flash"
+
+        cio = ctx.get_data("cio_result") or {}
+        scoring = ctx.get_data("scoring_result") or {}
+        rb = ctx.get_data("red_blue_result") or {}
+
+        status = cio.get("status", "NEEDS_EVIDENCE")
+        total_score = scoring.get("total_score", 0)
+        gate = scoring.get("gate_result", "UNKNOWN")
+
+        # Build summary from governance data
+        parts = [f"[{status}] Score: {total_score}/10 Gate: {gate}"]
+        if rb:
+            arb = rb.get("arbitration", {})
+            parts.append(f"RedBlue: {arb.get('stronger_side', '?')} side wins. {arb.get('verdict', '')}")
+        if cio:
+            parts.append(f"CIO: {cio.get('headline', '')}")
+            parts.append(f"Next: {cio.get('next_user_action', '')}")
+
+        result.analysis_summary = " | ".join(parts)
+        result.risk_warning = cio.get("headline", "")
+
+        if status == "BLOCKED_BY_FATAL" or gate == "BLOCKED":
+            result.decision_type = "hold"
+            result.sentiment_score = min(59, int(total_score * 10))
+            result.operation_advice = "观望 — 治理层阻断"
+        elif status == "WAIT_ENTRY":
+            result.decision_type = "hold"
+            result.sentiment_score = 55
+            result.operation_advice = "等待入场确认"
+        elif status == "NEEDS_EVIDENCE":
+            result.decision_type = "hold"
+            result.sentiment_score = 50
+            result.operation_advice = "补证据后重新评估"
+        elif status == "READY_FOR_REVIEW":
+            result.decision_type = "hold"
+            result.sentiment_score = int(total_score * 10)
+            result.operation_advice = "可进入人工审查"
+        else:
+            result.decision_type = "hold"
+            result.sentiment_score = 50
+            result.operation_advice = "观望"
+
+        result.trend_prediction = f"治理层审查: RB={rb.get('arbitration', {}).get('stronger_side', '?')} | Score={total_score}/10 | CIO={status}"
+        result.dashboard = {
+            "decision_type": result.decision_type,
+            "sentiment_score": result.sentiment_score,
+            "analysis_summary": result.analysis_summary,
+            "operation_advice": result.operation_advice,
+            "trend_prediction": result.trend_prediction,
+            "risk_warning": result.risk_warning,
+            "governance": {
+                "cio_status": status,
+                "score": total_score,
+                "gate": gate,
+                "red_blue_verdict": rb.get("arbitration", {}).get("verdict", ""),
+            },
+        }
+        return result
+
     def _run_governed_analysis(self, code, stock_name, enhanced_context, news_context,
                                trend_result, fundamental_context, realtime_quote):
         """Run the full governed pipeline and return an AnalysisResult."""
@@ -246,30 +313,40 @@ class StockAnalysisPipeline:
             },
         )
 
-        result = AnalysisResult()
-        result.success = orch_result.success
-        result.stock_code = code
-        result.stock_name = stock_name
-
-        if orch_result.dashboard:
+        # If orchestrator succeeded with full dashboard, use it
+        if orch_result.success and orch_result.dashboard:
             d = orch_result.dashboard
+            result = AnalysisResult()
+            result.success = True
+            result.stock_code = code
+            result.stock_name = stock_name
             result.decision_type = d.get("decision_type", "hold")
             result.sentiment_score = d.get("sentiment_score", 50)
-            result.analysis_summary = d.get("analysis_summary", orch_result.content[:200] if orch_result.content else "")
+            result.analysis_summary = d.get("analysis_summary", "")
             result.operation_advice = d.get("operation_advice", "")
             result.trend_prediction = d.get("trend_prediction", "")
             result.risk_warning = d.get("risk_warning", "")
             result.key_points = d.get("key_points", [])
             result.dashboard = d
-            result.model_used = orch_result.model or "governed/gemini-2.5-flash"
-        else:
-            result.decision_type = "hold"
-            result.sentiment_score = 50
-            result.analysis_summary = orch_result.content[:500] if orch_result.content else "Governed analysis completed"
-            result.operation_advice = "观望"
-            result.trend_prediction = "治理层审查完成"
-            result.model_used = orch_result.model or "governed/gemini-2.5-flash"
+            result.model_used = "governed/gemini-2.5-flash"
+            return result
 
+        # Orchestrator may have failed at Decision stage but governance agents completed.
+        # Extract results from the AgentContext (governance agents write to ctx.data).
+        cio = ctx.get_data("cio_result")
+        scoring = ctx.get_data("scoring_result")
+        rb = ctx.get_data("red_blue_result")
+        if cio or scoring or rb:
+            logger.info("[301013] Governed: Decision failed but governance data available, building partial result")
+            return self._build_governed_result_from_context(ctx, code, stock_name, orch_result)
+
+        # Complete failure — no useful data
+        result = AnalysisResult()
+        result.success = False
+        result.stock_code = code
+        result.stock_name = stock_name
+        result.analysis_summary = f"Governed analysis failed: {orch_result.error}"
+        result.model_used = "governed/gemini-2.5-flash"
         return result
 
     def _emit_progress(self, progress: int, message: str) -> None:

@@ -526,7 +526,7 @@ class AgentOrchestrator:
             #   - skill agents (specialist evaluation, optional)
             if result.status == StageStatus.FAILED:
                 non_critical = (
-                    agent.agent_name in ("intel", "risk")
+                    agent.agent_name in ("intel", "risk", "decision")
                     or agent.agent_name in getattr(self, "_skill_agent_names", set())
                 )
                 if not non_critical:
