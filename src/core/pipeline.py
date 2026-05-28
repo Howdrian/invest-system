@@ -220,6 +220,7 @@ class StockAnalysisPipeline:
         from src.analyzer import AnalysisResult
         result = AnalysisResult()
         result.success = True
+        result._governed = True
         result.stock_code = code
         result.stock_name = stock_name
         result.model_used = "governed/gemini-2.5-flash"
@@ -241,8 +242,26 @@ class StockAnalysisPipeline:
             parts.append(f"CIO: {cio.get('headline', '')}")
             parts.append(f"Next: {cio.get('next_user_action', '')}")
 
-        result.analysis_summary = " | ".join(parts)
+        result.analysis_summary = "\n".join([
+            f"## Governance Layer 审查结果",
+            f"- **CIO状态**: {status}",
+            f"- **评分**: {total_score}/10 (门控: {gate})",
+            f"- **红蓝对抗**: {rb.get('arbitration', {}).get('stronger_side', '?')}方胜出",
+            f"- **CIO判断**: {cio.get('headline', '')}",
+            f"- **下一步**: {cio.get('next_user_action', '')}",
+            "",
+            "---",
+        ] + parts)
         result.risk_warning = cio.get("headline", "")
+        # Attach governance details for report rendering
+        result._governance = {
+            "cio_status": status,
+            "score": total_score,
+            "gate": gate,
+            "red_blue": rb,
+            "scoring": scoring,
+            "cio": cio,
+        }
 
         if status == "BLOCKED_BY_FATAL" or gate == "BLOCKED":
             result.decision_type = "hold"
@@ -329,6 +348,7 @@ class StockAnalysisPipeline:
             result.key_points = d.get("key_points", [])
             result.dashboard = d
             result.model_used = "governed/gemini-2.5-flash"
+            result._governed = True
             return result
 
         # Orchestrator may have failed at Decision stage but governance agents completed.
@@ -788,7 +808,8 @@ class StockAnalysisPipeline:
             # Step 7.7: price_position fallback
             if result:
                 fill_price_position_if_needed(result, trend_result, realtime_quote)
-                stabilize_decision_with_structure(result, trend_result, fundamental_context)
+                if not getattr(result, '_governed', False):
+                    stabilize_decision_with_structure(result, trend_result, fundamental_context)
                 if isinstance(fundamental_context, dict):
                     result.fundamental_context = fundamental_context
 
