@@ -20,3 +20,8 @@
 **治理模式**: governed | **AI**: Gemini 2.5 Flash | **数据**: AkShare/YFinance/Baostock
 
 > 完整说明: [GitHub](https://github.com/Howdrian/invest-system)
+
+### 2026-05-29 Standard 模式
+
+- [301013 利和兴 个股分析](./report_20260529.md) — 评分 59，持有观察
+- [大盘复盘](./market_review_20260528.md) — 2026-05-28
