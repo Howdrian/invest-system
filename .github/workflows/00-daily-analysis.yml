@@ -494,30 +494,32 @@ jobs:
         if: always()
         run: |
           TODAY=$(TZ='Asia/Shanghai' date +%Y-%m-%d)
-          mkdir -p reports
-          # 生成一个摘要 Markdown，方便直接在仓库里看
-          echo "# 投研日报 — $TODAY" > reports/README.md
-          echo "" >> reports/README.md
-          echo "> 自动生成于 $(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S') 北京时" >> reports/README.md
-          echo "" >> reports/README.md
-          echo "## 自选股" >> reports/README.md
-          echo "\`$STOCK_LIST\`" >> reports/README.md
-          echo "" >> reports/README.md
-          echo "## 分析结果" >> reports/README.md
-          echo "| 文件 | 说明 |" >> reports/README.md
-          echo "|---|---|" >> reports/README.md
+          mkdir -p docs
+          # 生成首页，方便 GitHub Pages 展示
+          echo "# 投研日报 — $TODAY" > docs/index.md
+          echo "" >> docs/index.md
+          echo "> 自动生成于 $(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S') 北京时" >> docs/index.md
+          echo "" >> docs/index.md
+          echo "## 自选股" >> docs/index.md
+          echo "\`$STOCK_LIST\`" >> docs/index.md
+          echo "" >> docs/index.md
+          echo "## 分析结果" >> docs/index.md
+          echo "| 文件 | 说明 |" >> docs/index.md
+          echo "|---|---|" >> docs/index.md
           for f in reports/*.md reports/*.html reports/*.json; do
             if [ -f "$f" ]; then
               name=$(basename "$f")
-              echo "| [$name](./$name) | 查看 |" >> reports/README.md
+              echo "| [$name](./$name) | 查看 |" >> docs/index.md
             fi
           done
-          echo "" >> reports/README.md
-          echo "---" >> reports/README.md
-          echo "完整的 Actions 运行日志：[查看](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> reports/README.md
+          # 把报告文件也移到 docs 目录
+          cp -r reports/* docs/ 2>/dev/null || true
+          echo "" >> docs/index.md
+          echo "---" >> docs/index.md
+          echo "完整的 Actions 运行日志：[查看](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> docs/index.md
 
           git config user.name "invest-bot"
           git config user.email "bot@invest-system.local"
-          git add reports/
+          git add docs/
           git diff --staged --quiet || git commit -m "report: $TODAY 投研日报"
           git push origin main
