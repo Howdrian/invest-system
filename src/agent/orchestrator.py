@@ -541,6 +541,11 @@ class AgentOrchestrator:
                 else:
                     logger.warning("[Orchestrator] stage '%s' failed (non-critical, degrading): %s", agent.agent_name, result.error)
 
+            # Rate-limit guard for free-tier LLM APIs (10 RPM)
+            if self.mode == "governed":
+                import time as _time
+                _time.sleep(4)
+
             index += 1
 
         # Assemble final output
