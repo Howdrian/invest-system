@@ -25,3 +25,7 @@
 
 - [301013 利和兴 个股分析](./report_20260529.md) — 评分 59，持有观察
 - [大盘复盘](./market_review_20260528.md) — 2026-05-28
+
+### 2026-05-29 Governed 模式
+
+- [301013 利和兴 Governed分析](./report_governed_20260529.md) — RedBlue+Scoring+CIO 治理层完成
