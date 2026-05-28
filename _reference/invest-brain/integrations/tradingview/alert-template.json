@@ -1,0 +1,11 @@
+{
+  "source": "tradingview",
+  "symbol": "{{ticker}}",
+  "exchange": "{{exchange}}",
+  "interval": "{{interval}}",
+  "price": "{{close}}",
+  "time": "{{time}}",
+  "signal": "breakout_or_reversal",
+  "strategy": "manual_or_pine_name",
+  "note": "why this alert matters"
+}

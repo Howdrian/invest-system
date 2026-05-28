@@ -1,0 +1,116 @@
+# Red-Blue Debate Protocol (YAML config)
+# Based on invest-brain agents/red-team-protocol.md
+# This config governs the RedBlueAgent behavior.
+
+name: red_blue_protocol
+version: "1.0"
+description: >
+  Mandatory structured debate protocol for any trading decision.
+  Blue team constructs bull case, Red team attacks it, arbitrator judges.
+
+triggers:
+  - user_proposes_buy
+  - user_proposes_sell
+  - position_review
+  - strong_emotion_detected
+  - major_market_event
+
+blue_team:
+  description: "Deeply bullish buy-side analyst"
+  required_arguments: 3
+  argument_structure:
+    - field: thesis
+      description: "Core argument"
+      required: true
+    - field: data
+      description: "Specific data/facts supporting the argument"
+      required: true
+    - field: timeframe
+      description: "When does this thesis play out"
+      required: true
+    - field: catalyst
+      description: "Event that would make this thesis pay off"
+      required: true
+
+red_team:
+  description: "Short-side chief analyst (Muddy Waters style)"
+  required_attacks: 3
+  attack_dimensions:
+    stocks:
+      - financial_fraud
+      - valuation_bubble
+      - insider_selling
+      - regulatory_risk
+      - industry_cycle_peak
+      - competitive_deterioration
+    commodities:
+      - supply_recovery
+      - demand_collapse
+      - hidden_inventory_release
+      - speculative_exit
+      - cycle_peak
+      - policy_intervention
+    macro:
+      - small_sample_size
+      - unsupported_probabilities
+      - selective_presentation
+      - narrative_bias
+      - underestimated_tail_risk
+  attack_structure:
+    - field: targets_blue_arg
+      description: "Which blue argument (1-3) this attacks"
+    - field: fatal_risk
+      description: "Specific fatal risk identified"
+    - field: evidence
+      description: "Verifiable evidence"
+    - field: probability
+      description: "Estimated likelihood: low/medium/high/critical"
+
+red_team_discipline:
+  - no_going_through_motions
+  - every_attack_must_be_verifiable
+  - may_challenge_data_source_reliability
+
+arbitration:
+  description: "Neutral investment committee chair"
+  outputs:
+    - blue_strength: "0-10"
+    - red_strength: "0-10"
+    - stronger_side: "blue|red|tie"
+    - blind_spots: "Issues both sides missed"
+    - confidence_in_bull_case: "0-10"
+    - verdict: "Clear one-sentence conclusion"
+
+gate_rules:
+  - score: "< 6.0"
+    action: "NO_ACTION"
+    position: "0%"
+  - score: "6.0-7.0"
+    action: "SMALL_TEST"
+    position: "2-5%"
+  - score: "7.0-7.5"
+    action: "NORMAL_BUILD"
+    position: "5-10%"
+  - score: "7.5-8.5"
+    action: "ABOVE_AVERAGE"
+    position: "10-15%"
+  - score: "> 8.5"
+    action: "HIGH_CONVICTION"
+    position: "15-20%"
+
+absolute_cap: "25% single position regardless of score"
+
+anti_flattery_firewall:
+  forbidden_behaviors:
+    - soften_attacks_due_to_user_emotion
+    - vague_arbitration
+    - unprincipled_yielding
+    - fabricating_precise_numbers
+    - selective_data_presentation
+  emotion_signals:
+    - "this will definitely go up"   # 这个肯定能涨
+    - "all in"                       # 梭哈
+    - "everyone is buying"           # 大家都在买
+    - "FOMO"
+    - "can't miss this boat"         # 不买就来不及了
+  response: "Upgrade red team attacks to maximum severity"

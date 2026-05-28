@@ -3,9 +3,14 @@
 DecisionAgent — final synthesis and decision-making specialist.
 
 Responsible for:
-- Aggregating opinions from technical + intel + risk + skill agents
+- Aggregating opinions from technical + intel + risk + governance agents
 - Producing the final Decision Dashboard JSON
 - Generating actionable buy/hold/sell recommendations with price levels
+
+When governance layer (RedBlueAgent, ScoringAgent, CioAgent) is present:
+- If CIO status is BLOCKED_BY_FATAL or NEEDS_EVIDENCE: NO buy/sell output
+- If ScoringAgent gate is BLOCKED: NO buy/sell output
+- DecisionAgent must include governance verdict in the dashboard
 """
 
 from __future__ import annotations
@@ -65,9 +70,25 @@ You will receive:
 1. Structured opinions from a Technical Agent and an Intel Agent
 2. Any risk flags raised by a Risk Agent
         3. Skill evaluation results (if applicable)
+        4. Governance review results: Red-Blue debate, Scoring Card, CIO verdict (if pipeline is in governed mode)
 
 Your task: synthesise all inputs into a single, actionable Decision Dashboard.
 {skills}
+## Governance Layer Rules (HARD — when present)
+The governance layer (RedBlueAgent → ScoringAgent → CioAgent) provides a
+structured review. When these results are present in the context:
+
+1. **CioAgent status BLOCKED_BY_FATAL**: decision_type MUST be "hold".
+   Include the fatal objections in risk_warning.
+2. **ScoringAgent gate BLOCKED (score < 6.0)**: decision_type MUST be "hold".
+   Include "评分门控阻断: score X.X/10" in the dashboard.
+3. **CioAgent status NEEDS_EVIDENCE**: decision_type should be "hold".
+   Note missing evidence in analysis_summary.
+4. **CioAgent status WAIT_ENTRY**: decision_type may be "hold".
+   Note "等待入场确认" in analysis_summary.
+5. **CioAgent status READY_FOR_REVIEW**: normal dashboard output.
+   The governance verdict is advisory, not a trading order.
+
 ## Core Principles
 1. **Core conclusion first** — one sentence, ≤30 chars
 2. **Split advice** — different for no-position vs has-position
@@ -81,6 +102,7 @@ Your task: synthesise all inputs into a single, actionable Decision Dashboard.
 - Intel / sentiment weight: ~30%
 - Risk flags weight: ~30% (negative override: any high-severity risk caps signal at "hold")
 - If a skill opinion is present, blend it at 20% weight (reducing others proportionally)
+- If governance layer is present, its verdict overrides the weighted signal
 
 ## Scoring
 - 80-100: buy (all conditions met, high conviction)
@@ -161,6 +183,24 @@ new decision_type values.
             parts.append("## Risk Flags")
             for rf in ctx.risk_flags:
                 parts.append(f"- [{rf.get('severity', 'medium')}] {rf.get('category', '')}: {rf.get('description', '')}")
+            parts.append("")
+
+        # Feed governance results (governed mode)
+        cio = ctx.get_data("cio_result")
+        scoring = ctx.get_data("scoring_result")
+        rb = ctx.get_data("red_blue_result")
+        if cio or scoring or rb:
+            parts.append("## Governance Layer Results")
+            parts.append("The following structured review was performed. Honor its verdict.\n")
+            if rb:
+                arb = rb.get("arbitration", {}) if isinstance(rb, dict) else {}
+                parts.append(f"Red-Blue Debate: {arb.get('stronger_side', 'unknown')} side stronger. {arb.get('verdict', '')}")
+            if scoring:
+                parts.append(f"Scoring Card: {scoring.get('total_score', '?')}/10 — GATE: {scoring.get('gate_result', '?')}")
+                parts.append(f"Position range: {scoring.get('position_size_range', '0%')}")
+            if cio:
+                parts.append(f"CIO Verdict: **{cio.get('status', '?')}** — {cio.get('headline', '')}")
+                parts.append(f"Next action: {cio.get('next_user_action', '')}")
             parts.append("")
 
         # Skill meta

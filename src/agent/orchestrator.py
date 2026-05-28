@@ -52,7 +52,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Valid orchestrator modes (ordered by cost/depth)
-VALID_MODES = ("quick", "standard", "full", "specialist")
+VALID_MODES = ("quick", "standard", "full", "specialist", "governed")
 
 
 @dataclass
@@ -614,6 +614,11 @@ class AgentOrchestrator:
             # Specialist agents are inserted lazily right before the decision
             # stage so the router can see the finished technical opinion.
             return [technical, intel, risk, decision]
+        elif self.mode == "governed":
+            # Governed mode adds invest-brain governance layer:
+            # RedBlue (debate) → Scoring (gate) → CIO (synthesis) → Decision (restricted)
+            governance = self._build_governance_agents()
+            return [technical, intel, risk] + governance + [decision]
         else:
             return [technical, intel, decision]
 
@@ -648,6 +653,31 @@ class AgentOrchestrator:
         except Exception as exc:
             logger.warning("[Orchestrator] failed to build skill agents: %s", exc)
             return []
+
+    def _build_governance_agents(self) -> list:
+        """Build invest-brain governance agents for the governed pipeline mode.
+
+        Order: RedBlueAgent → ScoringAgent → CioAgent
+
+        These agents are pure synthesis (no tools) and work from the context
+        accumulated by Technical, Intel, and Risk agents.
+        """
+        from src.agent.agents.governance.red_blue_agent import RedBlueAgent
+        from src.agent.agents.governance.scoring_agent import ScoringAgent
+        from src.agent.agents.governance.cio_agent import CioAgent
+
+        common_kwargs = dict(
+            tool_registry=self.tool_registry,
+            llm_adapter=self.llm_adapter,
+            skill_instructions=self.skill_instructions,
+            technical_skill_policy=self.technical_skill_policy,
+        )
+
+        red_blue = self._prepare_agent(RedBlueAgent(**common_kwargs))
+        scoring = self._prepare_agent(ScoringAgent(**common_kwargs))
+        cio = self._prepare_agent(CioAgent(**common_kwargs))
+
+        return [red_blue, scoring, cio]
 
     def _build_skill_agents(self, ctx: AgentContext) -> list:
         """Compatibility wrapper for legacy imports."""
