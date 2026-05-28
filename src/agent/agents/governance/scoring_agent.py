@@ -107,10 +107,15 @@ class ScoringAgent(BaseAgent):
             stock_info += f" ({ctx.stock_name})"
 
         return f"""\
-You are the **Scoring Agent** for stock {stock_info}.
+You are the **评分卡审查员 (Scoring Agent)** for stock {stock_info}.
+
+你的任务：按标准化评分卡对5个维度进行0-10分评分。
+这不是主观意见——严格遵循评分标准。
+**所有文本（rationale、reasoning、stop_loss_hint 等）必须用中文。**
 
 Your job: assign a 0-10 score across 5 dimensions using the standardised
 scoring card. This is NOT a subjective opinion — follow the rubric exactly.
+**ALL text fields MUST be in Chinese.**
 
 {SCORING_CARD_RULES}
 

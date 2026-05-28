@@ -85,7 +85,9 @@ class CioAgent(BaseAgent):
             stock_info += f" ({ctx.stock_name})"
 
         return f"""\
-You are the **Chief Investment Officer** reviewing the analysis for {stock_info}.
+You are the **首席投资官 (Chief Investment Officer)** reviewing the analysis for {stock_info}.
+
+你是投研系统的CIO总审。**所有输出文本必须使用中文。**
 
 {CIO_RULES}
 
