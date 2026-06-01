@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Research Cycle One-screen Brief</title>
+<style>
+:root { --bg:#0b1020; --card:#121a2b; --line:#253149; --text:#edf2ff; --muted:#9aa8c7; --good:#1d7d4f; --warn:#a86a14; --bad:#a83636; }
+* { box-sizing:border-box; } body { margin:0; background:linear-gradient(135deg,#08101f,#111827); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; }
+main { max-width:1280px; margin:0 auto; padding:28px; }
+.hero { border:1px solid var(--line); background:rgba(18,26,43,.92); border-radius:24px; padding:24px; margin-bottom:16px; display:grid; grid-template-columns:1.8fr 1fr 1fr; gap:16px; align-items:center; }
+h1 { margin:0 0 10px; font-size:30px; } .verdict { font-size:24px; font-weight:850; line-height:1.25; }
+.kpi { border-left:1px solid var(--line); padding-left:16px; } .kpi b { display:block; font-size:28px; } small,.muted { color:var(--muted); }
+.grid { display:grid; grid-template-columns:1.6fr 1fr; gap:16px; } .card { border:1px solid var(--line); background:var(--card); border-radius:20px; padding:18px; }
+h2 { margin:0 0 14px; font-size:18px; color:#cfe0ff; } table { width:100%; border-collapse:collapse; } th,td { text-align:left; border-bottom:1px solid #23304a; padding:10px 8px; vertical-align:top; } th { color:#9db2d5; font-size:12px; text-transform:uppercase; letter-spacing:.08em; }
+.badge { display:inline-block; border-radius:999px; padding:4px 8px; background:#29354d; font-size:12px; font-weight:700; } .badge.good { background:var(--good); } .badge.warn { background:var(--warn); } .badge.bad { background:var(--bad); }
+.sources { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; } .source { border:1px solid var(--line); border-radius:14px; padding:10px; background:#0f1727; min-height:92px; } .source small { display:block; margin-top:8px; }
+.footer { margin-top:16px; color:var(--muted); } @media(max-width:900px){ .hero,.grid{grid-template-columns:1fr;} .kpi{border-left:0; padding-left:0;} }
+</style>
+</head>
+<body><main>
+<section class="hero">
+  <div><h1>统一研究周期 · 一屏结论</h1><div class="verdict">有标的可进入红蓝重评；但数据源有失败</div><small>invest-brain/2026-06-01/research-cycle</small></div>
+  <div class="kpi"><small>深评候选</small><b>6</b><span class="muted">funnel rows 115</span></div>
+  <div class="kpi"><small>Macro Regime</small><b>refreshed</b><span class="muted">stale=True · macro-regime-detector</span></div>
+</section>
+<div class="grid">
+  <section class="card"><h2>优先深度重评</h2><table><thead><tr><th>标的</th><th>Verdict</th><th>证据质量</th><th>价格风险</th><th>下一步</th></tr></thead><tbody>
+        <tr>
+          <td><b>600111.SS</b><br><small>北方稀土</small></td>
+          <td>DEEP_REVIEW_NOW</td>
+          <td><span class="badge good">HIGH_OFFICIAL_EVIDENCE</span><br><small>8.7</small></td>
+          <td>PULLBACK_OR_WEAK_CONFIRM_FIRST</td>
+          <td>读原文 + 找止跌/反转确认</td>
+        </tr>
+        
+        <tr>
+          <td><b>002466.SZ</b><br><small>天齐锂业</small></td>
+          <td>DEEP_REVIEW_NOW</td>
+          <td><span class="badge good">HIGH_OFFICIAL_EVIDENCE</span><br><small>11.7</small></td>
+          <td>PULLBACK_OR_WEAK_CONFIRM_FIRST</td>
+          <td>读原文 + 找止跌/反转确认</td>
+        </tr>
+        
+        <tr>
+          <td><b>002460.SZ</b><br><small>赣锋锂业</small></td>
+          <td>DEEP_REVIEW_NOW</td>
+          <td><span class="badge good">HIGH_OFFICIAL_EVIDENCE</span><br><small>13.2</small></td>
+          <td>PULLBACK_OR_WEAK_CONFIRM_FIRST</td>
+          <td>读原文 + 找止跌/反转确认</td>
+        </tr>
+        
+        <tr>
+          <td><b>600893.SS</b><br><small>航发动力</small></td>
+          <td>DEEP_REVIEW_NOW</td>
+          <td><span class="badge good">HIGH_OFFICIAL_EVIDENCE</span><br><small>5.3</small></td>
+          <td>PULLBACK_OR_WEAK_CONFIRM_FIRST</td>
+          <td>读原文 + 找止跌/反转确认</td>
+        </tr>
+        
+        <tr>
+          <td><b>XLK</b><br><small>Technology Select Sector SPDR</small></td>
+          <td>DEEP_REVIEW_NOW</td>
+          <td><span class="badge neutral">MEDIUM_MIXED_EVIDENCE</span><br><small>7.8</small></td>
+          <td>NORMAL_RECHECK</td>
+          <td>启动完整红蓝重评</td>
+        </tr>
+        
+        <tr>
+          <td><b>SMH</b><br><small>VanEck Semiconductor ETF</small></td>
+          <td>DEEP_REVIEW_NOW</td>
+          <td><span class="badge neutral">MEDIUM_MIXED_EVIDENCE</span><br><small>7.8</small></td>
+          <td>NORMAL_RECHECK</td>
+          <td>启动完整红蓝重评</td>
+        </tr>
+        </tbody></table></section>
+  <section class="card"><h2>数据源健康</h2><div class="sources">
+        <div class="source ok">
+          <div><span class="badge good">OK</span></div>
+          <b>macro_regime</b>
+          <small>usable · stale:1, refreshed:1</small>
+        </div>
+        
+        <div class="source ok">
+          <div><span class="badge good">OK</span></div>
+          <b>intelligence</b>
+          <small>usable · snapshots:103, events:22, triggers:103, cache_hits:112</small>
+        </div>
+        
+        <div class="source ok">
+          <div><span class="badge good">OK</span></div>
+          <b>market_heat</b>
+          <small>usable · items:270, candidates:40, cache_hits:9</small>
+        </div>
+        
+        <div class="source ok">
+          <div><span class="badge good">OK</span></div>
+          <b>a_share</b>
+          <small>usable · snapshots:55, events:22, triggers:55, cache_hits:64</small>
+        </div>
+        
+        <div class="source ok">
+          <div><span class="badge good">OK</span></div>
+          <b>reports</b>
+          <small>usable · reports_scanned:53, usable_reports:34, high_value_reports:7, report_triggers:43, cache_hits:14</small>
+        </div>
+        
+        <div class="source ok">
+          <div><span class="badge good">OK</span></div>
+          <b>official</b>
+          <small>usable · macro_points:6, sec_filings:34, sec_company_facts:69, cache_hits:30</small>
+        </div>
+        
+        <div class="source ok">
+          <div><span class="badge good">OK</span></div>
+          <b>official_ext</b>
+          <small>usable · extension_points:4, finra_short_interest:8, cache_hits:12</small>
+        </div>
+        
+        <div class="source ok">
+          <div><span class="badge good">OK</span></div>
+          <b>free_source_upgrade</b>
+          <small>usable · providers_total:13, ready_providers:3, needs_key_providers:5, needs_install_providers:4, degraded_providers:0, blocked_by_terms_providers:1, high_quality_ready:2, phase1_ready:3, cache_hits:3</small>
+        </div>
+        
+        <div class="source ok">
+          <div><span class="badge good">OK</span></div>
+          <b>announcements</b>
+          <small>usable · cninfo_announcements:32, gov_policy_items:60, announcement_triggers:13, cache_hits:15</small>
+        </div>
+        
+        <div class="source ok">
+          <div><span class="badge good">OK</span></div>
+          <b>crypto</b>
+          <small>usable · snapshots:2, candidates:2</small>
+        </div>
+        
+        <div class="source warn">
+          <div><span class="badge warn">WARN</span></div>
+          <b>polymarket</b>
+          <small>unavailable · signals:0, rejected:0</small>
+        </div>
+        
+        <div class="source ok">
+          <div><span class="badge good">OK</span></div>
+          <b>deep_review</b>
+          <small>usable · candidates:6</small>
+        </div>
+        </div></section>
+</div>
+<div class="footer">只读研究摘要；不是买卖建议；交易必须走红蓝对抗和评分门控。 · Generated 2026-06-01T13:33:47+00:00</div>
+</main></body></html>

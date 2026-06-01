@@ -519,29 +519,31 @@ jobs:
         if: always()
         run: |
           TODAY=$(TZ='Asia/Shanghai' date +%Y-%m-%d)
-          mkdir -p docs
-          # 生成首页，方便 GitHub Pages 展示
-          echo "# 投研日报 — $TODAY" > docs/index.md
-          echo "" >> docs/index.md
-          echo "> 自动生成于 $(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S') 北京时" >> docs/index.md
-          echo "" >> docs/index.md
-          echo "## 自选股" >> docs/index.md
-          echo "\`$STOCK_LIST\`" >> docs/index.md
-          echo "" >> docs/index.md
-          echo "## 分析结果" >> docs/index.md
-          echo "| 文件 | 说明 |" >> docs/index.md
-          echo "|---|---|" >> docs/index.md
+          mkdir -p docs/daily
+          DAILY_INDEX="docs/daily/index.md"
+          # 生成每日投研入口；不要写 docs/index.md，避免和既有 docs/INDEX.md 文档中心在 macOS 上大小写冲突
+          echo "# 投研日报 — $TODAY" > "$DAILY_INDEX"
+          echo "" >> "$DAILY_INDEX"
+          echo "> 自动生成于 $(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S') 北京时" >> "$DAILY_INDEX"
+          echo "" >> "$DAILY_INDEX"
+          echo "## 自选股" >> "$DAILY_INDEX"
+          echo "\`$STOCK_LIST\`" >> "$DAILY_INDEX"
+          echo "" >> "$DAILY_INDEX"
+          echo "## 分析结果" >> "$DAILY_INDEX"
+          echo "| 文件 | 说明 |" >> "$DAILY_INDEX"
+          echo "|---|---|" >> "$DAILY_INDEX"
           for f in reports/*.md reports/*.html reports/*.json; do
             if [ -f "$f" ]; then
               name=$(basename "$f")
-              echo "| [$name](./$name) | 查看 |" >> docs/index.md
+              echo "| [$name](../$name) | 查看 |" >> "$DAILY_INDEX"
             fi
           done
+          cp "$DAILY_INDEX" "docs/daily/$TODAY.md"
           # 把报告文件也移到 docs 目录
           cp -r reports/* docs/ 2>/dev/null || true
-          echo "" >> docs/index.md
-          echo "---" >> docs/index.md
-          echo "完整的 Actions 运行日志：[查看](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> docs/index.md
+          echo "" >> "$DAILY_INDEX"
+          echo "---" >> "$DAILY_INDEX"
+          echo "完整的 Actions 运行日志：[查看](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> "$DAILY_INDEX"
 
           git config user.name "invest-bot"
           git config user.email "bot@invest-system.local"
