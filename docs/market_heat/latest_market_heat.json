@@ -1,0 +1,273 @@
+{
+  "schema": "market_heat_v1",
+  "status": "available",
+  "as_of": "2026-06-01T14:29:19.653314+00:00",
+  "watchlist": [
+    "301013",
+    "160644"
+  ],
+  "hot_stocks": [
+    {
+      "rank": 1,
+      "code": "SZ000539",
+      "name": "粤电力Ａ",
+      "price": 9.77,
+      "change_pct": 10.02,
+      "source": "东方财富人气榜"
+    },
+    {
+      "rank": 2,
+      "code": "SH600011",
+      "name": "华能国际",
+      "price": 9.76,
+      "change_pct": 10.03,
+      "source": "东方财富人气榜"
+    },
+    {
+      "rank": 3,
+      "code": "SH601991",
+      "name": "大唐发电",
+      "price": 8.37,
+      "change_pct": -3.01,
+      "source": "东方财富人气榜"
+    },
+    {
+      "rank": 4,
+      "code": "SZ000767",
+      "name": "晋控电力",
+      "price": 6.14,
+      "change_pct": 10.04,
+      "source": "东方财富人气榜"
+    },
+    {
+      "rank": 5,
+      "code": "SZ000725",
+      "name": "京东方Ａ",
+      "price": 5.36,
+      "change_pct": 4.89,
+      "source": "东方财富人气榜"
+    },
+    {
+      "rank": 6,
+      "code": "SH603890",
+      "name": "春秋电子",
+      "price": 27.29,
+      "change_pct": 10.0,
+      "source": "东方财富人气榜"
+    },
+    {
+      "rank": 7,
+      "code": "SZ002081",
+      "name": "金 螳 螂",
+      "price": 6.78,
+      "change_pct": 10.06,
+      "source": "东方财富人气榜"
+    },
+    {
+      "rank": 8,
+      "code": "SH600584",
+      "name": "长电科技",
+      "price": 75.65,
+      "change_pct": -7.8,
+      "source": "东方财富人气榜"
+    },
+    {
+      "rank": 9,
+      "code": "SZ002579",
+      "name": "中京电子",
+      "price": 18.87,
+      "change_pct": 10.03,
+      "source": "东方财富人气榜"
+    },
+    {
+      "rank": 10,
+      "code": "SZ000636",
+      "name": "风华高科",
+      "price": 55.05,
+      "change_pct": 3.81,
+      "source": "东方财富人气榜"
+    },
+    {
+      "rank": 11,
+      "code": "SH600863",
+      "name": "华能蒙电",
+      "price": 7.92,
+      "change_pct": 8.49,
+      "source": "东方财富人气榜"
+    },
+    {
+      "rank": 12,
+      "code": "SZ002421",
+      "name": "达实智能",
+      "price": 4.52,
+      "change_pct": 9.98,
+      "source": "东方财富人气榜"
+    },
+    {
+      "rank": 13,
+      "code": "SZ300058",
+      "name": "蓝色光标",
+      "price": 17.96,
+      "change_pct": 7.54,
+      "source": "东方财富人气榜"
+    },
+    {
+      "rank": 14,
+      "code": "SZ002384",
+      "name": "东山精密",
+      "price": 191.75,
+      "change_pct": -10.0,
+      "source": "东方财富人气榜"
+    },
+    {
+      "rank": 15,
+      "code": "SZ301236",
+      "name": "软通动力",
+      "price": 39.65,
+      "change_pct": 20.01,
+      "source": "东方财富人气榜"
+    },
+    {
+      "rank": 16,
+      "code": "SZ002580",
+      "name": "圣阳股份",
+      "price": 26.71,
+      "change_pct": 10.01,
+      "source": "东方财富人气榜"
+    },
+    {
+      "rank": 17,
+      "code": "SZ002181",
+      "name": "粤 传 媒",
+      "price": 18.16,
+      "change_pct": 9.99,
+      "source": "东方财富人气榜"
+    },
+    {
+      "rank": 18,
+      "code": "SZ000681",
+      "name": "视觉中国",
+      "price": 22.65,
+      "change_pct": 10.0,
+      "source": "东方财富人气榜"
+    },
+    {
+      "rank": 19,
+      "code": "SZ002185",
+      "name": "华天科技",
+      "price": 18.43,
+      "change_pct": -4.71,
+      "source": "东方财富人气榜"
+    },
+    {
+      "rank": 20,
+      "code": "SH600121",
+      "name": "郑州煤电",
+      "price": 4.7,
+      "change_pct": 10.07,
+      "source": "东方财富人气榜"
+    }
+  ],
+  "sector_top": [
+    {
+      "name": "煤炭开采和洗选业",
+      "change_pct": 6.5028075720386
+    },
+    {
+      "name": "石油和天然气开采业",
+      "change_pct": 3.9064224233061
+    },
+    {
+      "name": "装卸搬运和运输代理业",
+      "change_pct": 3.8122444958873
+    },
+    {
+      "name": "非金属矿采选业",
+      "change_pct": 3.5258358662614
+    },
+    {
+      "name": "农业",
+      "change_pct": 3.5192691243647
+    },
+    {
+      "name": "文化艺术业",
+      "change_pct": 3.4108920306853
+    },
+    {
+      "name": "互联网和相关服务",
+      "change_pct": 3.3851218546634
+    },
+    {
+      "name": "燃气生产和供应业",
+      "change_pct": 3.3540180047338
+    },
+    {
+      "name": "农、林、牧、渔服务业",
+      "change_pct": 3.3033033033033
+    },
+    {
+      "name": "纺织服装、服饰业",
+      "change_pct": 3.0782942547648
+    }
+  ],
+  "sector_bottom": [
+    {
+      "name": "房屋建筑业",
+      "change_pct": -6.3195907312669
+    },
+    {
+      "name": "计算机、通信和其他电子设备制造业",
+      "change_pct": -5.0859832989215
+    },
+    {
+      "name": "仪器仪表制造业",
+      "change_pct": -3.229260223369
+    },
+    {
+      "name": "专用设备制造业",
+      "change_pct": -3.0973131619372
+    },
+    {
+      "name": "建筑安装业",
+      "change_pct": -2.7964325054188
+    },
+    {
+      "name": "机动车、电子产品和日用产品修理业",
+      "change_pct": -2.3760633616896
+    },
+    {
+      "name": "建筑装饰和其他建筑业",
+      "change_pct": -1.9843605482216
+    },
+    {
+      "name": "研究和试验发展",
+      "change_pct": -1.8084441526181
+    },
+    {
+      "name": "有色金属冶炼和压延加工业",
+      "change_pct": -1.6955774668005
+    },
+    {
+      "name": "医药制造业",
+      "change_pct": -1.6060249372402
+    }
+  ],
+  "concept_top": [],
+  "concept_bottom": [],
+  "focus_items": [
+    {
+      "symbol": "301013",
+      "reason": "watchlist_member",
+      "heat_bucket": "watch"
+    },
+    {
+      "symbol": "160644",
+      "reason": "watchlist_member",
+      "heat_bucket": "watch"
+    }
+  ],
+  "notes": [
+    "market heat 是情报发现入口，只用于提示关注，不直接触发交易。"
+  ],
+  "warnings": []
+}
