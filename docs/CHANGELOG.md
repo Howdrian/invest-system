@@ -54,6 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - [改进] governed RedBlue 升级为蓝队论点→红队攻击→蓝队反驳→红队终局反驳→仲裁的两轮互驳，并为 Technical/Intel/Risk 补齐 Usage + Tips。
 - [改进] 回测服务优先读取 governed CIO trade_plan action，将人工交易计划草案映射到既有方向评估。
 - [修复] 搜索服务配置和 GitHub Actions 兼容 `TAVILY_API_KEY`、`BOCHA_API_KEY`、`SERPAPI_API_KEY`、`BRAVE_API_KEY`、`MINIMAX_API_KEY` 单数环境变量，避免已配置 key 未被读取而降级到公共 SearXNG。
+- [修复] GitHub Actions 在 feature branch 手动运行时，日报提交推送到当前触发分支，避免写死 `main` 导致最后一步失败。
 
 ## [3.18.0] - 2026-05-21
 

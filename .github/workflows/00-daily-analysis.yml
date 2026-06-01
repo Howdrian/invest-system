@@ -544,4 +544,5 @@ jobs:
           git config user.email "bot@invest-system.local"
           git add docs/
           git diff --staged --quiet || git commit -m "report: $TODAY 投研日报"
-          git push origin main
+          TARGET_BRANCH="${GITHUB_REF_NAME:-main}"
+          git push origin "HEAD:${TARGET_BRANCH}"
