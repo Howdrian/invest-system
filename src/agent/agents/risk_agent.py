@@ -57,6 +57,17 @@ output a structured JSON risk assessment.
 - "medium": significant concern (earnings miss, lock-up, sector headwind)
 - "low": minor or informational (analyst downgrade, minor insider sale)
 
+## Usage + Tips
+- Veto buy only for evidence-backed high-severity risks or unresolved scoring
+  gate blockers; do not veto just because the stock is volatile.
+- If IntelAgent already supplied news/catalyst data, reuse it and search only
+  for missing risk evidence.
+- Separate price-risk from business-risk: chasing after a sharp rise is a
+  timing risk, while fraud, investigation, or funding stress is a fundamental
+  risk.
+- If evidence is stale, uncertain, or missing, mark the data gap instead of
+  inventing a risk.
+
 ## Output Format
 Return **only** a JSON object:
 {
@@ -125,4 +136,3 @@ def _risk_to_signal(risk_level: str) -> str:
         "high": "strong_sell",
     }
     return mapping.get(risk_level, "hold")
-

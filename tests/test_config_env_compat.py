@@ -70,6 +70,77 @@ class ConfigEnvCompatibilityTestCase(unittest.TestCase):
 
     @patch("src.config.setup_env")
     @patch.object(Config, "_parse_litellm_yaml", return_value=[])
+    def test_load_from_env_reads_governed_parallel_controls(
+        self, _mock_parse_litellm_yaml, _mock_setup_env
+    ):
+        with patch.dict(
+            os.environ,
+            {
+                "STOCK_LIST": "600519",
+                "AGENT_GOVERNED_PARALLEL": "false",
+                "AGENT_GOVERNED_PARALLEL_MAX_WORKERS": "2",
+            },
+            clear=True,
+        ):
+            config = Config._load_from_env()
+
+        self.assertFalse(config.agent_governed_parallel)
+        self.assertEqual(config.agent_governed_parallel_max_workers, 2)
+
+    @patch("src.config.setup_env")
+    @patch.object(Config, "_parse_litellm_yaml", return_value=[])
+    def test_load_from_env_reads_governed_macro_and_heat_controls(
+        self, _mock_parse_litellm_yaml, _mock_setup_env
+    ):
+        with patch.dict(
+            os.environ,
+            {
+                "STOCK_LIST": "600519",
+                "FMP_API_KEY": "fmp-secret",
+                "MACRO_CONTEXT_ENABLED": "false",
+                "MACRO_CONTEXT_CACHE_TTL_SECONDS": "3600",
+                "MACRO_CONTEXT_REFRESH_ON_RUN": "true",
+                "MARKET_HEAT_ENABLED": "false",
+                "MARKET_HEAT_OUTPUT_DIR": "tmp/heat",
+            },
+            clear=True,
+        ):
+            config = Config._load_from_env()
+
+        self.assertEqual(config.fmp_api_key, "fmp-secret")
+        self.assertFalse(config.macro_context_enabled)
+        self.assertEqual(config.macro_context_cache_ttl_seconds, 3600)
+        self.assertTrue(config.macro_context_refresh_on_run)
+        self.assertFalse(config.market_heat_enabled)
+        self.assertEqual(config.market_heat_output_dir, "tmp/heat")
+
+    @patch("src.config.setup_env")
+    @patch.object(Config, "_parse_litellm_yaml", return_value=[])
+    def test_load_from_env_accepts_singular_search_key_aliases(
+        self, _mock_parse_litellm_yaml, _mock_setup_env
+    ):
+        with patch.dict(
+            os.environ,
+            {
+                "STOCK_LIST": "600519",
+                "TAVILY_API_KEY": "tavily-one",
+                "BOCHA_API_KEY": "bocha-one",
+                "SERPAPI_API_KEY": "serp-one",
+                "BRAVE_API_KEY": "brave-one",
+                "MINIMAX_API_KEY": "minimax-one",
+            },
+            clear=True,
+        ):
+            config = Config._load_from_env()
+
+        self.assertEqual(config.tavily_api_keys, ["tavily-one"])
+        self.assertEqual(config.bocha_api_keys, ["bocha-one"])
+        self.assertEqual(config.serpapi_keys, ["serp-one"])
+        self.assertEqual(config.brave_api_keys, ["brave-one"])
+        self.assertEqual(config.minimax_api_keys, ["minimax-one"])
+
+    @patch("src.config.setup_env")
+    @patch.object(Config, "_parse_litellm_yaml", return_value=[])
     def test_schedule_run_immediately_falls_back_to_legacy_run_immediately(
         self,
         _mock_parse_yaml,

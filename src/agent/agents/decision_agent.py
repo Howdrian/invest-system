@@ -201,6 +201,12 @@ new decision_type values.
             if cio:
                 parts.append(f"CIO Verdict: **{cio.get('status', '?')}** — {cio.get('headline', '')}")
                 parts.append(f"Next action: {cio.get('next_user_action', '')}")
+                trade_plan = cio.get("trade_plan")
+                if isinstance(trade_plan, dict):
+                    parts.append(
+                        "CIO manual trade plan: "
+                        f"{json.dumps(trade_plan, ensure_ascii=False, default=str)}"
+                    )
             parts.append("")
 
         # Skill meta

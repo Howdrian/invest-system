@@ -234,6 +234,12 @@ jobs:
           # 数据源
           # ==========================================
           TUSHARE_TOKEN: ${{ secrets.TUSHARE_TOKEN }}
+          FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
+          MACRO_CONTEXT_ENABLED: ${{ vars.MACRO_CONTEXT_ENABLED || secrets.MACRO_CONTEXT_ENABLED || 'true' }}
+          MACRO_CONTEXT_CACHE_TTL_SECONDS: ${{ vars.MACRO_CONTEXT_CACHE_TTL_SECONDS || secrets.MACRO_CONTEXT_CACHE_TTL_SECONDS || '43200' }}
+          MACRO_CONTEXT_REFRESH_ON_RUN: ${{ vars.MACRO_CONTEXT_REFRESH_ON_RUN || secrets.MACRO_CONTEXT_REFRESH_ON_RUN || 'false' }}
+          MARKET_HEAT_ENABLED: ${{ vars.MARKET_HEAT_ENABLED || secrets.MARKET_HEAT_ENABLED || 'true' }}
+          MARKET_HEAT_OUTPUT_DIR: ${{ vars.MARKET_HEAT_OUTPUT_DIR || secrets.MARKET_HEAT_OUTPUT_DIR || 'reports/market_heat' }}
           # Longbridge OpenAPI（美股/港股实时行情字段补充；不设则仅 YFinance/AkShare，无 [Longbridge] 调用）
           LONGBRIDGE_APP_KEY: ${{ secrets.LONGBRIDGE_APP_KEY }}
           LONGBRIDGE_APP_SECRET: ${{ secrets.LONGBRIDGE_APP_SECRET }}
@@ -255,10 +261,15 @@ jobs:
           ANSPIRE_LLM_BASE_URL: ${{ vars.ANSPIRE_LLM_BASE_URL || secrets.ANSPIRE_LLM_BASE_URL }}
           ANSPIRE_LLM_ENABLED: ${{ vars.ANSPIRE_LLM_ENABLED || secrets.ANSPIRE_LLM_ENABLED }}
           BOCHA_API_KEYS: ${{ secrets.BOCHA_API_KEYS }}
+          BOCHA_API_KEY: ${{ secrets.BOCHA_API_KEY }}
           TAVILY_API_KEYS: ${{ secrets.TAVILY_API_KEYS }}
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
           SERPAPI_API_KEYS: ${{ secrets.SERPAPI_API_KEYS }}
+          SERPAPI_API_KEY: ${{ secrets.SERPAPI_API_KEY }}
           MINIMAX_API_KEYS: ${{ secrets.MINIMAX_API_KEYS }}
+          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
           BRAVE_API_KEYS: ${{ secrets.BRAVE_API_KEYS }}
+          BRAVE_API_KEY: ${{ secrets.BRAVE_API_KEY }}
           SEARXNG_BASE_URLS: ${{ secrets.SEARXNG_BASE_URLS }}
           SEARXNG_PUBLIC_INSTANCES_ENABLED: ${{ vars.SEARXNG_PUBLIC_INSTANCES_ENABLED || secrets.SEARXNG_PUBLIC_INSTANCES_ENABLED }}
           
@@ -358,6 +369,11 @@ jobs:
           MARKET_REVIEW_ENABLED: ${{ vars.MARKET_REVIEW_ENABLED || secrets.MARKET_REVIEW_ENABLED || 'true' }}
           ANALYSIS_DELAY: ${{ vars.ANALYSIS_DELAY || secrets.ANALYSIS_DELAY || '0' }}
           TRADING_DAY_CHECK_ENABLED: ${{ vars.TRADING_DAY_CHECK_ENABLED || secrets.TRADING_DAY_CHECK_ENABLED || 'true' }}
+          AGENT_MODE: ${{ vars.AGENT_MODE || secrets.AGENT_MODE || 'true' }}
+          AGENT_ARCH: ${{ vars.AGENT_ARCH || secrets.AGENT_ARCH || 'multi' }}
+          AGENT_ORCHESTRATOR_MODE: ${{ vars.AGENT_ORCHESTRATOR_MODE || secrets.AGENT_ORCHESTRATOR_MODE || 'governed' }}
+          AGENT_GOVERNED_PARALLEL: ${{ vars.AGENT_GOVERNED_PARALLEL || secrets.AGENT_GOVERNED_PARALLEL || 'true' }}
+          AGENT_GOVERNED_PARALLEL_MAX_WORKERS: ${{ vars.AGENT_GOVERNED_PARALLEL_MAX_WORKERS || secrets.AGENT_GOVERNED_PARALLEL_MAX_WORKERS || '3' }}
           
           # ==========================================
           # 系统配置
@@ -392,6 +408,7 @@ jobs:
           echo "🎯 运行模式: $MODE"
           echo "📊 自选股: $STOCK_LIST"
           echo "📝 报告类型: $REPORT_TYPE"
+          echo "🤖 Agent: mode=$AGENT_MODE arch=$AGENT_ARCH orchestrator=$AGENT_ORCHESTRATOR_MODE governed_parallel=$AGENT_GOVERNED_PARALLEL"
           echo ""
           echo "=========================================="
           echo "📋 配置检查"
@@ -411,14 +428,15 @@ jobs:
           echo ""
           echo "【数据源】"
           echo "  Tushare Token: $([ -n "$TUSHARE_TOKEN" ] && echo '✅ 已配置' || echo '⚪ 未配置')"
+          echo "  FMP API Key: $([ -n "$FMP_API_KEY" ] && echo '✅ 已配置（宏观增强）' || echo '⚪ 未配置（宏观降级可运行）')"
           echo "  Longbridge: $([ -n "$LONGBRIDGE_APP_KEY" ] && [ -n "$LONGBRIDGE_APP_SECRET" ] && [ -n "$LONGBRIDGE_ACCESS_TOKEN" ] && echo '✅ 已配置（美股/港股行情补充）' || echo '⚪ 未配置（仅 YFinance 等，无长桥调用）')"
           echo ""
           echo "【搜索引擎】"
-          echo "  Bocha API Keys: $([ -n "$BOCHA_API_KEYS" ] && echo '✅ 已配置' || echo '⚪ 未配置')"
-          echo "  Tavily API Keys: $([ -n "$TAVILY_API_KEYS" ] && echo '✅ 已配置' || echo '⚪ 未配置')"
-          echo "  SerpAPI Keys: $([ -n "$SERPAPI_API_KEYS" ] && echo '✅ 已配置' || echo '⚪ 未配置')"
-          echo "  MiniMax API Keys: $([ -n "$MINIMAX_API_KEYS" ] && echo '✅ 已配置' || echo '⚪ 未配置')"
-          echo "  Brave API Keys: $([ -n "$BRAVE_API_KEYS" ] && echo '✅ 已配置' || echo '⚪ 未配置')"
+          echo "  Bocha API Keys: $([ -n "$BOCHA_API_KEYS$BOCHA_API_KEY" ] && echo '✅ 已配置' || echo '⚪ 未配置')"
+          echo "  Tavily API Keys: $([ -n "$TAVILY_API_KEYS$TAVILY_API_KEY" ] && echo '✅ 已配置' || echo '⚪ 未配置')"
+          echo "  SerpAPI Keys: $([ -n "$SERPAPI_API_KEYS$SERPAPI_API_KEY" ] && echo '✅ 已配置' || echo '⚪ 未配置')"
+          echo "  MiniMax API Keys: $([ -n "$MINIMAX_API_KEYS$MINIMAX_API_KEY" ] && echo '✅ 已配置' || echo '⚪ 未配置')"
+          echo "  Brave API Keys: $([ -n "$BRAVE_API_KEYS$BRAVE_API_KEY" ] && echo '✅ 已配置' || echo '⚪ 未配置')"
           echo "  SearXNG Base URLs: $([ -n "$SEARXNG_BASE_URLS" ] && echo '✅ 已配置' || echo '⚪ 未配置')"
           case "${SEARXNG_PUBLIC_INSTANCES_ENABLED,,}" in
             0|false|no|off)
@@ -451,6 +469,10 @@ jobs:
             FORCE_RUN_ARG="--force-run"
             echo "⚡ 已启用强制运行模式（跳过交易日检查）"
           fi
+
+          # governed 支撑上下文：失败不阻断主分析
+          python -m src.macro.official_sources --refresh || echo "⚠️ 宏观上下文刷新失败，主分析将降级运行"
+          python -m src.intel.market_heat --symbols "$STOCK_LIST" --output-dir "$MARKET_HEAT_OUTPUT_DIR" --live || echo "⚠️ 市场热度摘要生成失败，主分析将降级运行"
 
           # 执行分析
           if [ "$MODE" = "market-only" ]; then

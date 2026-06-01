@@ -14,6 +14,7 @@ Covers:
 import json
 import sys
 import os
+import threading
 import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -433,6 +434,238 @@ class TestDecisionAgentPostProcess(unittest.TestCase):
         self.assertEqual(ctx.get_data("final_dashboard")["decision_type"], "buy")
 
 
+class TestCioAgentPostProcess(unittest.TestCase):
+    """Test CIO trade-plan guardrails."""
+
+    def _make_agent(self):
+        from src.agent.agents.governance.cio_agent import CioAgent
+
+        return CioAgent(tool_registry=MagicMock(), llm_adapter=MagicMock())
+
+    def test_passed_gate_allows_manual_trade_plan(self):
+        agent = self._make_agent()
+        ctx = AgentContext(query="test", stock_code="600519", stock_name="贵州茅台")
+        ctx.set_data(
+            "scoring_result",
+            {
+                "total_score": 7.2,
+                "gate_result": "PASS",
+                "position_size_range": "5-10%",
+            },
+        )
+        ctx.set_data(
+            "portfolio_context",
+            {
+                "source": "invest-system DB",
+                "total_equity": 100000.0,
+                "available_cash": 60000.0,
+                "current_price": 1880.0,
+            },
+        )
+        raw = json.dumps(
+            {
+                "schema": "cio_trade_plan_v1",
+                "stock": "600519",
+                "status": "READY_FOR_REVIEW",
+                "headline": "证据链可进入人工交易计划审查",
+                "can_proceed_to_review": True,
+                "cannot_proceed_reasons": [],
+                "top_watch_items": ["观察回踩承接"],
+                "fatal_objections": [],
+                "missing_evidence": [],
+                "trade_plan": {
+                    "action": "buy",
+                    "target_position_pct": 8,
+                    "quantity": 4,
+                    "entry_zone": "1800-1880",
+                    "stop_loss": "1760",
+                    "take_profit": "2050",
+                    "invalidations": ["跌破1760"],
+                    "conditions": ["回踩不破"],
+                },
+                "next_user_action": "人工复核后执行",
+                "summary": "计划仅供人工复核。",
+            },
+            ensure_ascii=False,
+        )
+
+        opinion = agent.post_process(ctx, raw)
+        parsed = ctx.get_data("cio_result")
+
+        self.assertIsNotNone(opinion)
+        self.assertEqual(opinion.signal, "buy")
+        self.assertEqual(parsed["trade_plan"]["target_position_pct"], 8.0)
+        self.assertTrue(parsed["trade_plan"]["manual_execution_only"])
+        self.assertEqual(parsed["direction"], "谨慎看多")
+        self.assertEqual(parsed["scoring_snapshot"]["total_score"], 7.2)
+        self.assertIn("非交易指令", parsed["disclaimer"])
+
+    def test_blocked_gate_removes_actionable_trade_plan(self):
+        agent = self._make_agent()
+        ctx = AgentContext(query="test", stock_code="600519", stock_name="贵州茅台")
+        ctx.set_data(
+            "scoring_result",
+            {
+                "total_score": 5.8,
+                "gate_result": "BLOCKED",
+                "position_size_range": "0%",
+            },
+        )
+        raw = json.dumps(
+            {
+                "schema": "cio_trade_plan_v1",
+                "stock": "600519",
+                "status": "READY_FOR_REVIEW",
+                "headline": "模型试图绕过门控",
+                "can_proceed_to_review": True,
+                "fatal_objections": [],
+                "trade_plan": {
+                    "action": "buy",
+                    "target_position_pct": 10,
+                    "quantity": 100,
+                },
+                "next_user_action": "买入",
+                "summary": "错误输出",
+            },
+            ensure_ascii=False,
+        )
+
+        opinion = agent.post_process(ctx, raw)
+        parsed = ctx.get_data("cio_result")
+
+        self.assertIsNotNone(opinion)
+        self.assertEqual(opinion.signal, "hold")
+        self.assertEqual(parsed["status"], "BLOCKED_BY_FATAL")
+        self.assertFalse(parsed["can_proceed_to_review"])
+        self.assertEqual(parsed["trade_plan"]["action"], "no_action")
+        self.assertIsNone(parsed["trade_plan"]["quantity"])
+        self.assertEqual(parsed["trade_plan"]["target_position_pct"], 0.0)
+        self.assertEqual(parsed["direction"], "无操作")
+
+    def test_unresolved_redblue_fatal_blocks_cio(self):
+        agent = self._make_agent()
+        ctx = AgentContext(query="test", stock_code="600519", stock_name="贵州茅台")
+        ctx.set_data(
+            "scoring_result",
+            {
+                "total_score": 7.1,
+                "gate_result": "PASS",
+                "position_size_range": "5-10%",
+            },
+        )
+        ctx.set_data(
+            "red_blue_result",
+            {
+                "red_team": {
+                    "final_attacks": [
+                        {"remaining_risk": "fatal", "counterpoint": "关键证据缺失"}
+                    ]
+                }
+            },
+        )
+        raw = json.dumps(
+            {
+                "schema": "cio_trade_plan_v1",
+                "stock": "600519",
+                "status": "READY_FOR_REVIEW",
+                "headline": "模型试图忽略红队 fatal",
+                "can_proceed_to_review": True,
+                "fatal_objections": [],
+                "trade_plan": {"action": "buy", "target_position_pct": 8},
+            },
+            ensure_ascii=False,
+        )
+
+        agent.post_process(ctx, raw)
+        parsed = ctx.get_data("cio_result")
+
+        self.assertEqual(parsed["status"], "BLOCKED_BY_FATAL")
+        self.assertEqual(parsed["trade_plan"]["action"], "no_action")
+        self.assertEqual(parsed["fatal_objections"][0]["source_agent"], "red_blue")
+
+
+class TestRedBlueAgentPostProcess(unittest.TestCase):
+    """Test two-round red-blue debate payload preservation."""
+
+    def test_stores_two_round_debate_result(self):
+        from src.agent.agents.governance.red_blue_agent import RedBlueAgent
+
+        agent = RedBlueAgent(tool_registry=MagicMock(), llm_adapter=MagicMock())
+        ctx = AgentContext(query="test", stock_code="600519")
+        raw = json.dumps(
+            {
+                "blue_team": {
+                    "arguments": [{"thesis": "需求改善", "data": "订单增加", "timeframe": "季度", "catalyst": "财报"}],
+                    "rebuttals": [
+                        {
+                            "targets_red_attack": 1,
+                            "response": "风险已反映",
+                            "evidence": "估值回落",
+                            "resolved": "partial",
+                        }
+                    ],
+                    "overall_strength": 6,
+                },
+                "red_team": {
+                    "attacks": [
+                        {
+                            "targets_blue_arg": 1,
+                            "fatal_risk": "利润率下滑",
+                            "evidence": "毛利率下降",
+                            "probability": "medium",
+                        }
+                    ],
+                    "final_attacks": [
+                        {
+                            "targets_blue_rebuttal": 1,
+                            "counterpoint": "估值回落不等于利润率修复",
+                            "remaining_risk": "material",
+                            "evidence_gap": "等待季报",
+                        }
+                    ],
+                    "overall_strength": 7,
+                },
+                "arbitration": {
+                    "blue_strength": 6,
+                    "red_strength": 7,
+                    "stronger_side": "red",
+                    "blind_spots": ["现金流"],
+                    "confidence_in_bull_case": 4,
+                    "verdict": "红队证据更强。",
+                },
+                "emotion_injection_detected": False,
+                "emotion_signal": "",
+            },
+            ensure_ascii=False,
+        )
+
+        opinion = agent.post_process(ctx, raw)
+
+        self.assertIsNotNone(opinion)
+        self.assertEqual(opinion.signal, "sell")
+        stored = ctx.get_data("red_blue_result")
+        self.assertEqual(stored["blue_team"]["rebuttals"][0]["resolved"], "partial")
+        self.assertEqual(stored["red_team"]["final_attacks"][0]["remaining_risk"], "material")
+
+
+class TestPromptUpgrades(unittest.TestCase):
+    """Prompt upgrades from the governed plan should remain visible."""
+
+    def test_usage_tips_and_macro_prompt_are_present(self):
+        from src.agent.agents.technical_agent import TechnicalAgent
+        from src.agent.agents.intel_agent import IntelAgent
+        from src.agent.agents.risk_agent import RiskAgent
+        from src.agent.agents.macro_agent import MacroAgent
+
+        ctx = AgentContext(query="test", stock_code="600519")
+        for agent_cls in (TechnicalAgent, IntelAgent, RiskAgent):
+            prompt = agent_cls(tool_registry=MagicMock(), llm_adapter=MagicMock()).system_prompt(ctx)
+            self.assertIn("Usage + Tips", prompt)
+
+        macro_prompt = MacroAgent(tool_registry=MagicMock(), llm_adapter=MagicMock()).system_prompt(ctx)
+        self.assertIn("Macro Analyst", macro_prompt)
+
+
 class TestIntelAgentPostProcess(unittest.TestCase):
     """Test IntelAgent JSON parsing and context caching behaviour."""
 
@@ -496,6 +729,13 @@ class TestOrchestratorModes(unittest.TestCase):
         chain = orch._build_agent_chain(ctx)
         names = [a.agent_name for a in chain]
         self.assertEqual(names, ["technical", "intel", "risk", "decision"])
+
+    def test_governed_mode(self):
+        orch = self._make_orchestrator("governed")
+        ctx = AgentContext(query="test", stock_code="600519")
+        chain = orch._build_agent_chain(ctx)
+        names = [a.agent_name for a in chain]
+        self.assertEqual(names, ["macro", "technical", "intel", "risk", "red_blue", "scoring", "cio", "decision"])
 
     def test_invalid_mode_falls_back_to_standard(self):
         orch = self._make_orchestrator("nonsense")
@@ -564,6 +804,30 @@ class TestOrchestratorModes(unittest.TestCase):
         self.assertEqual(ctx.meta["analysis_context_pack_summary"], pack_summary)
         self.assertNotIn("market_phase_context", ctx.data)
         self.assertNotIn("analysis_context_pack_summary", ctx.data)
+
+    def test_build_context_accepts_prefetched_governed_inputs(self):
+        orch = self._make_orchestrator()
+        ctx = orch._build_context(
+            "Analyze 600519",
+            context={
+                "stock_code": "600519",
+                "realtime_quote": {"price": 1880.0},
+                "daily_history": [{"date": "2026-05-29", "close": 1880.0}],
+                "chip_distribution": {"profit_ratio": 0.72},
+                "trend_result": {"ma_alignment": "bullish"},
+                "news_context": "公告摘要",
+                "fundamental_context": {"status": "ok"},
+                "portfolio_context": {"total_equity": 100000.0},
+                "macro_context": {"status": "DEGRADED"},
+                "market_heat_context": {"status": "available"},
+            },
+        )
+
+        self.assertEqual(ctx.get_data("realtime_quote")["price"], 1880.0)
+        self.assertEqual(ctx.get_data("fundamental_context")["status"], "ok")
+        self.assertEqual(ctx.get_data("portfolio_context")["total_equity"], 100000.0)
+        self.assertEqual(ctx.get_data("macro_context")["status"], "DEGRADED")
+        self.assertEqual(ctx.get_data("market_heat_context")["status"], "available")
 
     def test_build_context_extracts_code_from_query(self):
         orch = self._make_orchestrator()
@@ -671,6 +935,92 @@ class TestOrchestratorExecution(unittest.TestCase):
         self.assertIn("Analysis Summary", result.content)
         skill.run.assert_called_once()
         decision.run.assert_called_once()
+
+    def test_governed_parallel_merges_stage_contexts_in_fixed_order(self):
+        orch = self._make_orchestrator(
+            config=SimpleNamespace(
+                agent_orchestrator_timeout_s=0,
+                agent_risk_override=True,
+                agent_governed_parallel=True,
+                agent_governed_parallel_max_workers=3,
+            )
+        )
+        orch.mode = "governed"
+        ctx = AgentContext(query="test", stock_code="600519", stock_name="贵州茅台")
+        ctx.set_data("realtime_quote", {"price": 1880.0})
+        barrier = threading.Barrier(3, timeout=3)
+        child_context_ids = []
+
+        def _run_parallel_stage(stage_name, *, signal="hold"):
+            def _run(run_ctx, progress_callback=None, timeout_seconds=None):
+                child_context_ids.append(id(run_ctx))
+                barrier.wait()
+                run_ctx.add_opinion(
+                    AgentOpinion(
+                        agent_name=stage_name,
+                        signal=signal,
+                        confidence=0.7,
+                        reasoning=f"{stage_name} reasoning",
+                    )
+                )
+                if stage_name == "intel":
+                    run_ctx.set_data("intel_opinion", {"sentiment_label": "positive"})
+                    run_ctx.add_risk_flag("intel", "公告风险", severity="low")
+                if stage_name == "risk":
+                    run_ctx.add_risk_flag("risk", "估值风险", severity="medium")
+                return self._stage_result(stage_name)
+
+            return _run
+
+        technical = MagicMock(agent_name="technical")
+        technical.run.side_effect = _run_parallel_stage("technical", signal="buy")
+        intel = MagicMock(agent_name="intel")
+        intel.run.side_effect = _run_parallel_stage("intel", signal="buy")
+        risk = MagicMock(agent_name="risk")
+        risk.run.side_effect = _run_parallel_stage("risk", signal="hold")
+        decision = MagicMock(agent_name="decision")
+
+        def _run_decision(run_ctx, progress_callback=None, timeout_seconds=None):
+            self.assertEqual([op.agent_name for op in run_ctx.opinions[:3]], ["technical", "intel", "risk"])
+            self.assertEqual(run_ctx.get_data("intel_opinion")["sentiment_label"], "positive")
+            self.assertEqual([flag["category"] for flag in run_ctx.risk_flags], ["intel", "risk"])
+            run_ctx.add_opinion(
+                AgentOpinion(agent_name="decision", signal="buy", confidence=0.8, reasoning="decision reasoning")
+            )
+            return self._stage_result("decision")
+
+        decision.run.side_effect = _run_decision
+
+        with patch.object(orch, "_build_agent_chain", return_value=[technical, intel, risk, decision]):
+            with patch("src.agent.orchestrator.time.sleep", return_value=None):
+                result = orch._execute_pipeline(ctx, parse_dashboard=False)
+
+        self.assertTrue(result.success)
+        self.assertEqual([op.agent_name for op in ctx.opinions], ["technical", "intel", "risk", "decision"])
+        self.assertEqual(ctx.get_data("intel_opinion")["sentiment_label"], "positive")
+        self.assertEqual(len(set(child_context_ids)), 3)
+        self.assertTrue(all(context_id != id(ctx) for context_id in child_context_ids))
+
+    def test_governed_parallel_batch_can_start_after_macro_stage(self):
+        orch = self._make_orchestrator(
+            config=SimpleNamespace(
+                agent_orchestrator_timeout_s=0,
+                agent_risk_override=True,
+                agent_governed_parallel=True,
+                agent_governed_parallel_max_workers=3,
+            )
+        )
+        orch.mode = "governed"
+        agents = [
+            MagicMock(agent_name="macro"),
+            MagicMock(agent_name="technical"),
+            MagicMock(agent_name="intel"),
+            MagicMock(agent_name="risk"),
+            MagicMock(agent_name="decision"),
+        ]
+
+        self.assertFalse(orch._should_run_governed_parallel_batch(agents, 0))
+        self.assertTrue(orch._should_run_governed_parallel_batch(agents, 1))
 
     def test_execute_pipeline_skips_stage_when_remaining_budget_below_minimum(self):
         orch = self._make_orchestrator(config=SimpleNamespace(agent_orchestrator_timeout_s=20))

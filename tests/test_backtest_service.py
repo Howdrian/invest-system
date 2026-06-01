@@ -6,6 +6,7 @@ and validate idempotency/force semantics, result field correctness,
 summary creation, and query methods.
 """
 
+import json
 import os
 import tempfile
 import unittest
@@ -177,6 +178,66 @@ class BacktestServiceTestCase(unittest.TestCase):
         self.assertAlmostEqual(result.simulated_exit_price, 110.0)
         self.assertEqual(result.simulated_exit_reason, "take_profit")
         self.assertAlmostEqual(result.simulated_return_pct, 10.0)
+
+    def test_governed_trade_plan_action_overrides_legacy_advice_for_backtest(self) -> None:
+        """Governed CIO trade_plan should drive direction evaluation."""
+        old_created_at = datetime(2024, 1, 1, 0, 0, 0)
+        raw_result = {
+            "governance": {
+                "trade_plan": {
+                    "action": "buy",
+                    "stop_loss": "跌破 9.0",
+                    "take_profit": "10.9",
+                    "manual_execution_only": True,
+                }
+            }
+        }
+        with self.db.get_session() as session:
+            session.add(
+                AnalysisHistory(
+                    query_id="q-governed",
+                    code="000001",
+                    name="平安银行",
+                    report_type="simple",
+                    sentiment_score=65,
+                    operation_advice="CIO交易计划草案可进入人工审查",
+                    trend_prediction="治理层通过",
+                    analysis_summary="governed",
+                    created_at=old_created_at,
+                    raw_result=json.dumps(raw_result, ensure_ascii=False),
+                    context_snapshot='{"enhanced_context": {"date": "2024-01-01"}}',
+                )
+            )
+            session.add(
+                StockDaily(
+                    code="000001",
+                    date=date(2024, 1, 1),
+                    open=10.0,
+                    high=10.0,
+                    low=10.0,
+                    close=10.0,
+                )
+            )
+            session.add_all(
+                [
+                    StockDaily(code="000001", date=date(2024, 1, 2), high=11.0, low=10.0, close=10.5),
+                    StockDaily(code="000001", date=date(2024, 1, 3), high=11.2, low=10.2, close=10.8),
+                    StockDaily(code="000001", date=date(2024, 1, 4), high=11.4, low=10.4, close=11.0),
+                ]
+            )
+            session.commit()
+
+        service = BacktestService(self.db)
+        stats = service.run_backtest(code="000001", force=False, eval_window_days=3, min_age_days=0, limit=10)
+
+        self.assertEqual(stats["saved"], 1)
+        with self.db.get_session() as session:
+            row = session.query(BacktestResult).filter(BacktestResult.code == "000001").one()
+        self.assertEqual(row.operation_advice, "买入")
+        self.assertEqual(row.position_recommendation, "long")
+        self.assertEqual(row.direction_expected, "up")
+        self.assertAlmostEqual(row.take_profit, 10.9)
+        self.assertTrue(row.hit_take_profit)
 
     def test_summaries_created_after_run(self) -> None:
         """Verify both overall and per-stock BacktestSummary rows are created."""

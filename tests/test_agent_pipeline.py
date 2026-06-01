@@ -647,6 +647,45 @@ class TestAgentResultConversion(unittest.TestCase):
         self.assertIn("agent:gemini", result.data_sources)
         self.assertIsNotNone(result.dashboard)
 
+    def test_convert_governed_dashboard_preserves_governance_payload(self):
+        """Governed AgentResult dashboard should persist governance for history/backtest."""
+        pipeline = self._make_pipeline()
+
+        from src.agent.executor import AgentResult
+        from src.enums import ReportType
+
+        governance = {
+            "cio_status": "READY_FOR_REVIEW",
+            "score": 6.4,
+            "gate": "PASS",
+            "trade_plan": {
+                "action": "buy",
+                "manual_execution_only": True,
+            },
+        }
+        dashboard = {
+            "stock_name": "贵州茅台",
+            "sentiment_score": 64,
+            "trend_prediction": "治理层通过",
+            "operation_advice": "CIO交易计划草案可进入人工审查",
+            "decision_type": "buy",
+            "confidence_level": "中",
+            "dashboard": {"core_conclusion": {"one_sentence": "治理层通过"}},
+            "analysis_summary": "governed",
+            "governance": governance,
+        }
+
+        result = pipeline._agent_result_to_analysis_result(
+            AgentResult(success=True, dashboard=dashboard, provider="gemini"),
+            "600519",
+            "贵州茅台",
+            ReportType.SIMPLE,
+            "q-governed",
+        )
+
+        self.assertEqual(result._governance["trade_plan"]["action"], "buy")
+        self.assertEqual(result.dashboard["governance"]["cio_status"], "READY_FOR_REVIEW")
+
     def test_convert_failed_dashboard(self):
         """Failed AgentResult should produce a minimal AnalysisResult."""
         pipeline = self._make_pipeline()
@@ -2698,6 +2737,80 @@ class TestSkillActivation(unittest.TestCase):
                 agent_result, "600519", "TestCo", ReportType.SIMPLE, "q1"
             )
             self.assertEqual(result.sentiment_score, 80)
+
+
+class TestGovernedPipelineContext(unittest.TestCase):
+    """Governed-mode pipeline should preserve prefetched context into the orchestrator."""
+
+    def test_run_governed_analysis_passes_prefetched_context_to_orchestrator(self):
+        from src.agent.orchestrator import OrchestratorResult
+        from src.core.pipeline import StockAnalysisPipeline
+
+        pipeline = StockAnalysisPipeline.__new__(StockAnalysisPipeline)
+        pipeline._emit_progress = MagicMock()
+        pipeline._build_governed_portfolio_context = MagicMock(
+            return_value={
+                "source": "invest-system DB",
+                "total_equity": 100000.0,
+                "available_cash": 60000.0,
+                "current_price": 1880.0,
+            }
+        )
+        pipeline._build_governed_macro_context = MagicMock(return_value={"status": "DEGRADED"})
+        pipeline._build_governed_market_heat_context = MagicMock(return_value={"status": "available"})
+        captured = {}
+
+        class _FakeOrchestrator:
+            def _execute_pipeline(self, ctx, parse_dashboard=True):
+                captured["ctx"] = ctx
+                return OrchestratorResult(
+                    success=True,
+                    dashboard={
+                        "decision_type": "buy",
+                        "sentiment_score": 72,
+                        "analysis_summary": "governed summary",
+                        "operation_advice": "CIO交易计划草案可进入人工审查",
+                        "trend_prediction": "治理层通过",
+                        "risk_warning": "人工复核",
+                        "key_points": ["CIO"],
+                        "governance": {
+                            "cio_status": "READY_FOR_REVIEW",
+                            "trade_plan": {"action": "buy", "manual_execution_only": True},
+                        },
+                    },
+                )
+
+        pipeline._get_governed_orchestrator = MagicMock(return_value=_FakeOrchestrator())
+
+        result = pipeline._run_governed_analysis(
+            "600519",
+            "贵州茅台",
+            {
+                "realtime": {"price": 1880.0},
+                "history": [{"date": "2026-05-29", "close": 1880.0}],
+                "chip": {"profit_ratio": 0.72},
+            },
+            "新闻摘要",
+            SimpleNamespace(ma_alignment="bullish"),
+            {"status": "ok"},
+            None,
+            chip_data=None,
+            analysis_context_pack_summary="## 分析上下文包摘要",
+            market_phase_context={"phase": "intraday"},
+        )
+
+        ctx = captured["ctx"]
+        self.assertEqual(ctx.get_data("realtime_quote")["price"], 1880.0)
+        self.assertEqual(ctx.get_data("daily_history")[0]["close"], 1880.0)
+        self.assertEqual(ctx.get_data("chip_distribution")["profit_ratio"], 0.72)
+        self.assertEqual(ctx.get_data("fundamental_context")["status"], "ok")
+        self.assertEqual(ctx.get_data("portfolio_context")["total_equity"], 100000.0)
+        self.assertEqual(ctx.get_data("macro_context")["status"], "DEGRADED")
+        self.assertEqual(ctx.get_data("market_heat_context")["status"], "available")
+        self.assertEqual(ctx.meta["analysis_context_pack_summary"], "## 分析上下文包摘要")
+        self.assertEqual(ctx.meta["market_phase_context"]["phase"], "intraday")
+        self.assertTrue(result._governed)
+        self.assertEqual(result._governance["trade_plan"]["action"], "buy")
 
 
 if __name__ == '__main__':

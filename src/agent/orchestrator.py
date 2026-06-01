@@ -24,11 +24,13 @@ can be a drop-in replacement via the factory.
 
 from __future__ import annotations
 
+import copy
 import json
 import inspect
 import logging
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
@@ -269,6 +271,197 @@ class AgentOrchestrator:
             run_kwargs["timeout_seconds"] = timeout_seconds
         return agent.run(ctx, **run_kwargs)
 
+    def _should_run_governed_parallel_batch(self, agents: List[Any], index: int) -> bool:
+        """Return True when governed analysis stages can run concurrently."""
+        if self.mode != "governed":
+            return False
+        if not getattr(self.config, "agent_governed_parallel", True):
+            return False
+        if len(agents) - index < 3:
+            return False
+        return [getattr(agent, "agent_name", "") for agent in agents[index:index + 3]] == [
+            "technical",
+            "intel",
+            "risk",
+        ]
+
+    def _clone_context_for_parallel_stage(self, ctx: AgentContext) -> AgentContext:
+        """Create an isolated context copy for one parallel governed stage."""
+        return AgentContext(
+            query=ctx.query,
+            stock_code=ctx.stock_code,
+            stock_name=ctx.stock_name,
+            session_id=ctx.session_id,
+            data=copy.deepcopy(ctx.data),
+            opinions=copy.deepcopy(ctx.opinions),
+            risk_flags=copy.deepcopy(ctx.risk_flags),
+            meta=copy.deepcopy(ctx.meta),
+            created_at=ctx.created_at,
+        )
+
+    def _merge_parallel_stage_context(
+        self,
+        ctx: AgentContext,
+        stage_ctx: AgentContext,
+        *,
+        base_opinion_count: int,
+        base_risk_flag_count: int,
+    ) -> None:
+        """Merge the new data produced by one isolated parallel stage."""
+        for opinion in stage_ctx.opinions[base_opinion_count:]:
+            ctx.add_opinion(copy.deepcopy(opinion))
+
+        for flag in stage_ctx.risk_flags[base_risk_flag_count:]:
+            ctx.risk_flags.append(copy.deepcopy(flag))
+
+        for key, value in stage_ctx.data.items():
+            should_overwrite = key.endswith("_opinion") or key in {
+                "intel_opinion",
+                "technical_opinion",
+                "risk_opinion",
+            }
+            if should_overwrite or key not in ctx.data:
+                ctx.set_data(key, copy.deepcopy(value))
+
+    def _execute_governed_parallel_batch(
+        self,
+        agents: List[Any],
+        ctx: AgentContext,
+        *,
+        stats: AgentRunStats,
+        all_tool_calls: List[Dict[str, Any]],
+        models_used: List[str],
+        t0: float,
+        timeout_s: int,
+        parse_dashboard: bool,
+        progress_callback: Optional[Callable] = None,
+    ) -> Optional[OrchestratorResult]:
+        """Run Technical/Intel/Risk concurrently and merge results deterministically."""
+        batch = agents[:3]
+        elapsed_s = time.time() - t0
+        remaining_timeout_s = max(0.0, timeout_s - elapsed_s) if timeout_s else None
+
+        stage_contexts: List[AgentContext] = []
+        base_counts: List[tuple[int, int]] = []
+        for agent in batch:
+            stage_ctx = self._clone_context_for_parallel_stage(ctx)
+            stage_contexts.append(stage_ctx)
+            base_counts.append((len(stage_ctx.opinions), len(stage_ctx.risk_flags)))
+            if progress_callback:
+                progress_callback({
+                    "type": "stage_start",
+                    "stage": agent.agent_name,
+                    "message": f"Starting {agent.agent_name} analysis...",
+                    "parallel_group": "governed_analysis",
+                })
+
+        max_workers_raw = getattr(self.config, "agent_governed_parallel_max_workers", 3)
+        try:
+            max_workers = max(1, int(max_workers_raw or 3))
+        except (TypeError, ValueError):
+            max_workers = 3
+        max_workers = min(len(batch), max_workers)
+
+        results_by_index: Dict[int, StageResult] = {}
+        with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="governed-agent") as executor:
+            future_to_index = {
+                executor.submit(
+                    self._run_stage_agent,
+                    agent,
+                    stage_contexts[i],
+                    progress_callback,
+                    remaining_timeout_s,
+                ): i
+                for i, agent in enumerate(batch)
+            }
+            for future in as_completed(future_to_index):
+                i = future_to_index[future]
+                agent = batch[i]
+                try:
+                    results_by_index[i] = future.result()
+                except Exception as exc:
+                    logger.error(
+                        "[Orchestrator] parallel governed stage '%s' failed: %s",
+                        agent.agent_name,
+                        exc,
+                        exc_info=True,
+                    )
+                    results_by_index[i] = StageResult(
+                        stage_name=agent.agent_name,
+                        status=StageStatus.FAILED,
+                        error=str(exc),
+                    )
+
+        for i, agent in enumerate(batch):
+            result = results_by_index.get(i) or StageResult(
+                stage_name=agent.agent_name,
+                status=StageStatus.FAILED,
+                error="Parallel governed stage returned no result",
+            )
+            stats.record_stage(result)
+            all_tool_calls.extend(tc for tc in (result.meta.get("tool_calls_log") or []))
+            models_used.extend(result.meta.get("models_used", []))
+
+            if progress_callback:
+                progress_callback({
+                    "type": "stage_done",
+                    "stage": agent.agent_name,
+                    "status": result.status.value,
+                    "duration": result.duration_s,
+                    "parallel_group": "governed_analysis",
+                })
+
+            if result.status == StageStatus.FAILED:
+                if agent.agent_name == "technical":
+                    logger.error(
+                        "[Orchestrator] critical parallel stage '%s' failed: %s",
+                        agent.agent_name,
+                        result.error,
+                    )
+                    return OrchestratorResult(
+                        success=False,
+                        error=f"Stage '{agent.agent_name}' failed: {result.error}",
+                        stats=stats,
+                        total_tokens=stats.total_tokens,
+                        tool_calls_log=all_tool_calls,
+                    )
+                logger.warning(
+                    "[Orchestrator] parallel stage '%s' failed (non-critical, degrading): %s",
+                    agent.agent_name,
+                    result.error,
+                )
+                continue
+
+            base_opinion_count, base_risk_flag_count = base_counts[i]
+            self._merge_parallel_stage_context(
+                ctx,
+                stage_contexts[i],
+                base_opinion_count=base_opinion_count,
+                base_risk_flag_count=base_risk_flag_count,
+            )
+
+        elapsed_s = time.time() - t0
+        if timeout_s and elapsed_s >= timeout_s:
+            logger.error("[Orchestrator] pipeline timed out after governed parallel batch")
+            if progress_callback:
+                progress_callback({
+                    "type": "pipeline_timeout",
+                    "stage": "governed_analysis",
+                    "elapsed": round(elapsed_s, 2),
+                    "timeout": timeout_s,
+                })
+            return self._build_timeout_result(
+                stats,
+                all_tool_calls,
+                models_used,
+                elapsed_s,
+                timeout_s,
+                ctx=ctx,
+                parse_dashboard=parse_dashboard,
+            )
+
+        return None
+
     # -----------------------------------------------------------------
     # Public interface (mirrors AgentExecutor)
     # -----------------------------------------------------------------
@@ -381,6 +574,26 @@ class AgentOrchestrator:
         _MIN_STAGE_BUDGET_S = 15
 
         while index < len(agents):
+            if self._should_run_governed_parallel_batch(agents, index):
+                parallel_result = self._execute_governed_parallel_batch(
+                    agents[index:],
+                    ctx,
+                    stats=stats,
+                    all_tool_calls=all_tool_calls,
+                    models_used=models_used,
+                    t0=t0,
+                    timeout_s=timeout_s,
+                    parse_dashboard=parse_dashboard,
+                    progress_callback=progress_callback,
+                )
+                if parallel_result is not None:
+                    return parallel_result
+                index += 3
+                if self.mode == "governed":
+                    import time as _time
+                    _time.sleep(4)
+                continue
+
             agent = agents[index]
             elapsed_s = time.time() - t0
             remaining_budget = timeout_s - elapsed_s if timeout_s else None
@@ -594,6 +807,7 @@ class AgentOrchestrator:
         from src.agent.agents.intel_agent import IntelAgent
         from src.agent.agents.decision_agent import DecisionAgent
         from src.agent.agents.risk_agent import RiskAgent
+        from src.agent.agents.macro_agent import MacroAgent
 
         self._skill_agent_names = set()
 
@@ -605,6 +819,7 @@ class AgentOrchestrator:
         )
 
         technical = self._prepare_agent(TechnicalAgent(**common_kwargs))
+        macro = self._prepare_agent(MacroAgent(**common_kwargs))
         intel = self._prepare_agent(IntelAgent(**common_kwargs))
         risk = self._prepare_agent(RiskAgent(**common_kwargs))
         decision = self._prepare_agent(DecisionAgent(**common_kwargs))
@@ -621,9 +836,11 @@ class AgentOrchestrator:
             return [technical, intel, risk, decision]
         elif self.mode == "governed":
             # Governed mode adds invest-brain governance layer:
-            # RedBlue (debate) → Scoring (gate) → CIO (synthesis) → Decision (restricted)
+            # Macro → Technical/Intel/Risk → RedBlue → Scoring → CIO → Decision.
+            # Technical/Intel/Risk may run concurrently after Macro has injected
+            # global regime context.
             governance = self._build_governance_agents()
-            return [technical, intel, risk] + governance + [decision]
+            return [macro, technical, intel, risk] + governance + [decision]
         else:
             return [technical, intel, decision]
 
@@ -751,7 +968,8 @@ class AgentOrchestrator:
 
             # Pre-populate data fields that the caller already has
             for data_key in ("realtime_quote", "daily_history", "chip_distribution",
-                             "trend_result", "news_context"):
+                             "trend_result", "news_context", "fundamental_context",
+                             "portfolio_context", "macro_context", "market_heat_context"):
                 if context.get(data_key):
                     ctx.set_data(data_key, context[data_key])
 
@@ -1061,6 +1279,38 @@ class AgentOrchestrator:
         payload["key_points"] = key_points
         payload["risk_warning"] = risk_warning
         payload["dashboard"] = dashboard_block
+        governance_payload = self._build_governance_payload(ctx)
+        if governance_payload:
+            payload["governance"] = governance_payload
+        return payload
+
+    def _build_governance_payload(self, ctx: AgentContext) -> Dict[str, Any]:
+        """Collect governed-mode review artifacts for dashboard/history persistence."""
+        rb = ctx.get_data("red_blue_result")
+        scoring = ctx.get_data("scoring_result")
+        cio = ctx.get_data("cio_result")
+        if not any(isinstance(item, dict) and item for item in (rb, scoring, cio)):
+            return {}
+
+        payload: Dict[str, Any] = {}
+        if isinstance(rb, dict):
+            payload["red_blue"] = rb
+            payload["red_blue_verdict"] = (
+                rb.get("arbitration", {}).get("verdict", "")
+                if isinstance(rb.get("arbitration"), dict)
+                else ""
+            )
+        if isinstance(scoring, dict):
+            payload["scoring"] = scoring
+            payload["score"] = scoring.get("total_score")
+            payload["gate"] = scoring.get("gate_result")
+            payload["position_size_range"] = scoring.get("position_size_range")
+        if isinstance(cio, dict):
+            payload["cio"] = cio
+            payload["cio_status"] = cio.get("status")
+            trade_plan = cio.get("trade_plan")
+            if isinstance(trade_plan, dict):
+                payload["trade_plan"] = trade_plan
         return payload
 
     def _collect_key_levels(
