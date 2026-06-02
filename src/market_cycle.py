@@ -335,14 +335,49 @@ def _render_one_screen_body(payload: Dict[str, Any]) -> str:
     health = payload["source_health"]
     macro = payload.get("macro_context") or {}
     reason = ""
+    indicators = macro.get("indicators") or {}
     if isinstance(macro.get("regime"), dict):
         reason = macro["regime"].get("reason") or ""
+    
+    # Build macro indicators display
+    macro_rows = ""
+    for key, val in indicators.items():
+        if isinstance(val, dict):
+            v = val.get("value") or val.get("latest") or ""
+        else:
+            v = str(val) if val else ""
+        if v:
+            macro_rows += f"<tr><td>{html.escape(str(key))}</td><td>{html.escape(str(v))}</td></tr>"
+    
+    indicators_table = ""
+    if macro_rows:
+        indicators_table = f'<section class="card"><h2>宏观指标</h2><table><thead><tr><th>指标</th><th>值</th></tr></thead><tbody>{macro_rows}</tbody></table></section>'
+    
+    # Show governed CIO conclusions if available
+    gov_conclusions = payload.get("governed_conclusions") or []
+    gov_html = ""
+    if gov_conclusions:
+        items = ""
+        for gc in gov_conclusions[:20]:
+            name = gc.get("name", "?")
+            code = gc.get("code", "?")
+            cio = gc.get("cio_action", "")
+            block = gc.get("block_reason", "")
+            score = gc.get("score", "")
+            icon = "🔴" if ("BLOCKED" in str(cio).upper() or "阻断" in str(cio)) else "🟡"
+            items += f'<tr><td>{icon}</td><td>{html.escape(str(name))} ({code})</td>'
+            items += f'<td>{html.escape(str(score))}</td>'
+            items += f'<td>{html.escape(str(cio)[:200])}</td></tr>'
+        gov_html = f'<section class="card"><h2>个股 CIO 判断</h2><table><thead><tr><th></th><th>标的</th><th>评分</th><th>CIO 结论</th></tr></thead><tbody>{items}</tbody></table></section>'
+    
     return f"""
 <section class="hero">
   <div><span class="label">统一看盘 · 一屏总览</span><h1>{html.escape(str(strategy.get('regime')))}</h1><p>{html.escape(str((strategy.get('strategy') or {}).get('headline') or ''))}</p></div>
   <div class="kpi"><small>Macro</small><b>{html.escape(str(payload.get('macro_status')))}</b><span>{html.escape(str(reason))}</span></div>
   <div class="kpi"><small>Source</small><b>{html.escape(str(health.get('usability_verdict')))}</b><span>trade: {html.escape(str(health.get('trade_review_usability')))}</span></div>
 </section>
+{indicators_table}
+{gov_html}
 <section class="card"><h2>今日边界</h2><ul><li>只读看盘，不自动交易。</li><li>个股交易前必须经过 governed 分析、红蓝、评分、CIO 和人工确认。</li><li>可选源失败只降权；关键源不可用才阻断交易审查。</li></ul></section>
 <section class="card"><h2>关注列表</h2>{_render_candidates_html(strategy.get('candidate_routing') or [])}</section>
 """
