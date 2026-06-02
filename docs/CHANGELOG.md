@@ -55,6 +55,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - [改进] 回测服务优先读取 governed CIO trade_plan action，将人工交易计划草案映射到既有方向评估。
 - [修复] 搜索服务配置和 GitHub Actions 兼容 `TAVILY_API_KEY`、`BOCHA_API_KEY`、`SERPAPI_API_KEY`、`BRAVE_API_KEY`、`MINIMAX_API_KEY` 单数环境变量，避免已配置 key 未被读取而降级到公共 SearXNG。
 - [修复] GitHub Actions 在 feature branch 手动运行时，日报提交推送到当前触发分支，避免写死 `main` 导致最后一步失败。
+- [新功能] 新增云端 market-cycle 三件套运行时，生成一屏总览、源健康和市场策略报告，并接入 GitHub Actions 每日发布入口。
+- [修复] governed 报告在 CIO hard gate 或低分阻断时强制展示 `no_action`/0% 仓位，避免最终 Markdown 出现与治理层冲突的交易指令话术。
+- [测试] 补齐 market-cycle、日报发布入口和 governed 报告 gate 回归测试，覆盖可选源降级与 critical 源阻断语义。
 
 ## [3.18.0] - 2026-05-21
 

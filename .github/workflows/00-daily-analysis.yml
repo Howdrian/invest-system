@@ -485,6 +485,16 @@ jobs:
           else
             python main.py $FORCE_RUN_ARG
           fi
+
+          TODAY=$(TZ='Asia/Shanghai' date +%Y-%m-%d)
+          echo "🧭 生成云端看盘三件套: reports/market_cycle/$TODAY"
+          python -m src.market_cycle \
+            --symbols "$STOCK_LIST" \
+            --output-dir "reports/market_cycle/$TODAY" \
+            --market-heat-output-dir "$MARKET_HEAT_OUTPUT_DIR" \
+            --date "$TODAY"
+          echo "macro status: see market-cycle log above"
+          echo "🤖 governed_parallel=$AGENT_GOVERNED_PARALLEL max_workers=$AGENT_GOVERNED_PARALLEL_MAX_WORKERS"
       
       - name: 上传分析报告
         uses: actions/upload-artifact@v6
@@ -505,7 +515,7 @@ jobs:
           echo "=========================================="
           if [ -d "reports" ] && [ "$(ls -A reports 2>/dev/null)" ]; then
             echo "生成的报告:"
-            ls -la reports/
+            find reports -maxdepth 3 -type f | sort
           else
             echo "⚠️ 未生成报告文件"
           fi
@@ -519,9 +529,11 @@ jobs:
         if: always()
         run: |
           TODAY=$(TZ='Asia/Shanghai' date +%Y-%m-%d)
-          mkdir -p docs/daily
+          MARKET_CYCLE_REPORTS="reports/market_cycle/$TODAY"
+          MARKET_CYCLE_DOCS="docs/market_cycle/$TODAY"
+          mkdir -p docs/daily "$MARKET_CYCLE_DOCS" docs/market_heat
           DAILY_INDEX="docs/daily/index.md"
-          # 生成每日投研入口；不要写 docs/index.md，避免和既有 docs/INDEX.md 文档中心在 macOS 上大小写冲突
+          # 生成每日投研入口；不要写 lowercase docs index，避免和既有 docs/INDEX.md 文档中心在 macOS 上大小写冲突
           echo "# 投研日报 — $TODAY" > "$DAILY_INDEX"
           echo "" >> "$DAILY_INDEX"
           echo "> 自动生成于 $(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S') 北京时" >> "$DAILY_INDEX"
@@ -529,7 +541,34 @@ jobs:
           echo "## 自选股" >> "$DAILY_INDEX"
           echo "\`$STOCK_LIST\`" >> "$DAILY_INDEX"
           echo "" >> "$DAILY_INDEX"
-          echo "## 分析结果" >> "$DAILY_INDEX"
+          echo "## 大盘 / 云端看盘三件套" >> "$DAILY_INDEX"
+          if [ -f "$MARKET_CYCLE_REPORTS/summary.md" ]; then
+            cp -r "$MARKET_CYCLE_REPORTS"/* "$MARKET_CYCLE_DOCS"/
+            echo "- [一屏总览](../market_cycle/$TODAY/00_one_screen_brief.html)" >> "$DAILY_INDEX"
+            echo "- [市场策略总控](../market_cycle/$TODAY/14_market_strategy.html)" >> "$DAILY_INDEX"
+            echo "- [数据源健康](../market_cycle/$TODAY/13_source_health.html)" >> "$DAILY_INDEX"
+            TODAY_ENV="$TODAY" python - <<'PY' >> "$DAILY_INDEX"
+import json
+import os
+from pathlib import Path
+today = os.environ["TODAY_ENV"]
+health_path = Path("docs/market_cycle") / today / "13_source_health.json"
+strategy_path = Path("docs/market_cycle") / today / "14_market_strategy.json"
+if health_path.exists():
+    health = json.loads(health_path.read_text(encoding="utf-8"))
+    print(f"- Macro context: `{health.get('macro_status')}`")
+    print(f"- Source health: `{health.get('usability_verdict')}`")
+    print(f"- Trade review usability: `{health.get('trade_review_usability')}`")
+if strategy_path.exists():
+    strategy = json.loads(strategy_path.read_text(encoding="utf-8"))
+    print(f"- Regime: `{strategy.get('regime')}`")
+PY
+          else
+            echo "- ⚠️ market-cycle 三件套未生成" >> "$DAILY_INDEX"
+          fi
+          echo "- Governed parallel: \`$AGENT_GOVERNED_PARALLEL\` / max_workers=\`$AGENT_GOVERNED_PARALLEL_MAX_WORKERS\`" >> "$DAILY_INDEX"
+          echo "" >> "$DAILY_INDEX"
+          echo "## 个股 Governed 报告" >> "$DAILY_INDEX"
           echo "| 文件 | 说明 |" >> "$DAILY_INDEX"
           echo "|---|---|" >> "$DAILY_INDEX"
           for f in reports/*.md reports/*.html reports/*.json; do
@@ -538,12 +577,13 @@ jobs:
               echo "| [$name](../$name) | 查看 |" >> "$DAILY_INDEX"
             fi
           done
-          cp "$DAILY_INDEX" "docs/daily/$TODAY.md"
-          # 把报告文件也移到 docs 目录
-          cp -r reports/* docs/ 2>/dev/null || true
           echo "" >> "$DAILY_INDEX"
           echo "---" >> "$DAILY_INDEX"
           echo "完整的 Actions 运行日志：[查看](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> "$DAILY_INDEX"
+          cp "$DAILY_INDEX" "docs/daily/$TODAY.md"
+          # 把顶层个股报告也移到 docs 目录；market-cycle 使用专属目录
+          cp reports/*.md reports/*.html reports/*.json docs/ 2>/dev/null || true
+          cp "$MARKET_HEAT_OUTPUT_DIR"/* docs/market_heat/ 2>/dev/null || true
 
           git config user.name "invest-bot"
           git config user.email "bot@invest-system.local"
