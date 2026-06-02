@@ -3,49 +3,48 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>投研日报 | invest-system</title>
+<title>投研系统日报 | invest-system</title>
 <style>
-body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; background: #0d1117; color: #c9d1d9; }
-h1 { color: #58a6ff; }
-a { color: #58a6ff; }
-.card { background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 1rem; margin: 1rem 0; }
-.tag { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem; margin-right: 0.5rem; }
-.governed { background: #1f6feb33; color: #58a6ff; }
-.standard { background: #3fb95033; color: #3fb950; }
-.time { color: #8b949e; font-size: 0.85rem; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; max-width: 980px; margin: 2rem auto; padding: 0 1rem; background: #0d1117; color: #c9d1d9; }
+h1, h2 { color: #58a6ff; }
+a { color: #58a6ff; text-decoration: none; }
+a:hover { text-decoration: underline; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; }
+.card { background: #161b22; border: 1px solid #30363d; border-radius: 10px; padding: 1rem; }
+.tag { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.8rem; margin-right: 0.5rem; background: #1f6feb33; color: #58a6ff; }
+.muted { color: #8b949e; font-size: 0.9rem; }
+li { margin: 0.35rem 0; }
 </style>
 </head>
 <body>
-<h1>投研日报</h1>
-<p class="time">最后更新: 2026-05-29 03:30 北京时 | 自选股: 301013 (利和兴)</p>
-<p>基于 daily_stock_analysis + invest-brain 治理层。<br>
-<span class="tag governed">Governed</span> 红蓝对抗 + 5维评分 + CIO总审<br>
-<span class="tag standard">Standard</span> 原版分析</p>
-
-<div class="card">
-<h2>2026-05-29 Governed 模式</h2>
-<p>Technical → Intel → Risk → <strong>RedBlue → Scoring → CIO</strong> → Decision</p>
-<ul>
-<li><a href="./report_governed_20260529.md">301013 利和兴 Governed分析</a> — 7 Agent 全链路完成</li>
-</ul>
+<h1>投研系统日报</h1>
+<p class="muted">最后更新：2026-06-02 21:27:29 北京时 | 自选股：301013,160644</p>
+<p><span class="tag">Market Cycle</span><span class="tag">Governed</span><span class="tag">CIO Gate</span></p>
+<div class="grid">
+  <section class="card">
+    <h2>今日入口</h2>
+    <ul>
+      <li><a href="./daily/2026-06-02.md">投研日报 2026-06-02</a></li>
+      <li><a href="./report_20260602.md">个股 Governed 报告</a></li>
+    </ul>
+  </section>
+  <section class="card">
+    <h2>大盘三件套</h2>
+    <ul>
+      <li><a href="./market_cycle/2026-06-02/00_one_screen_brief.html">一屏总览</a></li>
+      <li><a href="./market_cycle/2026-06-02/14_market_strategy.html">市场策略总控</a></li>
+      <li><a href="./market_cycle/2026-06-02/13_source_health.html">数据源健康</a></li>
+    </ul>
+  </section>
+  <section class="card">
+    <h2>辅助视图</h2>
+    <ul>
+      <li><a href="./market_heat/latest_market_heat.md">市场热度</a></li>
+      <li><a href="./daily/index.md">最新日报 Markdown</a></li>
+      <li><a href="https://github.com/Howdrian/invest-system/actions/runs/26821985123">本次 Actions 日志</a></li>
+    </ul>
+  </section>
 </div>
-
-<div class="card">
-<h2>2026-05-29 Standard 模式</h2>
-<ul>
-<li><a href="./report_20260529.md">301013 利和兴 个股分析</a> — 评分 59，持有观察</li>
-</ul>
-</div>
-
-<div class="card">
-<h2>2026-05-28</h2>
-<ul>
-<li><a href="./market_review_20260528.md">大盘复盘</a> — 上证4098，创业板+1.96%</li>
-</ul>
-</div>
-
-<p style="margin-top:2rem; color:#484f58; font-size:0.8rem;">
-<a href="https://github.com/Howdrian/invest-system">GitHub</a> | 模型: Gemini 2.5 Flash (Vertex AI) | 数据: AkShare/YFinance
-</p>
+<p class="muted">说明：本页面是只读 GitHub Pages 面板；修改自选、持仓或手动触发分析请在 GitHub Actions / Web UI / API 中完成。</p>
 </body>
 </html>

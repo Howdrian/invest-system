@@ -8,6 +8,8 @@ def test_daily_workflow_publishes_market_cycle_without_docs_index_conflict():
     assert "reports/market_cycle/$TODAY" in workflow
     assert "docs/market_cycle/$TODAY" in workflow
     assert "docs/daily/$TODAY.md" in workflow
+    assert "docs/index.html" in workflow
+    assert "投研系统日报" in workflow
     assert "docs/index.md" not in workflow
     assert "macro status" in workflow.lower()
     assert "Macro context" in workflow

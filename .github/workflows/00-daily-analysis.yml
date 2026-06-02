@@ -589,6 +589,59 @@ jobs:
           # 把顶层个股报告也移到 docs 目录；market-cycle 使用专属目录
           cp reports/*.md reports/*.html reports/*.json docs/ 2>/dev/null || true
           cp "$MARKET_HEAT_OUTPUT_DIR"/* docs/market_heat/ 2>/dev/null || true
+          TODAY_COMPACT="${TODAY//-/}"
+          cat > docs/index.html <<HTML
+          <!DOCTYPE html>
+          <html lang="zh-CN">
+          <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>投研系统日报 | invest-system</title>
+          <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; max-width: 980px; margin: 2rem auto; padding: 0 1rem; background: #0d1117; color: #c9d1d9; }
+          h1, h2 { color: #58a6ff; }
+          a { color: #58a6ff; text-decoration: none; }
+          a:hover { text-decoration: underline; }
+          .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; }
+          .card { background: #161b22; border: 1px solid #30363d; border-radius: 10px; padding: 1rem; }
+          .tag { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.8rem; margin-right: 0.5rem; background: #1f6feb33; color: #58a6ff; }
+          .muted { color: #8b949e; font-size: 0.9rem; }
+          li { margin: 0.35rem 0; }
+          </style>
+          </head>
+          <body>
+          <h1>投研系统日报</h1>
+          <p class="muted">最后更新：$(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S') 北京时 | 自选股：$STOCK_LIST</p>
+          <p><span class="tag">Market Cycle</span><span class="tag">Governed</span><span class="tag">CIO Gate</span></p>
+          <div class="grid">
+            <section class="card">
+              <h2>今日入口</h2>
+              <ul>
+                <li><a href="./daily/$TODAY.md">投研日报 $TODAY</a></li>
+                <li><a href="./report_${TODAY_COMPACT}.md">个股 Governed 报告</a></li>
+              </ul>
+            </section>
+            <section class="card">
+              <h2>大盘三件套</h2>
+              <ul>
+                <li><a href="./market_cycle/$TODAY/00_one_screen_brief.html">一屏总览</a></li>
+                <li><a href="./market_cycle/$TODAY/14_market_strategy.html">市场策略总控</a></li>
+                <li><a href="./market_cycle/$TODAY/13_source_health.html">数据源健康</a></li>
+              </ul>
+            </section>
+            <section class="card">
+              <h2>辅助视图</h2>
+              <ul>
+                <li><a href="./market_heat/latest_market_heat.md">市场热度</a></li>
+                <li><a href="./daily/index.md">最新日报 Markdown</a></li>
+                <li><a href="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}">本次 Actions 日志</a></li>
+              </ul>
+            </section>
+          </div>
+          <p class="muted">说明：本页面是只读 GitHub Pages 面板；修改自选、持仓或手动触发分析请在 GitHub Actions / Web UI / API 中完成。</p>
+          </body>
+          </html>
+          HTML
 
           git config user.name "invest-bot"
           git config user.email "bot@invest-system.local"
