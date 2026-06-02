@@ -1,0 +1,42 @@
+{
+  "schema": "source_health_v1",
+  "generated_at": "2026-06-02T13:27:28.480206+00:00",
+  "macro_status": "REFRESHED",
+  "usability_verdict": "usable",
+  "trade_review_usability": "usable",
+  "rows": [
+    {
+      "component": "macro_context",
+      "status": "REFRESHED",
+      "usability": "usable",
+      "criticality": "critical",
+      "blocking_level": "none",
+      "warnings": [],
+      "source": "src.macro.official_sources"
+    },
+    {
+      "component": "market_heat",
+      "status": "AVAILABLE",
+      "usability": "usable",
+      "criticality": "optional",
+      "blocking_level": "none",
+      "warnings": [],
+      "source": "src.intel.market_heat"
+    },
+    {
+      "component": "governed_reports",
+      "status": "AVAILABLE",
+      "usability": "usable",
+      "criticality": "optional",
+      "blocking_level": "none",
+      "warnings": [],
+      "source": "reports/report_YYYYMMDD.md",
+      "count": 1
+    }
+  ],
+  "blocking_summary": {
+    "critical_unavailable_components": [],
+    "optional_unavailable_components": [],
+    "optional_degraded_components": []
+  }
+}

@@ -49,6 +49,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - [修复] 将 `exchange-calendars` 依赖下限提升到 `4.13.0`，避免 pandas 3 环境导入交易日历时因 Timedelta 单位 `T` 失效导致分析失败。
 - [测试] 执行 `python -c "import exchange_calendars as xcals; xcals.get_calendar('XSHG'); print('ok')"` 通过验证，以覆盖导入与交易日历初始化兼容性。
 - [新功能] 普通分析与 Agent 运行时 Prompt 接入 AnalysisContextPack 低敏摘要，保持 history/API/Web 输出兼容。
+- [新功能] governed 模式支持 Technical/Intel/Risk 并行分析、CIO 人工交易计划草案与治理结果持久化。
+- [新功能] governed 模式新增 Macro Analyst、宏观上下文缓存、每日市场热度摘要与 GitHub Actions 预刷新入口；GitHub Actions 默认按 `AGENT_MODE=true`、`AGENT_ARCH=multi`、`AGENT_ORCHESTRATOR_MODE=governed` 运行，可用 Repository Variables 覆盖。
+- [改进] governed RedBlue 升级为蓝队论点→红队攻击→蓝队反驳→红队终局反驳→仲裁的两轮互驳，并为 Technical/Intel/Risk 补齐 Usage + Tips。
+- [改进] 回测服务优先读取 governed CIO trade_plan action，将人工交易计划草案映射到既有方向评估。
+- [修复] 搜索服务配置和 GitHub Actions 兼容 `TAVILY_API_KEY`、`BOCHA_API_KEY`、`SERPAPI_API_KEY`、`BRAVE_API_KEY`、`MINIMAX_API_KEY` 单数环境变量，避免已配置 key 未被读取而降级到公共 SearXNG。
+- [修复] GitHub Actions 在 feature branch 手动运行时，日报提交推送到当前触发分支，避免写死 `main` 导致最后一步失败。
+- [新功能] 新增云端 market-cycle 三件套运行时，生成一屏总览、源健康和市场策略报告，并接入 GitHub Actions 每日发布入口。
+- [修复] governed 报告在 CIO hard gate 或低分阻断时强制展示 `no_action`/0% 仓位，避免最终 Markdown 出现与治理层冲突的交易指令话术。
+- [测试] 补齐 market-cycle、日报发布入口和 governed 报告 gate 回归测试，覆盖可选源降级与 critical 源阻断语义。
 
 ## [3.18.0] - 2026-05-21
 

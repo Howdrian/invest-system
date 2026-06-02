@@ -1955,6 +1955,9 @@ class DatabaseManager(metaclass=_DatabaseManagerMeta):
             'data_sources': getattr(result, 'data_sources', ''),
             'raw_response': getattr(result, 'raw_response', None),
         })
+        governance = getattr(result, "_governance", None)
+        if isinstance(governance, dict) and governance:
+            data["governance"] = governance
         return data
 
     @staticmethod

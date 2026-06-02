@@ -90,6 +90,68 @@ def _safe_float(value: Any) -> Optional[float]:
     except (TypeError, ValueError):
         return None
 
+
+def _enforce_governed_report_gate(result: "AnalysisResult") -> None:
+    """Keep markdown wording aligned with governed CIO/scoring hard gates."""
+    dashboard = getattr(result, "dashboard", None)
+    governance = {}
+    if isinstance(dashboard, dict) and isinstance(dashboard.get("governance"), dict):
+        governance = dashboard["governance"]
+    elif isinstance(getattr(result, "_governance", None), dict):
+        governance = getattr(result, "_governance")
+    if not governance:
+        return
+
+    cio = governance.get("cio") if isinstance(governance.get("cio"), dict) else {}
+    trade_plan = governance.get("trade_plan") if isinstance(governance.get("trade_plan"), dict) else {}
+    status = str(governance.get("cio_status") or cio.get("status") or "").upper()
+    gate = str(governance.get("gate") or governance.get("gate_result") or "").upper()
+    raw_score = governance.get("score")
+    if raw_score is None:
+        raw_score = governance.get("total_score")
+    score = _safe_float(raw_score)
+    action = str(trade_plan.get("action") or "").strip().lower()
+
+    blocked = (
+        status == "BLOCKED_BY_FATAL"
+        or gate == "BLOCKED"
+        or (score is not None and score < 6)
+        or action == "no_action"
+    )
+    if not blocked:
+        return
+
+    trade_plan = dict(trade_plan)
+    trade_plan["action"] = "no_action"
+    trade_plan["target_position_pct"] = 0
+    trade_plan["manual_execution_only"] = True
+    governance["trade_plan"] = trade_plan
+    governance.setdefault("cio_status", status or "BLOCKED_BY_FATAL")
+    if isinstance(dashboard, dict):
+        dashboard.setdefault("governance", governance)
+        core = dashboard.setdefault("core_conclusion", {})
+        if isinstance(core, dict):
+            core["one_sentence"] = (
+                "治理层已阻断：最终动作为 no_action，目标仓位 0%，"
+                "仅保留风险复核和补证据入口。"
+            )
+            core["position_advice"] = {
+                "no_position": "治理层阻断：no_action，目标仓位 0%，不新增仓位，等待补证据或重新评估。",
+                "has_position": "治理层阻断：no_action，目标仓位 0%；如已持仓，仅做风险复核并等待人工确认。",
+            }
+        dashboard["battle_plan"] = {
+            "position_strategy": {
+                "suggested_position": "0%",
+                "entry_plan": "no_action：治理层已阻断，不新增仓位；等待补证据或重新评估。",
+                "risk_control": "不执行自动交易；如已持仓，仅做人工风险复核。",
+            }
+        }
+    setattr(result, "decision_type", "hold")
+    setattr(result, "operation_advice", "观望 — 治理层阻断")
+    # 报告主信号由 sentiment_score 推导。治理层已阻断时，不能继续让极低分被
+    # 渲染成“卖出/清仓”类指令式话术；真实 governed 分数仍保留在 governance 里。
+    setattr(result, "sentiment_score", 50)
+
 if TYPE_CHECKING:
     from src.analyzer import AnalysisResult
 
@@ -714,6 +776,8 @@ class NotificationService(
         """
         if report_date is None:
             report_date = datetime.now().strftime('%Y-%m-%d')
+        for result in results:
+            _enforce_governed_report_gate(result)
         report_language = self._get_report_language(results)
         labels = get_report_labels(report_language)
 
@@ -958,6 +1022,8 @@ class NotificationService(
         Returns:
             Markdown 格式的决策仪表盘日报
         """
+        for result in results:
+            _enforce_governed_report_gate(result)
         config = get_config()
         report_language = self._get_report_language(results)
         labels = get_report_labels(report_language)
@@ -1517,6 +1583,8 @@ class NotificationService(
         """
         if report_date is None:
             report_date = datetime.now().strftime('%Y-%m-%d')
+        for result in results:
+            _enforce_governed_report_gate(result)
         report_language = self._get_report_language(results)
         labels = get_report_labels(report_language)
         config = get_config()
@@ -1574,6 +1642,7 @@ class NotificationService(
         Returns:
             Markdown 格式的单股报告
         """
+        _enforce_governed_report_gate(result)
         report_date = datetime.now().strftime('%Y-%m-%d %H:%M')
         report_language = self._get_report_language(result)
         labels = get_report_labels(report_language)

@@ -620,6 +620,7 @@ class Config:
     # === 数据源 API Token ===
     tushare_token: Optional[str] = None
     tickflow_api_key: Optional[str] = None
+    fmp_api_key: Optional[str] = None
     finnhub_api_key: Optional[str] = None
     alphavantage_api_key: Optional[str] = None
     longbridge_app_key: Optional[str] = None
@@ -712,6 +713,13 @@ class Config:
     agent_arch: str = "single"     # Agent architecture: 'single' (legacy) or 'multi' (orchestrator)
     agent_orchestrator_mode: str = "standard"  # Orchestrator mode: quick/standard/full/specialist
     agent_orchestrator_timeout_s: int = 600  # Cooperative timeout budget for the whole multi-agent pipeline
+    agent_governed_parallel: bool = True  # Run governed Technical/Intel/Risk stages concurrently
+    agent_governed_parallel_max_workers: int = 3  # Max concurrent governed analysis stages
+    macro_context_enabled: bool = True  # Inject cached macro/regime context into governed analysis
+    macro_context_cache_ttl_seconds: int = 12 * 60 * 60  # Cache TTL for governed macro context
+    macro_context_refresh_on_run: bool = False  # Online macro refresh inside each governed run (off by default)
+    market_heat_enabled: bool = True  # Inject daily market-heat/watchlist context into IntelAgent
+    market_heat_output_dir: str = "reports/market_heat"  # Daily market-heat artifact directory
     agent_risk_override: bool = True  # Allow risk agent to veto buy signals
     agent_deep_research_budget: int = 30000  # Max token budget for deep research
     agent_deep_research_timeout: int = 180  # Max seconds for /research command before returning timeout
@@ -1042,6 +1050,18 @@ class Config:
         if cls._instance is None:
             cls._instance = cls._load_from_env()
         return cls._instance
+
+    @classmethod
+    def _parse_multi_key_env(cls, primary_name: str, *alias_names: str) -> List[str]:
+        """Parse comma-separated API keys from primary env name plus aliases."""
+        keys: List[str] = []
+        for name in (primary_name, *alias_names):
+            raw = os.getenv(name, "")
+            for item in raw.split(","):
+                key = item.strip()
+                if key and key not in keys:
+                    keys.append(key)
+        return keys
     
     @classmethod
     def _load_from_env(cls) -> 'Config':
@@ -1307,21 +1327,12 @@ class Config:
             maximum=20,
         )
 
-        # 解析搜索引擎 API Keys（支持多个 key，逗号分隔）
-        bocha_keys_str = os.getenv('BOCHA_API_KEYS', '')
-        bocha_api_keys = [k.strip() for k in bocha_keys_str.split(',') if k.strip()]
-
-        minimax_keys_str = os.getenv('MINIMAX_API_KEYS', '')
-        minimax_api_keys = [k.strip() for k in minimax_keys_str.split(',') if k.strip()]
-        
-        tavily_keys_str = os.getenv('TAVILY_API_KEYS', '')
-        tavily_api_keys = [k.strip() for k in tavily_keys_str.split(',') if k.strip()]
-        
-        serpapi_keys_str = os.getenv('SERPAPI_API_KEYS', '')
-        serpapi_keys = [k.strip() for k in serpapi_keys_str.split(',') if k.strip()]
-
-        brave_keys_str = os.getenv('BRAVE_API_KEYS', '')
-        brave_api_keys = [k.strip() for k in brave_keys_str.split(',') if k.strip()]
+        # 解析搜索引擎 API Keys（支持多个 key，逗号分隔；兼容常见单数 KEY 命名）
+        bocha_api_keys = cls._parse_multi_key_env('BOCHA_API_KEYS', 'BOCHA_API_KEY')
+        minimax_api_keys = cls._parse_multi_key_env('MINIMAX_API_KEYS', 'MINIMAX_API_KEY')
+        tavily_api_keys = cls._parse_multi_key_env('TAVILY_API_KEYS', 'TAVILY_API_KEY')
+        serpapi_keys = cls._parse_multi_key_env('SERPAPI_API_KEYS', 'SERPAPI_API_KEY')
+        brave_api_keys = cls._parse_multi_key_env('BRAVE_API_KEYS', 'BRAVE_API_KEY')
 
         _raw_urls = [u.strip() for u in os.getenv('SEARXNG_BASE_URLS', '').split(',') if u.strip()]
         searxng_base_urls = []
@@ -1410,6 +1421,7 @@ class Config:
             feishu_folder_token=os.getenv('FEISHU_FOLDER_TOKEN'),
             tushare_token=os.getenv('TUSHARE_TOKEN'),
             tickflow_api_key=os.getenv('TICKFLOW_API_KEY'),
+            fmp_api_key=os.getenv('FMP_API_KEY') or os.getenv('FINANCIAL_MODELING_PREP_API_KEY') or None,
             finnhub_api_key=os.getenv('FINNHUB_API_KEY') or None,
             alphavantage_api_key=os.getenv('ALPHAVANTAGE_API_KEY') or None,
             longbridge_app_key=os.getenv('LONGBRIDGE_APP_KEY') or None,
@@ -1494,6 +1506,32 @@ class Config:
                 field_name='AGENT_ORCHESTRATOR_TIMEOUT_S',
                 minimum=0,
             ),
+            agent_governed_parallel=os.getenv('AGENT_GOVERNED_PARALLEL', 'true').lower() == 'true',
+            agent_governed_parallel_max_workers=parse_env_int(
+                os.getenv('AGENT_GOVERNED_PARALLEL_MAX_WORKERS'),
+                3,
+                field_name='AGENT_GOVERNED_PARALLEL_MAX_WORKERS',
+                minimum=1,
+            ),
+            macro_context_enabled=parse_env_bool(
+                os.getenv('MACRO_CONTEXT_ENABLED'),
+                default=True,
+            ),
+            macro_context_cache_ttl_seconds=parse_env_int(
+                os.getenv('MACRO_CONTEXT_CACHE_TTL_SECONDS'),
+                12 * 60 * 60,
+                field_name='MACRO_CONTEXT_CACHE_TTL_SECONDS',
+                minimum=60,
+            ),
+            macro_context_refresh_on_run=parse_env_bool(
+                os.getenv('MACRO_CONTEXT_REFRESH_ON_RUN'),
+                default=False,
+            ),
+            market_heat_enabled=parse_env_bool(
+                os.getenv('MARKET_HEAT_ENABLED'),
+                default=True,
+            ),
+            market_heat_output_dir=os.getenv('MARKET_HEAT_OUTPUT_DIR') or "reports/market_heat",
             agent_risk_override=os.getenv('AGENT_RISK_OVERRIDE', 'true').lower() == 'true',
             agent_deep_research_budget=parse_env_int(
                 os.getenv('AGENT_DEEP_RESEARCH_BUDGET'),

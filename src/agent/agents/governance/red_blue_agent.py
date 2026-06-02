@@ -7,7 +7,9 @@ Based on invest-brain ``agents/red-team-protocol.md``.
 Flow:
 1. Blue team: construct 3 bull arguments (data + timeframe + catalyst)
 2. Red team: attack each argument with 3 fatal counterpoints (evidence + probability)
-3. Arbitrator: assess which side is stronger, identify blind spots, output verdict
+3. Blue team: rebut each red attack with evidence or concede the weakness
+4. Red team: final counter-rebuttal, separating fatal objections from residual risk
+5. Arbitrator: assess which side is stronger, identify blind spots, output verdict
 
 This agent does NOT use tools — it works purely from the context
 accumulated by prior agents (Technical, Intel, Risk).
@@ -82,7 +84,20 @@ Red Team discipline:
 - Every attack must be verifiable
 - You may challenge the reliability of the data sources themselves
 
-## Step 3 — Arbitration (Neutral Judge)
+## Step 3 — Blue Team Rebuttal
+For EACH red attack:
+- Either rebut it with specific evidence already present in context
+- Or concede it as a real weakness
+- Do not invent new facts
+
+## Step 4 — Red Team Final Counter-Rebuttal
+For EACH blue rebuttal:
+- State whether the rebuttal fully resolves, partially resolves, or fails to
+  resolve the attack
+- Identify remaining fatal objections, if any
+- Escalate weak-source or missing-data problems
+
+## Step 5 — Arbitration (Neutral Judge)
 1. Assess which side has stronger evidence
 2. Identify blind spots BOTH sides missed
 3. Output a 0-10 confidence score for the bull case
@@ -102,6 +117,14 @@ Return **only** a JSON object:
         "catalyst": "What triggers the payoff"
       }}
     ],
+    "rebuttals": [
+      {{
+        "targets_red_attack": 1,
+        "response": "Blue rebuttal or concession",
+        "evidence": "Context evidence used, or data gap",
+        "resolved": "yes|partial|no"
+      }}
+    ],
     "overall_strength": 0-10
   }},
   "red_team": {{
@@ -111,6 +134,14 @@ Return **only** a JSON object:
         "fatal_risk": "The specific risk",
         "evidence": "Verifiable evidence",
         "probability": "Estimated likelihood (low/medium/high/critical)"
+      }}
+    ],
+    "final_attacks": [
+      {{
+        "targets_blue_rebuttal": 1,
+        "counterpoint": "Final red response",
+        "remaining_risk": "fatal|material|minor|resolved",
+        "evidence_gap": "Missing evidence if any"
       }}
     ],
     "overall_strength": 0-10

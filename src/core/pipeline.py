@@ -12,6 +12,7 @@ A股自选股智能分析系统 - 核心分析流水线
 """
 
 import logging
+import re
 import threading
 import time
 import uuid
@@ -218,7 +219,13 @@ class StockAnalysisPipeline:
     def _build_governed_result_from_context(self, ctx, code, stock_name, orch_result):
         """Build AnalysisResult from partial orchestrator output (governance agents completed)."""
         from src.analyzer import AnalysisResult
-        result = AnalysisResult()
+        result = AnalysisResult(
+            code=code,
+            name=stock_name,
+            sentiment_score=50,
+            trend_prediction="治理层审查",
+            operation_advice="观望",
+        )
         result.success = True
         result._governed = True
         result.stock_code = code
@@ -232,6 +239,7 @@ class StockAnalysisPipeline:
         status = cio.get("status", "NEEDS_EVIDENCE")
         total_score = scoring.get("total_score", 0)
         gate = scoring.get("gate_result", "UNKNOWN")
+        trade_plan = cio.get("trade_plan") if isinstance(cio.get("trade_plan"), dict) else {}
 
         # Build summary from governance data
         parts = [f"[{status}] Score: {total_score}/10 Gate: {gate}"]
@@ -261,6 +269,7 @@ class StockAnalysisPipeline:
             "red_blue": rb,
             "scoring": scoring,
             "cio": cio,
+            "trade_plan": trade_plan,
         }
 
         if status == "BLOCKED_BY_FATAL" or gate == "BLOCKED":
@@ -276,9 +285,15 @@ class StockAnalysisPipeline:
             result.sentiment_score = 50
             result.operation_advice = "补证据后重新评估"
         elif status == "READY_FOR_REVIEW":
-            result.decision_type = "hold"
+            action = str(trade_plan.get("action") or "").lower()
+            if action in {"buy", "add"}:
+                result.decision_type = "buy"
+            elif action in {"sell", "reduce"}:
+                result.decision_type = "sell"
+            else:
+                result.decision_type = "hold"
             result.sentiment_score = int(total_score * 10)
-            result.operation_advice = "可进入人工审查"
+            result.operation_advice = "CIO交易计划草案可进入人工审查"
         else:
             result.decision_type = "hold"
             result.sentiment_score = 50
@@ -297,12 +312,16 @@ class StockAnalysisPipeline:
                 "score": total_score,
                 "gate": gate,
                 "red_blue_verdict": rb.get("arbitration", {}).get("verdict", ""),
+                "cio": cio,
+                "trade_plan": trade_plan,
             },
         }
         return result
 
     def _run_governed_analysis(self, code, stock_name, enhanced_context, news_context,
-                               trend_result, fundamental_context, realtime_quote):
+                               trend_result, fundamental_context, realtime_quote,
+                               chip_data=None, analysis_context_pack_summary: str = "",
+                               market_phase_context: Optional[Dict[str, Any]] = None):
         """Run the full governed pipeline and return an AnalysisResult."""
         from src.agent.protocols import AgentContext
         from src.analyzer import AnalysisResult
@@ -314,41 +333,67 @@ class StockAnalysisPipeline:
             stock_code=code,
             stock_name=stock_name,
         )
-        ctx.set_data("realtime_quote", realtime_quote or enhanced_context.get("realtime", {}))
+        realtime_payload = self._safe_to_dict(realtime_quote) or enhanced_context.get("realtime", {})
+        current_price = (
+            realtime_payload.get("price")
+            if isinstance(realtime_payload, dict)
+            else None
+        )
+        ctx.set_data("realtime_quote", realtime_payload)
         ctx.set_data("daily_history", enhanced_context.get("history"))
         ctx.set_data("trend_result", trend_result.__dict__ if trend_result else {})
+        chip_payload = self._safe_to_dict(chip_data) or enhanced_context.get("chip")
+        if chip_payload:
+            ctx.set_data("chip_distribution", chip_payload)
         ctx.set_data("news_context", news_context)
         if isinstance(fundamental_context, dict):
             ctx.set_data("fundamental_context", fundamental_context)
+        portfolio_context = self._build_governed_portfolio_context(
+            code=code,
+            current_price=current_price,
+        )
+        if portfolio_context:
+            ctx.set_data("portfolio_context", portfolio_context)
+        macro_context = self._build_governed_macro_context()
+        if macro_context:
+            ctx.set_data("macro_context", macro_context)
+        market_heat_context = self._build_governed_market_heat_context()
+        if market_heat_context:
+            ctx.set_data("market_heat_context", market_heat_context)
         ctx.meta["report_language"] = "zh"
+        if isinstance(market_phase_context, dict):
+            ctx.meta["market_phase_context"] = market_phase_context
+        elif isinstance(enhanced_context.get("market_phase_context"), dict):
+            ctx.meta["market_phase_context"] = enhanced_context["market_phase_context"]
+        if analysis_context_pack_summary:
+            ctx.meta["analysis_context_pack_summary"] = analysis_context_pack_summary
 
         self._emit_progress(66, f"{stock_name}：治理层 RedBlue 红蓝对抗中...")
-        orch_result = orchestrator.run(
-            task=f"分析 {stock_name}({code})",
-            context={
-                "stock_code": code,
-                "stock_name": stock_name,
-                "report_language": "zh",
-            },
-        )
+        orch_result = orchestrator._execute_pipeline(ctx, parse_dashboard=True)
 
         # If orchestrator succeeded with full dashboard, use it
         if orch_result.success and orch_result.dashboard:
             d = orch_result.dashboard
-            result = AnalysisResult()
+            result = AnalysisResult(
+                code=code,
+                name=stock_name,
+                sentiment_score=self._safe_int(d.get("sentiment_score", 50)),
+                trend_prediction=d.get("trend_prediction", ""),
+                operation_advice=d.get("operation_advice", ""),
+            )
             result.success = True
             result.stock_code = code
             result.stock_name = stock_name
             result.decision_type = d.get("decision_type", "hold")
-            result.sentiment_score = d.get("sentiment_score", 50)
             result.analysis_summary = d.get("analysis_summary", "")
-            result.operation_advice = d.get("operation_advice", "")
-            result.trend_prediction = d.get("trend_prediction", "")
             result.risk_warning = d.get("risk_warning", "")
             result.key_points = d.get("key_points", [])
             result.dashboard = d
             result.model_used = "governed/gemini-2.5-flash"
             result._governed = True
+            governance = d.get("governance") if isinstance(d, dict) else None
+            if isinstance(governance, dict):
+                result._governance = governance
             return result
 
         # Orchestrator may have failed at Decision stage but governance agents completed.
@@ -361,13 +406,167 @@ class StockAnalysisPipeline:
             return self._build_governed_result_from_context(ctx, code, stock_name, orch_result)
 
         # Complete failure — no useful data
-        result = AnalysisResult()
+        result = AnalysisResult(
+            code=code,
+            name=stock_name,
+            sentiment_score=50,
+            trend_prediction="治理层分析失败",
+            operation_advice="观望",
+        )
         result.success = False
         result.stock_code = code
         result.stock_name = stock_name
         result.analysis_summary = f"Governed analysis failed: {orch_result.error}"
         result.model_used = "governed/gemini-2.5-flash"
         return result
+
+    def _build_governed_macro_context(self) -> Dict[str, Any]:
+        """Return cached/refreshed macro context for governed analysis.
+
+        This path is intentionally fail-open: missing FMP key or network should
+        degrade macro evidence, not block a stock analysis run.
+        """
+        config = getattr(self, "config", None) or get_config()
+        if not getattr(config, "macro_context_enabled", True):
+            return {
+                "schema": "macro_context_v1",
+                "status": "DISABLED",
+                "warnings": ["macro_context_disabled"],
+            }
+        try:
+            from src.macro.official_sources import MacroContextService
+
+            service = MacroContextService(fmp_api_key=getattr(config, "fmp_api_key", None))
+            return service.get_context(
+                allow_network=bool(getattr(config, "macro_context_refresh_on_run", False)),
+                force_refresh=bool(getattr(config, "macro_context_refresh_on_run", False)),
+                max_age_seconds=int(getattr(config, "macro_context_cache_ttl_seconds", 12 * 60 * 60)),
+            )
+        except Exception as exc:
+            logger.warning("Governed macro context unavailable: %s", exc)
+            return {
+                "schema": "macro_context_v1",
+                "status": "DEGRADED",
+                "warnings": [f"macro_context_error: {exc}"],
+            }
+
+    def _build_governed_market_heat_context(self) -> Dict[str, Any]:
+        """Return daily market-heat / watchlist context for IntelAgent."""
+        config = getattr(self, "config", None) or get_config()
+        if not getattr(config, "market_heat_enabled", True):
+            return {
+                "schema": "market_heat_v1",
+                "status": "DISABLED",
+                "notes": ["market_heat_disabled"],
+            }
+        try:
+            from src.intel.market_heat import build_market_heat_snapshot, load_latest_market_heat
+
+            output_dir = getattr(config, "market_heat_output_dir", "reports/market_heat")
+            cached = load_latest_market_heat(output_dir)
+            if cached:
+                return cached
+            return build_market_heat_snapshot(getattr(config, "stock_list", []))
+        except Exception as exc:
+            logger.warning("Governed market heat context unavailable: %s", exc)
+            return {
+                "schema": "market_heat_v1",
+                "status": "DEGRADED",
+                "notes": [f"market_heat_error: {exc}"],
+            }
+
+    def _build_governed_portfolio_context(
+        self,
+        *,
+        code: str,
+        current_price: Optional[float],
+    ) -> Dict[str, Any]:
+        """Return a compact portfolio context from invest-system DB for CIO review."""
+        try:
+            from src.services.portfolio_service import PortfolioService
+
+            snapshot = PortfolioService().get_portfolio_snapshot()
+        except Exception as exc:
+            logger.warning("Governed portfolio context unavailable for %s: %s", code, exc)
+            return {
+                "source": "invest-system DB",
+                "status": "unavailable",
+                "error": str(exc),
+                "current_price": current_price,
+            }
+
+        if not isinstance(snapshot, dict):
+            return {
+                "source": "invest-system DB",
+                "status": "unavailable",
+                "current_price": current_price,
+            }
+
+        accounts = snapshot.get("accounts") if isinstance(snapshot.get("accounts"), list) else []
+        target_positions: List[Dict[str, Any]] = []
+        top_positions: List[Dict[str, Any]] = []
+        available_cash = 0.0
+        target_market_value = 0.0
+        normalized_target = self._normalize_portfolio_symbol_for_match(code)
+
+        for account in accounts:
+            if not isinstance(account, dict):
+                continue
+            available_cash += self._safe_float(account.get("total_cash"), default=0.0)
+            for position in account.get("positions") or []:
+                if not isinstance(position, dict):
+                    continue
+                compact = {
+                    "account_id": account.get("account_id"),
+                    "account_name": account.get("account_name"),
+                    "symbol": position.get("symbol"),
+                    "market": position.get("market"),
+                    "quantity": position.get("quantity"),
+                    "avg_cost": position.get("avg_cost"),
+                    "last_price": position.get("last_price"),
+                    "market_value_base": position.get("market_value_base"),
+                    "unrealized_pnl_base": position.get("unrealized_pnl_base"),
+                    "unrealized_pnl_pct": position.get("unrealized_pnl_pct"),
+                }
+                top_positions.append(compact)
+                if self._normalize_portfolio_symbol_for_match(str(position.get("symbol") or "")) == normalized_target:
+                    target_positions.append(compact)
+                    target_market_value += self._safe_float(position.get("market_value_base"), default=0.0)
+
+        top_positions.sort(
+            key=lambda item: self._safe_float(item.get("market_value_base"), default=0.0),
+            reverse=True,
+        )
+        total_equity = self._safe_float(snapshot.get("total_equity"), default=0.0)
+        return {
+            "source": "invest-system DB",
+            "status": "available",
+            "as_of": snapshot.get("as_of"),
+            "currency": snapshot.get("currency"),
+            "account_count": snapshot.get("account_count", len(accounts)),
+            "total_equity": total_equity,
+            "available_cash": available_cash,
+            "total_market_value": self._safe_float(snapshot.get("total_market_value"), default=0.0),
+            "current_price": current_price,
+            "has_position": bool(target_positions),
+            "target_market_value": target_market_value,
+            "target_positions": target_positions,
+            "top_positions": top_positions[:5],
+        }
+
+    @staticmethod
+    def _normalize_portfolio_symbol_for_match(symbol: str) -> str:
+        text = str(symbol or "").strip().upper()
+        if not text:
+            return ""
+        return re.sub(r"^(SH|SZ|HK|US)|\.(SH|SZ|HK|US)$", "", text)
+
+    @staticmethod
+    def _safe_float(value: Any, default: float = 0.0) -> float:
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return default
 
     def _emit_progress(self, progress: int, message: str) -> None:
         """Best-effort bridge from pipeline stages to task SSE progress."""
@@ -744,6 +943,9 @@ class StockAnalysisPipeline:
                 result = self._run_governed_analysis(
                     code, stock_name, enhanced_context, news_context,
                     trend_result, fundamental_context, realtime_quote,
+                    chip_data=chip_data,
+                    analysis_context_pack_summary=analysis_context_pack_summary,
+                    market_phase_context=market_phase_context_dict,
                 )
             else:
                 try:
@@ -824,6 +1026,7 @@ class StockAnalysisPipeline:
                         realtime_quote=realtime_quote,
                         chip_data=chip_data
                     )
+                    self._attach_result_governance_to_snapshot(context_snapshot, result)
                     result.diagnostic_context_snapshot = context_snapshot
                     saved_count = self.db.save_analysis_history(
                         result=result,
@@ -1315,6 +1518,7 @@ class StockAnalysisPipeline:
                         realtime_quote=realtime_quote,
                         chip_data=chip_data,
                     )
+                    self._attach_result_governance_to_snapshot(agent_context_snapshot, result)
                     result.diagnostic_context_snapshot = agent_context_snapshot
                     agent_context_snapshot["stock_name"] = resolved_stock_name
                     saved_count = self.db.save_analysis_history(
@@ -1507,6 +1711,11 @@ class StockAnalysisPipeline:
             # methods (get_sniper_points, get_core_conclusion, etc.) expect that inner
             # structure, so we unwrap it here.
             result.dashboard = nested_dashboard or dash
+            governance = self._extract_agent_dashboard_governance(dash, nested_dashboard)
+            if governance:
+                result._governance = governance
+                if isinstance(result.dashboard, dict) and "governance" not in result.dashboard:
+                    result.dashboard["governance"] = governance
             self._backfill_agent_dashboard_fields(result, trend_result, report_language)
         else:
             self._apply_trend_fallback(result, trend_result, report_language)
@@ -1520,6 +1729,18 @@ class StockAnalysisPipeline:
                 result.error_message = "Agent failed to generate a valid decision dashboard" if report_language == "en" else "Agent 未能生成有效的决策仪表盘"
 
         return result
+
+    @staticmethod
+    def _extract_agent_dashboard_governance(
+        dash: Dict[str, Any],
+        nested_dashboard: Any,
+    ) -> Dict[str, Any]:
+        """Extract governed-mode payload from AgentResult dashboard shapes."""
+        if isinstance(dash, dict) and isinstance(dash.get("governance"), dict):
+            return dash["governance"]
+        if isinstance(nested_dashboard, dict) and isinstance(nested_dashboard.get("governance"), dict):
+            return nested_dashboard["governance"]
+        return {}
 
     @staticmethod
     def _agent_dashboard_value(
@@ -1966,6 +2187,19 @@ class StockAnalysisPipeline:
         if self.analysis_skills is not None:
             snapshot["skills"] = list(self.analysis_skills)
         return snapshot
+
+    @staticmethod
+    def _attach_result_governance_to_snapshot(snapshot: Dict[str, Any], result: Any) -> None:
+        """Persist governed review artifacts into the diagnostic context snapshot."""
+        if not isinstance(snapshot, dict) or result is None:
+            return
+        governance = getattr(result, "_governance", None)
+        if not isinstance(governance, dict):
+            dashboard = getattr(result, "dashboard", None)
+            if isinstance(dashboard, dict) and isinstance(dashboard.get("governance"), dict):
+                governance = dashboard["governance"]
+        if isinstance(governance, dict) and governance:
+            snapshot["governance"] = governance
 
     @staticmethod
     def _build_notification_run_snapshot(

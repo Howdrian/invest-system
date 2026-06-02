@@ -14,6 +14,10 @@ from src.config import get_config
 from src.core.backtest_engine import OVERALL_SENTINEL_CODE, BacktestEngine, EvaluationConfig
 from src.repositories.backtest_repo import BacktestRepository
 from src.repositories.stock_repo import StockRepository
+from src.services.governed_backtest import (
+    resolve_governed_operation_advice,
+    resolve_governed_price_levels,
+)
 from src.storage import BacktestResult, BacktestSummary, DatabaseManager
 
 logger = logging.getLogger(__name__)
@@ -74,6 +78,8 @@ class BacktestService:
         for analysis in candidates:
             processed += 1
             touched_codes.add(analysis.code)
+            operation_advice = self._resolve_operation_advice_for_backtest(analysis)
+            stop_loss, take_profit = self._resolve_price_levels_for_backtest(analysis)
 
             try:
                 analysis_date = self._resolve_analysis_date(analysis)
@@ -87,7 +93,7 @@ class BacktestService:
                             engine_version=str(engine_version),
                             eval_status="error",
                             evaluated_at=datetime.now(),
-                            operation_advice=analysis.operation_advice,
+                            operation_advice=operation_advice,
                         )
                     )
                     continue
@@ -108,7 +114,7 @@ class BacktestService:
                             engine_version=str(engine_version),
                             eval_status="insufficient_data",
                             evaluated_at=datetime.now(),
-                            operation_advice=analysis.operation_advice,
+                            operation_advice=operation_advice,
                         )
                     )
                     continue
@@ -128,12 +134,12 @@ class BacktestService:
                     )
 
                 evaluation = BacktestEngine.evaluate_single(
-                    operation_advice=analysis.operation_advice,
+                    operation_advice=operation_advice,
                     analysis_date=start_daily.date,
                     start_price=float(start_daily.close),
                     forward_bars=forward_bars,
-                    stop_loss=analysis.stop_loss,
-                    take_profit=analysis.take_profit,
+                    stop_loss=stop_loss,
+                    take_profit=take_profit,
                     config=eval_config,
                 )
 
@@ -190,7 +196,7 @@ class BacktestService:
                         engine_version=str(engine_version),
                         eval_status="error",
                         evaluated_at=datetime.now(),
-                        operation_advice=analysis.operation_advice,
+                        operation_advice=operation_advice,
                     )
                 )
 
@@ -343,6 +349,25 @@ class BacktestService:
             return analysis.created_at.date()
         logger.warning(f"无法确定分析日期，跳过记录: {analysis.code}#{getattr(analysis, 'id', '?')}")
         return None
+
+    @staticmethod
+    def _resolve_operation_advice_for_backtest(analysis) -> Optional[str]:
+        """Prefer governed CIO trade-plan action when present, else legacy advice."""
+        return resolve_governed_operation_advice(
+            raw_result=getattr(analysis, "raw_result", None),
+            context_snapshot=getattr(analysis, "context_snapshot", None),
+            fallback=getattr(analysis, "operation_advice", None),
+        )
+
+    @staticmethod
+    def _resolve_price_levels_for_backtest(analysis) -> tuple[Optional[float], Optional[float]]:
+        """Prefer governed CIO trade-plan stop/take-profit hints when numeric."""
+        return resolve_governed_price_levels(
+            raw_result=getattr(analysis, "raw_result", None),
+            context_snapshot=getattr(analysis, "context_snapshot", None),
+            fallback_stop_loss=getattr(analysis, "stop_loss", None),
+            fallback_take_profit=getattr(analysis, "take_profit", None),
+        )
 
     def _try_fill_daily_data(self, *, code: str, analysis_date: date, eval_window_days: int) -> None:
         try:
