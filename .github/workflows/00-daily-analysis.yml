@@ -527,6 +527,11 @@ jobs:
 
       - name: 提交报告到仓库
         if: always()
+        env:
+          STOCK_LIST: ${{ vars.STOCK_LIST || secrets.STOCK_LIST || '600519' }}
+          MARKET_HEAT_OUTPUT_DIR: ${{ vars.MARKET_HEAT_OUTPUT_DIR || secrets.MARKET_HEAT_OUTPUT_DIR || 'reports/market_heat' }}
+          AGENT_GOVERNED_PARALLEL: ${{ vars.AGENT_GOVERNED_PARALLEL || secrets.AGENT_GOVERNED_PARALLEL || 'true' }}
+          AGENT_GOVERNED_PARALLEL_MAX_WORKERS: ${{ vars.AGENT_GOVERNED_PARALLEL_MAX_WORKERS || secrets.AGENT_GOVERNED_PARALLEL_MAX_WORKERS || '3' }}
         run: |
           TODAY=$(TZ='Asia/Shanghai' date +%Y-%m-%d)
           MARKET_CYCLE_REPORTS="reports/market_cycle/$TODAY"
