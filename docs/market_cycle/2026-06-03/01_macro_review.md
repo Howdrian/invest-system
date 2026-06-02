@@ -7,7 +7,7 @@
 
 ## 主结论
 
-宏观中性，等待价格和证据共振；VIX neutral: 16.02
+风险偏好偏强，但仍需候选证据确认；VIX low: 15.92
 
 ## 宏观四维度 / 风险温度
 
@@ -18,14 +18,14 @@
 | `rates_liquidity` | `available_limited` | `neutral_or_unknown` | 官方宏观源刷新入口已接入；无 key 时只提供降级上下文。 |
 | `energy_commodities` | `degraded` | `watch` | WTI/EIA/FRED not fully wired; Polymarket energy scenarios can only be optional hints. |
 | `usd_fx` | `missing` | `unknown` | DXY/USD/CNH not wired in v1. |
-| `risk_appetite` | `available` | `neutral` | VIX neutral: 16.02 |
+| `risk_appetite` | `available` | `risk_on` | VIX low: 15.92 |
 | `market_heat` | `available` | `watchlist_or_hotspot` | focus_items=2 |
 
 ## 6 因子 Regime
 
-- Risk state: `neutral`
+- Risk state: `risk_on`
 - Six-factor status: `DEGRADED`
-- Reason: VIX neutral: 16.02
+- Reason: VIX low: 15.92
 - Boundary: 六因子缺项时只作为宏观降级判断，不冒充满血 Regime。
 
 ## 地缘四场景 / Polymarket 融合
@@ -39,7 +39,7 @@
 
 ## 对资产/候选池影响
 
-- 维持观察，等待宏观、板块和个股证据共振。
+- 可观察高质量成长/科技候选，但不得追高或跳过评分。
 - Polymarket 和宏观只影响候选优先级、风险预算和红队问题，不直接交易。
 
 ## Data gaps

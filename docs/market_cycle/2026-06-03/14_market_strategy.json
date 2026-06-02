@@ -1,10 +1,10 @@
 {
   "schema": "market_strategy_v1",
-  "generated_at": "2026-06-02T16:32:56.777832+00:00",
-  "regime": "NEUTRAL_WATCH",
+  "generated_at": "2026-06-02T17:21:41.007968+00:00",
+  "regime": "STRUCTURAL_RISK_ON",
   "confidence": "MEDIUM",
   "strategy": {
-    "headline": "宏观中性；维持观察，等待价格和证据共振。",
+    "headline": "宏观风险偏好偏强；候选可进入人工预审，但不得跳过红蓝和评分。",
     "stance": "watch_conditions_ready",
     "actions": [
       "把热度和宏观作为候选发现，不直接触发交易",

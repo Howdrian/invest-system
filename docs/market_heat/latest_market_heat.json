@@ -1,7 +1,7 @@
 {
   "schema": "market_heat_v1",
   "status": "available",
-  "as_of": "2026-06-02T16:22:53.123293+00:00",
+  "as_of": "2026-06-02T17:07:00.537361+00:00",
   "watchlist": [
     "301013",
     "160644"
@@ -113,18 +113,18 @@
     },
     {
       "rank": 14,
-      "code": "SZ002081",
-      "name": "金 螳 螂",
-      "price": 6.85,
-      "change_pct": 1.03,
-      "source": "东方财富人气榜"
-    },
-    {
-      "rank": 15,
       "code": "SZ000062",
       "name": "深圳华强",
       "price": 33.52,
       "change_pct": 10.01,
+      "source": "东方财富人气榜"
+    },
+    {
+      "rank": 15,
+      "code": "SZ002081",
+      "name": "金 螳 螂",
+      "price": 6.85,
+      "change_pct": 1.03,
       "source": "东方财富人气榜"
     },
     {

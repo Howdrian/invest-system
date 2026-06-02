@@ -1,6 +1,6 @@
 # Market Regime Strategy
 
-- Regime: `NEUTRAL_WATCH`
+- Regime: `STRUCTURAL_RISK_ON`
 - Confidence: `MEDIUM`
 - Stance: `watch_conditions_ready`
 - Participation allowed: `True`
@@ -8,7 +8,7 @@
 
 ## 主结论
 
-宏观中性；维持观察，等待价格和证据共振。
+宏观风险偏好偏强；候选可进入人工预审，但不得跳过红蓝和评分。
 
 ## 应该做
 

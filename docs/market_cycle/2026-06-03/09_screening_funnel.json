@@ -1,7 +1,7 @@
 {
   "schema": "screening_funnel_v1",
   "run_date": "2026-06-03",
-  "generated_at": "2026-06-02T16:32:56.777782+00:00",
+  "generated_at": "2026-06-02T17:21:41.007911+00:00",
   "status": "available",
   "candidate_count": 22,
   "candidates": [
@@ -214,8 +214,8 @@
       "macro_overlay": "地缘/预测市场差异触发红队复核。"
     },
     {
-      "symbol": "SZ002081",
-      "name": "金 螳 螂",
+      "symbol": "SZ000062",
+      "name": "深圳华强",
       "source": "hot_stocks",
       "priority_score": 6.5,
       "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
@@ -230,8 +230,8 @@
       "macro_overlay": "地缘/预测市场差异触发红队复核。"
     },
     {
-      "symbol": "SZ000062",
-      "name": "深圳华强",
+      "symbol": "SZ002081",
+      "name": "金 螳 螂",
       "source": "hot_stocks",
       "priority_score": 6.5,
       "evidence_quality": "MEDIUM_MIXED_EVIDENCE",

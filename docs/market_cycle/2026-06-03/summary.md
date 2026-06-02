@@ -5,7 +5,7 @@
 - Prediction market: `AVAILABLE`
 - Source health: `degraded`
 - Trade review usability: `usable`
-- Regime: `NEUTRAL_WATCH`
+- Regime: `STRUCTURAL_RISK_ON`
 - Deep review candidates: `6`
 - Auto governed candidates: `0`
 - Participation allowed: `True`

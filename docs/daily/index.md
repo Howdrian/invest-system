@@ -1,6 +1,6 @@
 # 投研日报 — 2026-06-03
 
-> 自动生成于 2026-06-03 00:32:58 北京时
+> 自动生成于 2026-06-03 01:21:42 北京时
 
 ## 自选股
 `301013,160644`
@@ -19,7 +19,7 @@
 - Polymarket: `available`
 - Deep review candidates: `6`
 - Auto governed candidates: `0`
-- Regime: `NEUTRAL_WATCH`
+- Regime: `STRUCTURAL_RISK_ON`
 - Governed parallel: `true` / max_workers=`3`
 
 ## 个股 Governed 报告
@@ -30,4 +30,4 @@
 | [report_20260602.md](../report_20260602.md) | 查看 |
 
 ---
-完整的 Actions 运行日志：[查看](https://github.com/Howdrian/invest-system/actions/runs/26833060716)
+完整的 Actions 运行日志：[查看](https://github.com/Howdrian/invest-system/actions/runs/26835450359)

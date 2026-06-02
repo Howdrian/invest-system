@@ -19,8 +19,8 @@
 | `SH600667` | `hot_stocks` | 6.5 | `DEEP_REVIEW_WAIT_ENTRY` | hot_stock_rank, prediction_market_red_team_trigger | 读公告/研报和技术承接；不追高。 |
 | `SZ002421` | `hot_stocks` | 6.5 | `DEEP_REVIEW_WAIT_ENTRY` | hot_stock_rank, prediction_market_red_team_trigger | 读公告/研报和技术承接；不追高。 |
 | `SH603601` | `hot_stocks` | 6.5 | `DEEP_REVIEW_WAIT_ENTRY` | hot_stock_rank, prediction_market_red_team_trigger | 读公告/研报和技术承接；不追高。 |
-| `SZ002081` | `hot_stocks` | 6.5 | `DEEP_REVIEW_WAIT_ENTRY` | hot_stock_rank, prediction_market_red_team_trigger | 读公告/研报和技术承接；不追高。 |
 | `SZ000062` | `hot_stocks` | 6.5 | `DEEP_REVIEW_WAIT_ENTRY` | hot_stock_rank, prediction_market_red_team_trigger | 读公告/研报和技术承接；不追高。 |
+| `SZ002081` | `hot_stocks` | 6.5 | `DEEP_REVIEW_WAIT_ENTRY` | hot_stock_rank, prediction_market_red_team_trigger | 读公告/研报和技术承接；不追高。 |
 | `SZ000960` | `hot_stocks` | 6.5 | `DEEP_REVIEW_WAIT_ENTRY` | hot_stock_rank, prediction_market_red_team_trigger | 读公告/研报和技术承接；不追高。 |
 | `SH600362` | `hot_stocks` | 6.5 | `DEEP_REVIEW_WAIT_ENTRY` | hot_stock_rank, prediction_market_red_team_trigger | 读公告/研报和技术承接；不追高。 |
 | `SH601869` | `hot_stocks` | 6.5 | `DEEP_REVIEW_WAIT_ENTRY` | hot_stock_rank, prediction_market_red_team_trigger | 读公告/研报和技术承接；不追高。 |

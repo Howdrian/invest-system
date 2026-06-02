@@ -2,10 +2,11 @@
 
 ## 2026-06-02 大盘复盘
 
-> 指数放量上涨但个股普跌，市场出现严重背离，科技成长主线强化但宽度极差，明日需警惕分化加剧。
+> 今日市场呈现“指数强、个股弱”的极端分化格局，核心矛盾在于科技权重股拉抬与多数个股调整背离，明日优先观察科技主线能否带动赚钱效应扩散，以及跌停家数是否收敛。
 
 ### 一、盘面总览
-今日主要指数全线上涨，创业板指以2.66%领涨，深成指、科创50涨幅均超1.6%，但全市场下跌家数高达3875家，上涨仅1543家，跌停17家，涨停98家。两市成交额放大至28125亿元，较前日明显放量，但“指数牛、个股熊”的特征突出，整体情绪处于“分歧偏暖”状态，并非全面强势。
+
+指数全线收红，创业板指大涨2.66%领跑，但市场宽度极差——下跌家数（3875家）远超上涨家数（1543家），涨跌比接近1:2.5。两市成交额放大至28125亿元，属于放量但结构失衡的典型场景，情绪温度呈现“冷热不均”，短线资金高度集中在科技制造方向。
 
 - **盘面信号**：53/100（震荡，需观察）
 - **信号依据**：上涨家数占比 28%，亏钱效应较强；主要指数平均涨跌幅 +1.45%；涨跌停差 +81
@@ -18,7 +19,8 @@
 | 两市成交额 | 28125 亿 | 高活跃度 |
 
 ### 二、指数结构
-上证指数仅涨0.43%，明显弱于深成指和创业板，上证50涨幅0.92%也对沪指形成一定支撑，但沪指的大盘权重（如银行、地产）表现拖累。创业板指一枝独秀，反映资金集中流向科技成长板块。整体呈现“沪弱深强、小票分化”格局。关键位置：上证在4070附近反复，短期支撑关注5日均线；创业板已逼近历史高位区域，需确认能否站稳4000点。
+
+上证指数涨幅最小（0.43%），表现被动跟随，权重股并未形成合力；创业板指和科创50双双涨超1.6%，显示资金明显向成长科技倾斜。上证50和沪深300分别涨0.92%和1.45%，说明大市值蓝筹内部亦有分化，银行、地产等传统板块拖累指数，而半导体、消费电子等科技权重成为拉抬主力。各指数均未回补关键支撑，创业板指距离前高压制仅一步之遥，短期需警惕冲高遇阻。
 
 | 指数 | 最新 | 涨跌幅 | 开盘 | 最高 | 最低 | 振幅 | 成交额(亿) |
 |------|------|--------|------|------|------|------|-----------|
@@ -30,7 +32,8 @@
 | 沪深300 | 4914.56 | 🟢 +1.45% | 4860.61 | 4930.28 | 4832.00 | 2.03% | 8068 |
 
 ### 三、板块主线
-领涨板块高度集中：仪器仪表制造业（+5.02%）、计算机通信电子（+4.14%）明显获得增量资金，与美股科技浪潮（纳指新高、AI基建投资）形成共振，主线地位强化。批发业（+2.99%）受益于部分大宗商品贸易活跃。领跌侧：体育（-6.65%）、影视（-4.61%）、房屋建筑（-4.34%）跌幅较大，反映消费端和政策敏感型行业承压，主线与拖累方向泾渭分明。
+
+领涨板块高度集中于泛科技制造：仪器仪表（+5.02%）、计算机通信电子（+4.14%）连续走强，形成今日最强主线，催化上可能与AI应用落地及国产替代预期有关。批发业（+2.99%）属于补涨，持续性存疑。领跌方面，体育（-6.65%）、影视（-4.61%）、房屋建筑（-4.34%）均属可选消费与地产链，反映出资金从顺周期向科技成长持续迁移。主线强度明确，但板块内部分化加大，警惕高位股分歧。
 
 #### 领涨板块 Top 5
 | 排名 | 板块 | 涨跌幅 |
@@ -51,26 +54,32 @@
 | 5 | 仓储业 | -3.80% |
 
 ### 四、资金与情绪
-成交额28125亿属近期极高水平，但涨跌家数比严重倒挂（1:2.5），显示资金高度集中在少数板块，多数个股被边缘化。涨停98家虽多，但跌停17家且跌幅榜个股数量较多，说明短线情绪并未过热，而是存在明显的“恐慌跟跌”现象。风险偏好仅出现在AI/科技方向，传统制造、消费、地产链资金持续流出。
+
+成交额突破2.8万亿，较前日明显放量，但涨停家数仅98家，跌停家数达17家，表明资金并未全面做多而是集中博弈。涨跌家数比严重倒挂，指数上涨而超六成个股下跌，市场宽度极窄，属于典型的“赚指数不赚钱”格局。若后续成交额无法维持或出现高位股炸板，情绪修复难度将加大。
 
 ### 五、消息催化
-海外方面，纳斯达克创历史新高、CNN恐惧贪婪指数仍处“贪婪”区间，继续为A股科技股提供情绪支撑。WSJ文章提示“AI基础设施投资面临泡沫风险”，但市场目前忽视该警告。油价上涨及美股期货平淡，外部扰动不大。国内无重大政策新闻，市场更多跟随美股风格及机构调仓节奏。
+
+外围方面，美股连续新高引发华尔街对市场过热和集中度风险的讨论，多家机构提示获利了结，这可能压制外资短期风险偏好。国内方面，Realtor.com推出AI搜索软件（美股关联）未直接作用于A股，但间接强化AI应用主题预期。整体来看，外部扰动偏空，但内资博弈科技主线的动能依然较强。
 
 #### 近三日市场线索
-- 1. [Nasdaq Closes At Record High: Investor Sentiment Improves, Fear Index Remains In 'Greed...](https://www.benzinga.com/markets/equities/26/06/52895973/nasdaq-closes-at-record-high-investor-sentiment-improves-fear-index-remains-in-greed-zone)（benzinga.com / 2026-06-01）
-- 2. [Stock futures are flat in overnight trading as June trading begins near record highs: L...](https://www.cnbc.com/2026/05/31/stock-market-today-live-updates.html)（cnbc.com / 2026-05-31）
-- 3. [Your FOMO Is Strong, but Pity Finance Pros - WSJ](https://www.wsj.com/finance/stocks/your-fomo-is-strong-but-pity-finance-pros-e12f05d3)（wsj.com / 2026-06-02）
-- 4. [Your FOMO Is Strong, but Pity Finance Pros - WSJ](https://www.wsj.com/finance/stocks/your-fomo-is-strong-but-pity-finance-pros-e12f05d3)（wsj.com / 2026-06-02）
+- 1. [Market concentration is creating 'fragility': Wall Street weighs 'narrow leadership' as...](https://finance.yahoo.com/markets/article/market-concentration-is-creating-fragility-wall-street-weighs-narrow-leadership-as-stocks-hit-all-time-high-135336610.html)（finance.yahoo.com / 2026-05-31）
+- 2. [Investors are piling into bullish options bets — another sign that the stock market is...](https://www.marketwatch.com/story/investors-are-piling-into-bullish-options-bets-another-sign-that-the-stock-market-is-getting-overheated-96c5fd15)（marketwatch.com / 2026-06-01）
+- 3. [Here are the 4 big things we're watching in the stock market in the week ahead - CNBC](https://www.cnbc.com/2026/05/31/here-are-the-4-big-things-were-watching-in-the-stock-market-in-the-week-ahead.html)（cnbc.com / 2026-05-31）
+- 4. [News Corporation-Owned Realtor.com Launches Artificial Intelligence Home Search Softwar...](https://www.moomoo.com/news/post/70926204/news-corporation-owned-realtorcom-launches-artificial-intelligence-home-search-software?futusource=news_newspage_recommend)（moomoo.com / 2026-06-02）
 - 5. [Why Is Virgin Galactic Stock Soaring Monday? - Virgin Galactic Holdings (NYSE:SPCE) - B...](https://www.benzinga.com/trading-ideas/movers/26/06/52902326/why-is-virgin-galactic-stock-soaring-monday)（benzinga.com / 2026-06-01）
 
 ### 六、明日交易计划
-结论：均衡偏防守。仓位建议控制在6成以内。
-- 关注方向：科技主线（计算机、通信、仪器仪表）内部轮动，龙头股若继续走强可适度参与，但需警惕分化后冲高回落。
-- 回避方向：体育、影视、房屋建筑等领跌板块，以及传统金融机构。
-- 触发失效条件：若明日创业板指跌破3980且成交额萎缩至2.2万亿以下，则减仓至4成；若上证指数跌破4050，全面转向防守。
+
+- **攻守判断**：均衡偏进攻（指数共振上行+成交额放大+主线强化，但涨跌比背离需观察）
+- **仓位区间**：5～6成，不盲目追高
+- **关注方向**：计算机通信电子、仪器仪表等科技主线内部低位补涨标的及分支（如AI应用、半导体设备）
+- **回避方向**：体育、影视等消费弱势板块及近期连续大涨的高位纯题材股
+- **失效条件**：若科技主线开盘出现大面积回落（跌幅超3%的板块数量超过5个）或成交额缩量至2.5万亿以下，则立即转为防守，仓位降至3成以下
 
 ### 七、风险提示
-1. 市场宽度持续恶化，若科技主线出现补跌，可能引发系统性回调。  
-2. 美股高位若出现获利回吐，将直接冲击A股科技股情绪。  
-3. 成交额若不能维持2.5万亿以上，结构性行情难以持续。  
+
+1. 涨跌家数持续恶化可能引发系统性的流动性分层风险。
+2. 外围美股过热后的回调压力传导至A股科技板块。
+3. 指数接近关键阻力位，若突破失败将引发技术性抛压。
+
 建议仅供参考，不构成投资建议。

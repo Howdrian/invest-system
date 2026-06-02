@@ -3,48 +3,94 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>投研系统日报 | invest-system</title>
+<title>投研日报 | invest-system</title>
 <style>
-body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; max-width: 980px; margin: 2rem auto; padding: 0 1rem; background: #0d1117; color: #c9d1d9; }
-h1, h2 { color: #58a6ff; }
-a { color: #58a6ff; text-decoration: none; }
+:root { --bg: #0d1117; --card: #161b22; --border: #30363d; --text: #c9d1d9;
+  --accent: #58a6ff; --red: #f85149; --yellow: #d2991d; --green: #3fb950; --muted: #8b949e; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  max-width: 1024px; margin: 0 auto; padding: 1.5rem 1rem; background: var(--bg); color: var(--text); line-height: 1.6; }
+h1 { color: var(--accent); font-size: 1.8rem; margin-bottom: .3rem; }
+h2 { color: var(--accent); font-size: 1.2rem; margin: 1.2rem 0 .5rem; }
+a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
-.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; }
-.card { background: #161b22; border: 1px solid #30363d; border-radius: 10px; padding: 1rem; }
-.tag { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.8rem; margin-right: 0.5rem; background: #1f6feb33; color: #58a6ff; }
-.muted { color: #8b949e; font-size: 0.9rem; }
-li { margin: 0.35rem 0; }
+.muted { color: var(--muted); font-size: .85rem; }
+.tag { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: .75rem; margin: 0 .3rem; }
+.tag-blue { background: #1f6feb33; color: var(--accent); }
+.tag-red { background: #f8514933; color: var(--red); }
+.tag-yellow { background: #d2991d33; color: var(--yellow); }
+.tag-green { background: #3fb95033; color: var(--green); }
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1rem; margin-bottom: 1rem; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+@media (max-width: 700px) { .grid2 { grid-template-columns: 1fr; } }
+.macro-line { font-size: .9rem; padding: .5rem; background: #1a2332; border-radius: 8px; margin-bottom: .5rem; }
+.stock-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: .8rem 1rem; margin-bottom: .6rem; }
+.stock-header { display: flex; align-items: center; gap: .5rem; margin-bottom: .3rem; }
+.stock-icon { font-size: 1.1rem; }
+.stock-name { font-weight: 600; }
+.score-badge { font-size: .8rem; color: var(--muted); margin-left: auto; }
+.stock-cio { font-size: .85rem; margin: .3rem 0; padding: .4rem .6rem; background: #1a2332; border-left: 3px solid var(--accent); border-radius: 6px; }
+.stock-reason { font-size: .8rem; color: var(--red); margin: .3rem 0; }
+.stock-conditions { font-size: .8rem; color: var(--green); margin: .3rem 0; }
+.section-links { display: flex; flex-wrap: wrap; gap: .4rem; margin: .5rem 0; }
+.section-links a { padding: .3rem .7rem; background: var(--card); border: 1px solid var(--border); border-radius: 8px; font-size: .85rem; }
+.section-links a:hover { background: #1f6feb22; }
 </style>
 </head>
 <body>
-<h1>投研系统日报</h1>
-<p class="muted">最后更新：2026-06-02 21:27:29 北京时 | 自选股：301013,160644</p>
-<p><span class="tag">Market Cycle</span><span class="tag">Governed</span><span class="tag">CIO Gate</span></p>
-<div class="grid">
-  <section class="card">
-    <h2>今日入口</h2>
-    <ul>
-      <li><a href="./daily/2026-06-02.md">投研日报 2026-06-02</a></li>
-      <li><a href="./report_20260602.md">个股 Governed 报告</a></li>
-    </ul>
-  </section>
-  <section class="card">
-    <h2>大盘三件套</h2>
-    <ul>
-      <li><a href="./market_cycle/2026-06-02/00_one_screen_brief.html">一屏总览</a></li>
-      <li><a href="./market_cycle/2026-06-02/14_market_strategy.html">市场策略总控</a></li>
-      <li><a href="./market_cycle/2026-06-02/13_source_health.html">数据源健康</a></li>
-    </ul>
-  </section>
-  <section class="card">
-    <h2>辅助视图</h2>
-    <ul>
-      <li><a href="./market_heat/latest_market_heat.md">市场热度</a></li>
-      <li><a href="./daily/index.md">最新日报 Markdown</a></li>
-      <li><a href="https://github.com/Howdrian/invest-system/actions/runs/26821985123">本次 Actions 日志</a></li>
-    </ul>
-  </section>
+
+<h1>📊 投研日报</h1>
+<p class="muted">更新: 2026-06-03 01:21:42 北京时 · 自选: 301013,160644 · 
+  <a href="https://github.com/Howdrian/invest-system/actions">Actions</a></p>
+
+<!-- MACRO CONTEXT -->
+<div class="card">
+  <h2>🌍 宏观背景</h2>
+  <div class="macro-line">
+    <strong>Regime: STRUCTURAL_RISK_ON</strong> (置信度: MEDIUM) — 宏观风险偏好偏强；候选可进入人工预审，但不得跳过红蓝和评分。
+  </div>
+  <div class="macro-line">
+    growth: degraded (unknown) | inflation: degraded (unknown) | rates_liquidity: available_limited (neutral_or_unknown) | energy_commodities: degraded (watch) | usd_fx: missing (unknown) | risk_appetite: available (risk_on) | market_heat: available (watchlist_or_hotspot)
+  </div>
+  <div class="macro-line">
+    数据源: ✅ 全部正常 · 宏观: REFRESHED · 交易审查: usable
+  </div>
+  <div class="macro-line"><strong>地缘四场景</strong><table style="width:100%;font-size:.8rem;margin-top:.3rem"><tr><th>场景</th><th>内部</th><th>市场</th><th>融合</th></tr><tr><td>A_controlled_deescalation</td><td>0.3%</td><td>-%</td><td>0.35%</td></tr><tr><td>B_crisis_cascade</td><td>0.4%</td><td>-%</td><td>0.35%</td></tr><tr><td>C_great_power_conflict</td><td>0.2%</td><td>-%</td><td>0.15%</td></tr><tr><td>D_nuclear_tail</td><td>0.1%</td><td>-%</td><td>0.1%</td></tr></table></div>
 </div>
-<p class="muted">说明：本页面是只读 GitHub Pages 面板；修改自选、持仓或手动触发分析请在 GitHub Actions / Web UI / API 中完成。</p>
+
+<!-- STOCK CIO CONCLUSIONS -->
+<div class="card">
+  <h2>🎯 个股 CIO 判断 (0 只)</h2>
+  <div class="muted">暂无个股分析报告，等待下一次 Actions 触发。</div>
+</div>
+
+<!-- LINKS -->
+<div class="grid2">
+  <div class="card">
+    <h2>📋 完整报告</h2>
+    <div class="section-links">
+      <a href="./daily/2026-06-03.md">日报 Markdown</a>
+      <a href="./report_20260603.md">个股完整报告</a>
+    </div>
+  </div>
+  <div class="card">
+    <h2>📊 大盘看板</h2>
+    <div class="section-links">
+      <a href="./market_cycle/2026-06-03/00_one_screen_brief.html">一屏总览</a>
+      <a href="./market_cycle/2026-06-03/01_macro_review.html">宏观与地缘</a>
+      <a href="./market_cycle/2026-06-03/09_screening_funnel.html">筛选漏斗</a>
+      <a href="./market_cycle/2026-06-03/11_deep_review_queue.html">深评候选</a>
+      <a href="./market_cycle/2026-06-03/14_market_strategy.html">市场策略</a>
+      <a href="./market_cycle/2026-06-03/13_source_health.html">数据源健康</a>
+      <a href="./market_heat/latest_market_heat.md">市场热度</a>
+    </div>
+  </div>
+</div>
+
+<p class="muted" style="margin-top:1.5rem;">
+⚠️ 以上为系统分析意见，非交易指令。最终决策由你做出。<br>
+本页面通过 GitHub Actions 自动生成，修改自选/持仓请通过 Web UI 或 .env。
+</p>
+
 </body>
 </html>
