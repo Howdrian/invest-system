@@ -28,7 +28,7 @@ on:
 # 并发控制：同一时间只运行一个分析任务
 concurrency:
   group: stock-analysis
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 permissions:
   contents: write
@@ -539,6 +539,12 @@ jobs:
           TODAY=$(TZ='Asia/Shanghai' date +%Y-%m-%d)
           MARKET_CYCLE_REPORTS="reports/market_cycle/$TODAY"
           MARKET_CYCLE_DOCS="docs/market_cycle/$TODAY"
+          TARGET_BRANCH="${GITHUB_REF_NAME:-main}"
+
+          # 先同步远端分支，避免多个 Actions 或人工提交让最终 push 被 non-fast-forward 拒绝。
+          git fetch origin "$TARGET_BRANCH"
+          git checkout -B "$TARGET_BRANCH" "origin/$TARGET_BRANCH"
+
           mkdir -p docs/daily "$MARKET_CYCLE_DOCS" docs/market_heat
           DAILY_INDEX="docs/daily/index.md"
           # 生成每日投研入口；不要写 lowercase docs index，避免和既有 docs/INDEX.md 文档中心在 macOS 上大小写冲突
@@ -613,11 +619,14 @@ jobs:
             --macro-cache data/macro_cache/macro_context_latest.json \
             --market-heat-dir "$MARKET_HEAT_OUTPUT_DIR" \
             --output docs/index.html \
-            --stock-list "$STOCK_LIST" || echo "⚠️ 首页增强生成失败，使用降级版本"
+            --stock-list "$STOCK_LIST"
 
           git config user.name "invest-bot"
           git config user.email "bot@invest-system.local"
           git add docs/
           git diff --staged --quiet || git commit -m "report: $TODAY 投研日报"
-          TARGET_BRANCH="${GITHUB_REF_NAME:-main}"
-          git push origin "HEAD:${TARGET_BRANCH}"
+          git push origin "HEAD:${TARGET_BRANCH}" || {
+            echo "⚠️ 首次 push 被远端更新拒绝，拉取远端后重试"
+            git pull --rebase origin "$TARGET_BRANCH"
+            git push origin "HEAD:${TARGET_BRANCH}"
+          }

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -18,7 +18,7 @@ DEFAULT_MARKET_CYCLE_DIR = Path("reports/market_cycle")
 DEFAULT_MACRO_CACHE = Path("data/macro_cache/macro_context_latest.json")
 DEFAULT_MARKET_HEAT_DIR = Path("reports/market_heat")
 DEFAULT_OUTPUT = Path("docs/index.html")
-TZ_CN = timezone.offset
+TZ_CN = timezone(timedelta(hours=8))
 
 
 def _read_json(path: Path) -> Dict[str, Any]:
@@ -75,11 +75,11 @@ def _html_escape(s: str) -> str:
 
 
 def _now_cn() -> str:
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    return datetime.now(TZ_CN).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def _today_str() -> str:
-    return datetime.now().strftime("%Y-%m-%d")
+    return datetime.now(TZ_CN).strftime("%Y-%m-%d")
 
 
 def generate(
@@ -111,7 +111,7 @@ def generate(
     usability = health_json.get("trade_review_usability", "unknown")
 
     # Build macro data from macro_review (preferred) or macro_cache
-    dims = macro_review_json.get("dimensions") or {}
+    dims = macro_review_json.get("macro_dimensions") or macro_review_json.get("dimensions") or {}
     macro_lines = []
     for key, val in dims.items():
         status = val.get("status") if isinstance(val, dict) else str(val)
@@ -129,15 +129,15 @@ def generate(
     macro_data_str = " | ".join(macro_lines[:8]) if macro_lines else "暂无宏观数据"
 
     # Geo scenarios from macro_review
-    scenarios = macro_review_json.get("scenarios") or []
+    scenarios = macro_review_json.get("geopolitical_scenarios") or macro_review_json.get("scenarios") or []
     geo_html = ""
     if scenarios:
         rows = ""
         for s in scenarios[:4]:
-            name = s.get("name", "?")
-            internal = s.get("internal_pct", "-")
-            market_p = s.get("market_pct", "-")
-            fused = s.get("fused_pct", "-")
+            name = s.get("name") or s.get("scenario") or s.get("scenario_id") or "?"
+            internal = s.get("internal_pct") or s.get("internal_probability") or "-"
+            market_p = s.get("market_pct") or s.get("market_probability") or "-"
+            fused = s.get("fused_pct") or s.get("fused_probability") or "-"
             rows += f"<tr><td>{_html_escape(str(name))}</td><td>{internal}%</td><td>{market_p}%</td><td>{fused}%</td></tr>"
         geo_html = f'<div class="macro-line"><strong>地缘四场景</strong><table style="width:100%;font-size:.8rem;margin-top:.3rem"><tr><th>场景</th><th>内部</th><th>市场</th><th>融合</th></tr>{rows}</table></div>'
 
@@ -283,6 +283,9 @@ a:hover {{ text-decoration: underline; }}
     <h2>📊 大盘看板</h2>
     <div class="section-links">
       <a href="./market_cycle/{today}/00_one_screen_brief.html">一屏总览</a>
+      <a href="./market_cycle/{today}/01_macro_review.html">宏观与地缘</a>
+      <a href="./market_cycle/{today}/09_screening_funnel.html">筛选漏斗</a>
+      <a href="./market_cycle/{today}/11_deep_review_queue.html">深评候选</a>
       <a href="./market_cycle/{today}/14_market_strategy.html">市场策略</a>
       <a href="./market_cycle/{today}/13_source_health.html">数据源健康</a>
       <a href="./market_heat/latest_market_heat.md">市场热度</a>
