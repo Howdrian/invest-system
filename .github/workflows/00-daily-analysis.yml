@@ -607,7 +607,7 @@ jobs:
           cp "$MARKET_HEAT_OUTPUT_DIR"/* docs/market_heat/ 2>/dev/null || true
           TODAY_COMPACT="${TODAY//-/}"
           echo "🎨 生成增强首页..."
-          python -m src.render_homepage \
+          python src/render_homepage.py \
             --reports-dir reports \
             --market-cycle-dir "reports/market_cycle" \
             --macro-cache data/macro_cache/macro_context_latest.json \
