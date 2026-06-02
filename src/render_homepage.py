@@ -303,6 +303,8 @@ a:hover {{ text-decoration: underline; }}
 
 if __name__ == "__main__":
     import argparse
+    import traceback
+    import sys
 
     p = argparse.ArgumentParser(description="Generate rich GitHub Pages homepage")
     p.add_argument("--reports-dir", default=str(DEFAULT_REPORTS_DIR))
@@ -312,11 +314,17 @@ if __name__ == "__main__":
     p.add_argument("--output", default=str(DEFAULT_OUTPUT))
     p.add_argument("--stock-list", default="")
     args = p.parse_args()
-    generate(
-        reports_dir=Path(args.reports_dir),
-        market_cycle_dir=Path(args.market_cycle_dir),
-        macro_cache=Path(args.macro_cache),
-        market_heat_dir=Path(args.market_heat_dir),
-        output=Path(args.output),
-        stock_list=args.stock_list,
-    )
+    try:
+        generate(
+            reports_dir=Path(args.reports_dir),
+            market_cycle_dir=Path(args.market_cycle_dir),
+            macro_cache=Path(args.macro_cache),
+            market_heat_dir=Path(args.market_heat_dir),
+            output=Path(args.output),
+            stock_list=args.stock_list,
+        )
+        print("✅ render_homepage: success")
+    except Exception as e:
+        print(f"❌ render_homepage failed: {e}")
+        traceback.print_exc()
+        sys.exit(1)
