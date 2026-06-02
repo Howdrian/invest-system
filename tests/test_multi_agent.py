@@ -664,6 +664,26 @@ class TestPromptUpgrades(unittest.TestCase):
 
         macro_prompt = MacroAgent(tool_registry=MagicMock(), llm_adapter=MagicMock()).system_prompt(ctx)
         self.assertIn("Macro Analyst", macro_prompt)
+        self.assertIn("macro_review", macro_prompt)
+
+    def test_macro_and_risk_agents_consume_shared_context(self):
+        from src.agent.agents.macro_agent import MacroAgent
+        from src.agent.agents.risk_agent import RiskAgent
+
+        ctx = AgentContext(query="test", stock_code="600519")
+        ctx.set_data("macro_context", {"status": "REFRESHED"})
+        ctx.set_data("macro_review", {"schema": "macro_review_v1", "headline": "宏观中性"})
+        ctx.set_data("event_context", {"events": [{"source": "prediction_market", "red_team_trigger": True}]})
+
+        macro_msg = MacroAgent(tool_registry=MagicMock(), llm_adapter=MagicMock()).build_user_message(ctx)
+        risk = RiskAgent(tool_registry=MagicMock(), llm_adapter=MagicMock())
+        risk_msg = risk.build_user_message(ctx)
+
+        self.assertIn("Macro Review", macro_msg)
+        self.assertIn("macro_review_v1", macro_msg)
+        self.assertIn("Shared event context", risk_msg)
+        self.assertIn("prediction_market", risk_msg)
+        self.assertNotIn("search_stock_news", risk.tool_names)
 
 
 class TestIntelAgentPostProcess(unittest.TestCase):

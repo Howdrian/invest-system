@@ -19,7 +19,27 @@ from typing import Any, Dict, Iterable, List, Optional
 
 from src.intel.market_heat import DEFAULT_OUTPUT_DIR as DEFAULT_MARKET_HEAT_DIR
 from src.intel.market_heat import build_market_heat_snapshot, load_latest_market_heat
+from src.intel.candidate_selector import (
+    build_deep_review_queue,
+    build_screening_funnel,
+    render_deep_review_queue_html,
+    render_deep_review_queue_md,
+    render_preliminary_deep_review_md,
+    render_screening_funnel_html,
+    render_screening_funnel_md,
+)
 from src.macro.official_sources import MacroContextService
+from src.macro.review import (
+    build_event_context,
+    build_macro_review,
+    render_macro_review_html,
+    render_macro_review_md,
+)
+from src.prediction_market.polymarket import (
+    DEFAULT_OUTPUT_DIR as DEFAULT_PREDICTION_MARKET_DIR,
+    build_prediction_market_snapshot,
+    load_latest_prediction_market,
+)
 
 DEFAULT_OUTPUT_ROOT = "reports/market_cycle"
 CRITICAL_COMPONENTS = {"macro_context"}
@@ -34,6 +54,7 @@ def build_market_cycle_payload(
     symbols: Iterable[str],
     macro_context: Optional[Dict[str, Any]],
     market_heat: Optional[Dict[str, Any]],
+    prediction_market: Optional[Dict[str, Any]] = None,
     report_files: Iterable[Path],
 ) -> Dict[str, Any]:
     """Build deterministic market-cycle view-model from runtime artifacts."""
@@ -44,8 +65,36 @@ def build_market_cycle_payload(
 
     macro_status = str(macro.get("status") or "UNAVAILABLE").upper()
     heat_status = str(heat.get("status") or "UNAVAILABLE").upper()
-    source_health = build_source_health(macro, heat, reports)
-    market_strategy = build_market_strategy(macro, heat, source_health)
+    prediction = prediction_market if isinstance(prediction_market, dict) else {}
+    macro_review = build_macro_review(
+        run_date=run_date,
+        macro_context=macro,
+        market_heat=heat,
+        prediction_market=prediction,
+    )
+    event_context = build_event_context(
+        macro_review=macro_review,
+        market_heat=heat,
+        prediction_market=prediction,
+    )
+    screening_funnel = build_screening_funnel(
+        run_date=run_date,
+        symbols=symbol_list,
+        market_heat=heat,
+        macro_review=macro_review,
+        prediction_market=prediction,
+    )
+    deep_review_queue = build_deep_review_queue(screening_funnel, max_candidates=6)
+    source_health = build_source_health(
+        macro,
+        heat,
+        reports,
+        prediction_market=prediction,
+        macro_review=macro_review,
+        screening_funnel=screening_funnel,
+        deep_review_queue=deep_review_queue,
+    )
+    market_strategy = build_market_strategy(macro, heat, source_health, deep_review_queue=deep_review_queue)
 
     return {
         "schema": "market_cycle_v1",
@@ -56,6 +105,12 @@ def build_market_cycle_payload(
         "macro_context": macro,
         "market_heat_status": heat_status,
         "market_heat": heat,
+        "prediction_market_status": str(prediction.get("status") or "MISSING").upper(),
+        "prediction_market": prediction,
+        "macro_review": macro_review,
+        "event_context": event_context,
+        "screening_funnel": screening_funnel,
+        "deep_review_queue": deep_review_queue,
         "report_files": [str(p) for p in reports],
         "source_health": source_health,
         "market_strategy": market_strategy,
@@ -68,6 +123,11 @@ def build_source_health(
     macro_context: Dict[str, Any],
     market_heat: Dict[str, Any],
     report_files: List[Path],
+    *,
+    prediction_market: Optional[Dict[str, Any]] = None,
+    macro_review: Optional[Dict[str, Any]] = None,
+    screening_funnel: Optional[Dict[str, Any]] = None,
+    deep_review_queue: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     rows: List[Dict[str, Any]] = []
     rows.append(_component_row(
@@ -80,9 +140,42 @@ def build_source_health(
     rows.append(_component_row(
         component="market_heat",
         status=str(market_heat.get("status") or "UNAVAILABLE"),
-        criticality="optional",
+        criticality="supporting",
         warnings=list(market_heat.get("warnings") or []),
         source="src.intel.market_heat",
+    ))
+    prediction = prediction_market if isinstance(prediction_market, dict) else {}
+    rows.append(_component_row(
+        component="prediction_market",
+        status=str(prediction.get("status") or "UNAVAILABLE"),
+        criticality="optional",
+        warnings=list(prediction.get("warnings") or []),
+        source="src.prediction_market.polymarket",
+    ))
+    macro_payload = macro_review if isinstance(macro_review, dict) else {}
+    rows.append(_component_row(
+        component="macro_review",
+        status=str(macro_payload.get("status") or "UNAVAILABLE"),
+        criticality="critical",
+        warnings=list(macro_payload.get("warnings") or []),
+        source="src.macro.review",
+    ))
+    funnel = screening_funnel if isinstance(screening_funnel, dict) else {}
+    rows.append(_component_row(
+        component="screening_funnel",
+        status=str(funnel.get("status") or "UNAVAILABLE"),
+        criticality="supporting",
+        warnings=[] if funnel else ["screening_funnel_missing"],
+        source="src.intel.candidate_selector",
+    ))
+    queue = deep_review_queue if isinstance(deep_review_queue, dict) else {}
+    rows.append(_component_row(
+        component="deep_review_queue",
+        status=str(queue.get("status") or "UNAVAILABLE"),
+        criticality="critical",
+        warnings=[] if queue else ["deep_review_queue_missing"],
+        source="src.intel.candidate_selector",
+        extra={"candidate_count": len(queue.get("candidates") or []) if queue else 0},
     ))
     rows.append(_component_row(
         component="governed_reports",
@@ -115,6 +208,10 @@ def build_source_health(
                 r["component"] for r in rows
                 if r.get("criticality") == "optional" and r.get("usability") == "degraded"
             ],
+            "supporting_degraded_components": [
+                r["component"] for r in rows
+                if r.get("criticality") == "supporting" and r.get("usability") in {"degraded", "unavailable"}
+            ],
         },
     }
 
@@ -123,6 +220,8 @@ def build_market_strategy(
     macro_context: Dict[str, Any],
     market_heat: Dict[str, Any],
     source_health: Dict[str, Any],
+    *,
+    deep_review_queue: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     trade_usability = source_health.get("trade_review_usability")
     if trade_usability == "unavailable":
@@ -153,6 +252,8 @@ def build_market_strategy(
             participation_allowed = trade_usability != "unavailable"
         gate_reason = "allowed" if participation_allowed else "macro_or_source_gate"
 
+    queue = deep_review_queue if isinstance(deep_review_queue, dict) else {}
+    queue_candidates = list(queue.get("candidates") or [])
     focus_items = list(market_heat.get("focus_items") or [])[:12]
     candidate_routing = [
         {
@@ -164,6 +265,15 @@ def build_market_strategy(
         for item in focus_items
         if item.get("symbol") or item.get("code")
     ]
+    for item in queue_candidates[:6]:
+        symbol = item.get("symbol")
+        if symbol and not any(existing.get("symbol") == symbol for existing in candidate_routing):
+            candidate_routing.append({
+                "symbol": symbol,
+                "bucket": item.get("verdict") or "deep_review",
+                "rule": item.get("next_action") or "进入 governed 前仍需红蓝、评分和 CIO。",
+                "ordinary_participation": bool(participation_allowed and item.get("verdict") == "DEEP_REVIEW_NOW"),
+            })
     return {
         "schema": "market_strategy_v1",
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -192,6 +302,16 @@ def write_market_cycle_outputs(payload: Dict[str, Any], output_dir: Path | str) 
     out.mkdir(parents=True, exist_ok=True)
     paths = {
         "one_screen_html": out / "00_one_screen_brief.html",
+        "macro_review_html": out / "01_macro_review.html",
+        "macro_review_md": out / "01_macro_review.md",
+        "macro_review_json": out / "01_macro_review.json",
+        "screening_funnel_html": out / "09_screening_funnel.html",
+        "screening_funnel_md": out / "09_screening_funnel.md",
+        "screening_funnel_json": out / "09_screening_funnel.json",
+        "deep_review_queue_html": out / "11_deep_review_queue.html",
+        "deep_review_queue_md": out / "11_deep_review_queue.md",
+        "deep_review_queue_json": out / "11_deep_review_queue.json",
+        "preliminary_deep_review_md": out / "12_preliminary_deep_review.md",
         "source_health_html": out / "13_source_health.html",
         "source_health_md": out / "13_source_health.md",
         "source_health_json": out / "13_source_health.json",
@@ -206,8 +326,26 @@ def write_market_cycle_outputs(payload: Dict[str, Any], output_dir: Path | str) 
     paths["market_strategy_json"].write_text(
         json.dumps(payload["market_strategy"], ensure_ascii=False, indent=2, default=str), encoding="utf-8"
     )
+    paths["macro_review_json"].write_text(
+        json.dumps(payload["macro_review"], ensure_ascii=False, indent=2, default=str), encoding="utf-8"
+    )
+    paths["screening_funnel_json"].write_text(
+        json.dumps(payload["screening_funnel"], ensure_ascii=False, indent=2, default=str), encoding="utf-8"
+    )
+    paths["deep_review_queue_json"].write_text(
+        json.dumps(payload["deep_review_queue"], ensure_ascii=False, indent=2, default=str), encoding="utf-8"
+    )
+    paths["macro_review_md"].write_text(render_macro_review_md(payload["macro_review"]), encoding="utf-8")
+    paths["screening_funnel_md"].write_text(render_screening_funnel_md(payload["screening_funnel"]), encoding="utf-8")
+    paths["deep_review_queue_md"].write_text(render_deep_review_queue_md(payload["deep_review_queue"]), encoding="utf-8")
+    paths["preliminary_deep_review_md"].write_text(
+        render_preliminary_deep_review_md(payload["deep_review_queue"]), encoding="utf-8"
+    )
     paths["source_health_md"].write_text(_render_source_health_md(payload), encoding="utf-8")
     paths["market_strategy_md"].write_text(_render_market_strategy_md(payload), encoding="utf-8")
+    paths["macro_review_html"].write_text(_html_page("宏观与地缘融合", render_macro_review_html(payload["macro_review"])), encoding="utf-8")
+    paths["screening_funnel_html"].write_text(_html_page("筛选漏斗", render_screening_funnel_html(payload["screening_funnel"])), encoding="utf-8")
+    paths["deep_review_queue_html"].write_text(_html_page("深评候选队列", render_deep_review_queue_html(payload["deep_review_queue"])), encoding="utf-8")
     paths["source_health_html"].write_text(_html_page("数据源健康", _render_source_health_body(payload)), encoding="utf-8")
     paths["market_strategy_html"].write_text(_html_page("市场策略总控", _render_market_strategy_body(payload)), encoding="utf-8")
     paths["one_screen_html"].write_text(_html_page("统一看盘一屏总览", _render_one_screen_body(payload)), encoding="utf-8")
@@ -247,9 +385,9 @@ def _component_row(
 
 
 def _global_usability(rows: List[Dict[str, Any]]) -> str:
-    if any(r.get("usability") == "unavailable" for r in rows):
+    if any(r.get("usability") == "unavailable" and r.get("criticality") == "critical" for r in rows):
         return "unavailable"
-    if any(r.get("usability") == "degraded" for r in rows):
+    if any(r.get("usability") in {"degraded", "unavailable"} for r in rows):
         return "degraded"
     return "usable"
 
@@ -266,13 +404,18 @@ def _trade_review_usability(rows: List[Dict[str, Any]]) -> str:
 def _render_summary_md(payload: Dict[str, Any]) -> str:
     strategy = payload["market_strategy"]
     health = payload["source_health"]
+    queue = payload.get("deep_review_queue") or {}
     return "\n".join([
         f"# 投研日报运行摘要 — {payload.get('run_date')}",
         "",
         f"- Macro status: `{payload.get('macro_status')}`",
+        f"- Macro review: `{(payload.get('macro_review') or {}).get('status')}`",
+        f"- Prediction market: `{payload.get('prediction_market_status')}`",
         f"- Source health: `{health.get('usability_verdict')}`",
         f"- Trade review usability: `{health.get('trade_review_usability')}`",
         f"- Regime: `{strategy.get('regime')}`",
+        f"- Deep review candidates: `{len(queue.get('candidates') or [])}`",
+        f"- Auto governed candidates: `{len(queue.get('auto_governed_candidates') or [])}`",
         f"- Participation allowed: `{strategy.get('participation_allowed')}`",
         "- Boundary: review-only; no trade execution; no protected writeback.",
         "",
@@ -334,6 +477,8 @@ def _render_one_screen_body(payload: Dict[str, Any]) -> str:
     strategy = payload["market_strategy"]
     health = payload["source_health"]
     macro = payload.get("macro_context") or {}
+    macro_review = payload.get("macro_review") or {}
+    queue = payload.get("deep_review_queue") or {}
     reason = ""
     indicators = macro.get("indicators") or {}
     if isinstance(macro.get("regime"), dict):
@@ -379,6 +524,7 @@ def _render_one_screen_body(payload: Dict[str, Any]) -> str:
 {indicators_table}
 {gov_html}
 <section class="card"><h2>今日边界</h2><ul><li>只读看盘，不自动交易。</li><li>个股交易前必须经过 governed 分析、红蓝、评分、CIO 和人工确认。</li><li>可选源失败只降权；关键源不可用才阻断交易审查。</li></ul></section>
+<section class="card"><h2>宏观/候选摘要</h2><ul><li>宏观报告：{html.escape(str(macro_review.get('status') or '-'))} · {html.escape(str(macro_review.get('confidence') or '-'))}</li><li>深评候选：{len(queue.get('candidates') or [])}，自动 governed：{len(queue.get('auto_governed_candidates') or [])}</li><li>Prediction market：{html.escape(str(payload.get('prediction_market_status') or '-'))}</li></ul></section>
 <section class="card"><h2>关注列表</h2>{_render_candidates_html(strategy.get('candidate_routing') or [])}</section>
 """
 
@@ -462,6 +608,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--output-dir", default="", help="Output dir; default reports/market_cycle/YYYY-MM-DD")
     parser.add_argument("--date", default="", help="Run date YYYY-MM-DD")
     parser.add_argument("--market-heat-output-dir", default=DEFAULT_MARKET_HEAT_DIR)
+    parser.add_argument("--prediction-market-output-dir", default=DEFAULT_PREDICTION_MARKET_DIR)
+    parser.add_argument("--prediction-market-keywords", default="", help="Comma-separated prediction-market keywords")
+    parser.add_argument("--refresh-prediction-market", action="store_true", help="Fetch public prediction-market APIs")
     parser.add_argument("--report-glob", default="reports/report_*.md")
     parser.add_argument("--refresh-macro", action="store_true", help="Allow network macro refresh")
     args = parser.parse_args(argv)
@@ -477,20 +626,30 @@ def main(argv: Optional[List[str]] = None) -> int:
     market_heat = load_latest_market_heat(args.market_heat_output_dir)
     if market_heat is None:
         market_heat = build_market_heat_snapshot(symbols, live=False)
+    prediction_market = load_latest_prediction_market(args.prediction_market_output_dir)
+    if prediction_market is None or args.refresh_prediction_market:
+        keywords = [s.strip() for s in args.prediction_market_keywords.split(",") if s.strip()] or None
+        prediction_market = build_prediction_market_snapshot(
+            keywords=keywords,
+            live=bool(args.refresh_prediction_market),
+        )
     report_files = _find_report_files(run_date, args.report_glob)
     payload = build_market_cycle_payload(
         run_date=run_date,
         symbols=symbols,
         macro_context=macro_context,
         market_heat=market_heat,
+        prediction_market=prediction_market,
         report_files=report_files,
     )
     paths = write_market_cycle_outputs(payload, output_dir)
     print(
         "market_cycle "
         f"macro status={payload.get('macro_status')} "
+        f"polymarket status={payload.get('prediction_market_status')} "
         f"source_health={payload['source_health'].get('usability_verdict')} "
         f"trade_review_usability={payload['source_health'].get('trade_review_usability')} "
+        f"deep_review_candidates={len(payload['deep_review_queue'].get('candidates') or [])} "
         f"output_dir={output_dir}"
     )
     print(json.dumps({"paths": {k: str(v) for k, v in paths.items()}}, ensure_ascii=False))

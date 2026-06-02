@@ -476,6 +476,7 @@ jobs:
           # governed 支撑上下文：失败不阻断主分析
           python -m src.macro.official_sources --refresh || echo "⚠️ 宏观上下文刷新失败，主分析将降级运行"
           python -m src.intel.market_heat --symbols "$STOCK_LIST" --output-dir "$MARKET_HEAT_OUTPUT_DIR" --live || echo "⚠️ 市场热度摘要生成失败，主分析将降级运行"
+          python -m src.prediction_market.polymarket --output-dir reports/prediction_market --live || echo "⚠️ Polymarket 只读概率刷新失败，主分析将降级运行"
 
           # 执行分析
           if [ "$MODE" = "market-only" ]; then
@@ -492,8 +493,10 @@ jobs:
             --symbols "$STOCK_LIST" \
             --output-dir "reports/market_cycle/$TODAY" \
             --market-heat-output-dir "$MARKET_HEAT_OUTPUT_DIR" \
+            --prediction-market-output-dir reports/prediction_market \
             --date "$TODAY"
           echo "macro status: see market-cycle log above"
+          echo "polymarket status: see market-cycle log above"
           echo "🤖 governed_parallel=$AGENT_GOVERNED_PARALLEL max_workers=$AGENT_GOVERNED_PARALLEL_MAX_WORKERS"
       
       - name: 上传分析报告
@@ -550,6 +553,9 @@ jobs:
           if [ -f "$MARKET_CYCLE_REPORTS/summary.md" ]; then
             cp -r "$MARKET_CYCLE_REPORTS"/* "$MARKET_CYCLE_DOCS"/
             echo "- [一屏总览](../market_cycle/$TODAY/00_one_screen_brief.html)" >> "$DAILY_INDEX"
+            echo "- [宏观与地缘融合](../market_cycle/$TODAY/01_macro_review.html)" >> "$DAILY_INDEX"
+            echo "- [筛选漏斗](../market_cycle/$TODAY/09_screening_funnel.md)" >> "$DAILY_INDEX"
+            echo "- [深评候选队列](../market_cycle/$TODAY/11_deep_review_queue.md)" >> "$DAILY_INDEX"
             echo "- [市场策略总控](../market_cycle/$TODAY/14_market_strategy.html)" >> "$DAILY_INDEX"
             echo "- [数据源健康](../market_cycle/$TODAY/13_source_health.html)" >> "$DAILY_INDEX"
             TODAY_ENV="$TODAY" python - <<'PY' >> "$DAILY_INDEX"
@@ -559,11 +565,21 @@ jobs:
           today = os.environ["TODAY_ENV"]
           health_path = Path("docs/market_cycle") / today / "13_source_health.json"
           strategy_path = Path("docs/market_cycle") / today / "14_market_strategy.json"
+          macro_path = Path("docs/market_cycle") / today / "01_macro_review.json"
+          queue_path = Path("docs/market_cycle") / today / "11_deep_review_queue.json"
           if health_path.exists():
               health = json.loads(health_path.read_text(encoding="utf-8"))
               print(f"- Macro context: `{health.get('macro_status')}`")
               print(f"- Source health: `{health.get('usability_verdict')}`")
               print(f"- Trade review usability: `{health.get('trade_review_usability')}`")
+          if macro_path.exists():
+              macro = json.loads(macro_path.read_text(encoding="utf-8"))
+              print(f"- Macro review: `{macro.get('status')}` / `{macro.get('confidence')}`")
+              print(f"- Polymarket: `{macro.get('prediction_market_status')}`")
+          if queue_path.exists():
+              queue = json.loads(queue_path.read_text(encoding="utf-8"))
+              print(f"- Deep review candidates: `{len(queue.get('candidates') or [])}`")
+              print(f"- Auto governed candidates: `{len(queue.get('auto_governed_candidates') or [])}`")
           if strategy_path.exists():
               strategy = json.loads(strategy_path.read_text(encoding="utf-8"))
               print(f"- Regime: `{strategy.get('regime')}`")

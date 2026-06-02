@@ -28,3 +28,9 @@
 |---|---|---|
 | `301013` | `watch` | 仅作为关注线索；进入交易前必须经过 governed 个股分析、红蓝、评分和 CIO。 |
 | `160644` | `watch` | 仅作为关注线索；进入交易前必须经过 governed 个股分析、红蓝、评分和 CIO。 |
+| `SH601991` | `DEEP_REVIEW_WAIT_ENTRY` | 读公告/研报和技术承接；不追高。 |
+| `SH601138` | `DEEP_REVIEW_WAIT_ENTRY` | 读公告/研报和技术承接；不追高。 |
+| `SZ002579` | `DEEP_REVIEW_WAIT_ENTRY` | 读公告/研报和技术承接；不追高。 |
+| `SH600487` | `DEEP_REVIEW_WAIT_ENTRY` | 读公告/研报和技术承接；不追高。 |
+| `SZ000636` | `DEEP_REVIEW_WAIT_ENTRY` | 读公告/研报和技术承接；不追高。 |
+| `SZ002384` | `DEEP_REVIEW_WAIT_ENTRY` | 读公告/研报和技术承接；不追高。 |

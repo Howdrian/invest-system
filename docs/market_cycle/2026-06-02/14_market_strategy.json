@@ -1,6 +1,6 @@
 {
   "schema": "market_strategy_v1",
-  "generated_at": "2026-06-02T13:27:28.480222+00:00",
+  "generated_at": "2026-06-02T16:03:38.047208+00:00",
   "regime": "NEUTRAL_WATCH",
   "confidence": "MEDIUM",
   "strategy": {
@@ -31,6 +31,42 @@
       "bucket": "watch",
       "rule": "仅作为关注线索；进入交易前必须经过 governed 个股分析、红蓝、评分和 CIO。",
       "ordinary_participation": true
+    },
+    {
+      "symbol": "SH601991",
+      "bucket": "DEEP_REVIEW_WAIT_ENTRY",
+      "rule": "读公告/研报和技术承接；不追高。",
+      "ordinary_participation": false
+    },
+    {
+      "symbol": "SH601138",
+      "bucket": "DEEP_REVIEW_WAIT_ENTRY",
+      "rule": "读公告/研报和技术承接；不追高。",
+      "ordinary_participation": false
+    },
+    {
+      "symbol": "SZ002579",
+      "bucket": "DEEP_REVIEW_WAIT_ENTRY",
+      "rule": "读公告/研报和技术承接；不追高。",
+      "ordinary_participation": false
+    },
+    {
+      "symbol": "SH600487",
+      "bucket": "DEEP_REVIEW_WAIT_ENTRY",
+      "rule": "读公告/研报和技术承接；不追高。",
+      "ordinary_participation": false
+    },
+    {
+      "symbol": "SZ000636",
+      "bucket": "DEEP_REVIEW_WAIT_ENTRY",
+      "rule": "读公告/研报和技术承接；不追高。",
+      "ordinary_participation": false
+    },
+    {
+      "symbol": "SZ002384",
+      "bucket": "DEEP_REVIEW_WAIT_ENTRY",
+      "rule": "读公告/研报和技术承接；不追高。",
+      "ordinary_participation": false
     }
   ],
   "scoring_impact": 0,

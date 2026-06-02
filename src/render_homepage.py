@@ -96,21 +96,29 @@ def generate(
 
     # Data sources
     macro = _read_json(macro_cache)
+    macro_review_json = _read_json(market_cycle_dir / today / "01_macro_review.json")
     strategy_json = _read_json(market_cycle_dir / today / "14_market_strategy.json")
     health_json = _read_json(market_cycle_dir / today / "13_source_health.json")
     heat_json = _read_json(market_heat_dir / "latest_market_heat.json")
+    screening_json = _read_json(market_cycle_dir / today / "09_screening_funnel.json")
+    deep_review_json = _read_json(market_cycle_dir / today / "11_deep_review_queue.json")
 
-    # Macro context
-    macro_status = macro.get("status", "UNAVAILABLE")
+    # Macro context — prefer macro_review (richer) over macro_cache
+    macro_status = macro_review_json.get("status") or macro.get("status", "UNAVAILABLE")
     regime = strategy_json.get("regime", "UNKNOWN")
     confidence = strategy_json.get("confidence", "LOW")
     headline = (strategy_json.get("strategy") or {}).get("headline", "待分析")
     usability = health_json.get("trade_review_usability", "unknown")
 
-    # Build macro data points
-    macro_indicators = macro.get("indicators") or {}
+    # Build macro data from macro_review (preferred) or macro_cache
+    dims = macro_review_json.get("dimensions") or {}
     macro_lines = []
-    if macro_indicators:
+    for key, val in dims.items():
+        status = val.get("status") if isinstance(val, dict) else str(val)
+        signal = val.get("signal") if isinstance(val, dict) else ""
+        macro_lines.append(f"{key}: {status}" + (f" ({signal})" if signal else ""))
+    if not macro_lines:
+        macro_indicators = macro.get("indicators") or {}
         for key, val in macro_indicators.items():
             if isinstance(val, dict):
                 v = val.get("value") or val.get("latest")
@@ -119,6 +127,19 @@ def generate(
             elif val:
                 macro_lines.append(f"{key}: {val}")
     macro_data_str = " | ".join(macro_lines[:8]) if macro_lines else "暂无宏观数据"
+
+    # Geo scenarios from macro_review
+    scenarios = macro_review_json.get("scenarios") or []
+    geo_html = ""
+    if scenarios:
+        rows = ""
+        for s in scenarios[:4]:
+            name = s.get("name", "?")
+            internal = s.get("internal_pct", "-")
+            market_p = s.get("market_pct", "-")
+            fused = s.get("fused_pct", "-")
+            rows += f"<tr><td>{_html_escape(str(name))}</td><td>{internal}%</td><td>{market_p}%</td><td>{fused}%</td></tr>"
+        geo_html = f'<div class="macro-line"><strong>地缘四场景</strong><table style="width:100%;font-size:.8rem;margin-top:.3rem"><tr><th>场景</th><th>内部</th><th>市场</th><th>融合</th></tr>{rows}</table></div>'
 
     # Source health
     health_rows = health_json.get("rows", [])
@@ -240,6 +261,7 @@ a:hover {{ text-decoration: underline; }}
   <div class="macro-line">
     数据源: {source_status} · 宏观: {_html_escape(macro_status)} · 交易审查: {_html_escape(usability)}
   </div>
+  {geo_html}
 </div>
 
 <!-- STOCK CIO CONCLUSIONS -->

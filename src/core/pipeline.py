@@ -360,6 +360,18 @@ class StockAnalysisPipeline:
         market_heat_context = self._build_governed_market_heat_context()
         if market_heat_context:
             ctx.set_data("market_heat_context", market_heat_context)
+        macro_review_context = self._build_governed_macro_review_context(
+            macro_context=macro_context,
+            market_heat_context=market_heat_context,
+        )
+        if macro_review_context:
+            ctx.set_data("macro_review", macro_review_context)
+        event_context = self._build_governed_event_context(
+            macro_review_context=macro_review_context,
+            market_heat_context=market_heat_context,
+        )
+        if event_context:
+            ctx.set_data("event_context", event_context)
         ctx.meta["report_language"] = "zh"
         if isinstance(market_phase_context, dict):
             ctx.meta["market_phase_context"] = market_phase_context
@@ -473,6 +485,59 @@ class StockAnalysisPipeline:
                 "schema": "market_heat_v1",
                 "status": "DEGRADED",
                 "notes": [f"market_heat_error: {exc}"],
+            }
+
+    def _build_governed_macro_review_context(
+        self,
+        *,
+        macro_context: Dict[str, Any],
+        market_heat_context: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Return a richer macro/geopolitical context for governed agents."""
+        try:
+            from src.macro.review import build_macro_review
+            from src.prediction_market.polymarket import load_latest_prediction_market
+
+            prediction = load_latest_prediction_market()
+            return build_macro_review(
+                run_date=datetime.now().strftime("%Y-%m-%d"),
+                macro_context=macro_context,
+                market_heat=market_heat_context,
+                prediction_market=prediction,
+            )
+        except Exception as exc:
+            logger.warning("Governed macro review context unavailable: %s", exc)
+            return {
+                "schema": "macro_review_v1",
+                "status": "DEGRADED",
+                "headline": "宏观报告上下文不可用，按降级处理。",
+                "warnings": [f"macro_review_error: {exc}"],
+                "trade_execution": "disabled",
+            }
+
+    def _build_governed_event_context(
+        self,
+        *,
+        macro_review_context: Dict[str, Any],
+        market_heat_context: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Return shared event context for Intel/Risk without coupling their conclusions."""
+        try:
+            from src.macro.review import build_event_context
+            from src.prediction_market.polymarket import load_latest_prediction_market
+
+            return build_event_context(
+                macro_review=macro_review_context,
+                market_heat=market_heat_context,
+                prediction_market=load_latest_prediction_market(),
+            )
+        except Exception as exc:
+            logger.warning("Governed event context unavailable: %s", exc)
+            return {
+                "schema": "event_context_v1",
+                "status": "DEGRADED",
+                "events": [],
+                "warnings": [f"event_context_error: {exc}"],
             }
 
     def _build_governed_portfolio_context(

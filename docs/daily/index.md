@@ -7,12 +7,16 @@
 
 ## 大盘 / 云端看盘三件套
 - [一屏总览](../market_cycle/2026-06-02/00_one_screen_brief.html)
+- [宏观与地缘融合](../market_cycle/2026-06-02/01_macro_review.html)
+- [筛选漏斗](../market_cycle/2026-06-02/09_screening_funnel.md)
+- [深评候选队列](../market_cycle/2026-06-02/11_deep_review_queue.md)
 - [市场策略总控](../market_cycle/2026-06-02/14_market_strategy.html)
 - [数据源健康](../market_cycle/2026-06-02/13_source_health.html)
 - Macro context: `REFRESHED`
-- Source health: `usable`
-- Trade review usability: `usable`
-- Regime: `NEUTRAL_WATCH`
+- Polymarket: `DEGRADED`
+- Source health: `degraded`
+- Trade review usability: `usable_limited`
+- Deep review candidates: `6`
 - Governed parallel: `true` / max_workers=`3`
 
 ## 个股 Governed 报告

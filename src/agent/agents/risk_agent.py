@@ -30,7 +30,6 @@ class RiskAgent(BaseAgent):
     agent_name = "risk"
     max_steps = 4
     tool_names = [
-        "search_stock_news",
         "get_realtime_quote",
         "get_stock_info",
     ]
@@ -60,8 +59,9 @@ output a structured JSON risk assessment.
 ## Usage + Tips
 - Veto buy only for evidence-backed high-severity risks or unresolved scoring
   gate blockers; do not veto just because the stock is volatile.
-- If IntelAgent already supplied news/catalyst data, reuse it and search only
-  for missing risk evidence.
+- Use the shared event_context/news_context/macro_review supplied by the
+  pipeline. Do not depend on IntelAgent's conclusions; independently evaluate
+  severity from the shared facts and your own quote/stock-info checks.
 - Separate price-risk from business-risk: chasing after a sharp rise is a
   timing risk, while fraud, investigation, or funding stress is a fundamental
   risk.
@@ -95,7 +95,14 @@ from your search results. Do NOT invent risks.
         if ctx.stock_name:
             parts[0] += f" ({ctx.stock_name})"
         parts.append("for ALL risk factors listed in your instructions.")
-        parts.append("Search for latest news if you haven't received intel data yet.")
+        parts.append("Use shared event/macro/news context first; you do not have a news-search tool in governed parallel mode.")
+
+        if ctx.get_data("event_context"):
+            parts.append(f"\n[Shared event context]\n{json.dumps(ctx.get_data('event_context'), ensure_ascii=False, default=str)}")
+        if ctx.get_data("macro_review"):
+            parts.append(f"\n[Macro review]\n{json.dumps(ctx.get_data('macro_review'), ensure_ascii=False, default=str)}")
+        if ctx.get_data("news_context"):
+            parts.append(f"\n[Shared news context]\n{json.dumps(ctx.get_data('news_context'), ensure_ascii=False, default=str)}")
 
         # Feed any existing intel data so the risk agent doesn't redo searches
         if ctx.get_data("intel_opinion"):

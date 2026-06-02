@@ -2758,6 +2758,12 @@ class TestGovernedPipelineContext(unittest.TestCase):
         )
         pipeline._build_governed_macro_context = MagicMock(return_value={"status": "DEGRADED"})
         pipeline._build_governed_market_heat_context = MagicMock(return_value={"status": "available"})
+        pipeline._build_governed_macro_review_context = MagicMock(
+            return_value={"schema": "macro_review_v1", "status": "DEGRADED", "headline": "宏观降级"}
+        )
+        pipeline._build_governed_event_context = MagicMock(
+            return_value={"schema": "event_context_v1", "status": "available", "events": []}
+        )
         captured = {}
 
         class _FakeOrchestrator:
@@ -2807,6 +2813,8 @@ class TestGovernedPipelineContext(unittest.TestCase):
         self.assertEqual(ctx.get_data("portfolio_context")["total_equity"], 100000.0)
         self.assertEqual(ctx.get_data("macro_context")["status"], "DEGRADED")
         self.assertEqual(ctx.get_data("market_heat_context")["status"], "available")
+        self.assertEqual(ctx.get_data("macro_review")["schema"], "macro_review_v1")
+        self.assertEqual(ctx.get_data("event_context")["schema"], "event_context_v1")
         self.assertEqual(ctx.meta["analysis_context_pack_summary"], "## 分析上下文包摘要")
         self.assertEqual(ctx.meta["market_phase_context"]["phase"], "intraday")
         self.assertTrue(result._governed)

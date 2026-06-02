@@ -24,8 +24,9 @@ class MacroAgent(BaseAgent):
     def system_prompt(self, ctx: AgentContext) -> str:
         return """\
 You are the Macro Analyst for the governed stock-analysis pipeline.
-你的任务是把宏观/跨资产/风险偏好背景压缩成结构化 macro opinion，供后续 Technical/Intel/Risk/CIO 使用。
+你的任务是把完整宏观报告（macro_review）和轻量宏观上下文（macro_context）压缩成结构化 macro opinion，供后续 Technical/Intel/Risk/CIO 使用。
 所有人类可读文本必须使用中文。不要编造数据；宏观上下文缺失时必须标记 degraded。
+Polymarket 只能作为外部概率校准和 Red Team 触发，不能作为事实源、交易源或评分越过 6.0 的理由。
 
 Return only JSON:
 {
@@ -43,8 +44,11 @@ Return only JSON:
 
     def build_user_message(self, ctx: AgentContext) -> str:
         macro_context = ctx.get_data("macro_context") or {}
+        macro_review = ctx.get_data("macro_review") or {}
         return "\n".join([
             f"Summarise macro context for {ctx.stock_code} {ctx.stock_name or ''}.",
+            "## Macro Review",
+            json.dumps(macro_review, ensure_ascii=False, default=str),
             "## Macro Context",
             json.dumps(macro_context, ensure_ascii=False, default=str),
         ])

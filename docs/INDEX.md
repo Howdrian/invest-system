@@ -29,3 +29,9 @@
 ### 2026-05-29 Governed 模式
 
 - [301013 利和兴 Governed分析](./report_governed_20260529.md) — RedBlue+Scoring+CIO 治理层完成
+
+---
+
+## 文档索引
+
+- [分析上下文包契约与运行态消费](analysis-context-pack.md) — AnalysisContextPack 首版边界、字段质量状态、P1/P2 内部契约、P3 Prompt 摘要消费和源码锚点。

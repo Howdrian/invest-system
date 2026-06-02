@@ -58,6 +58,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - [新功能] 新增云端 market-cycle 三件套运行时，生成一屏总览、源健康和市场策略报告，并接入 GitHub Actions 每日发布入口。
 - [修复] governed 报告在 CIO hard gate 或低分阻断时强制展示 `no_action`/0% 仓位，避免最终 Markdown 出现与治理层冲突的交易指令话术。
 - [测试] 补齐 market-cycle、日报发布入口和 governed 报告 gate 回归测试，覆盖可选源降级与 critical 源阻断语义。
+- [新功能] 扩展 market-cycle 为宏观/地缘融合、预测市场、筛选漏斗和深评队列报告，日报仅新增文字链接，保护现有 Web/Pages 数据面板布局。
 
 ## [3.18.0] - 2026-05-21
 
