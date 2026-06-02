@@ -548,21 +548,21 @@ jobs:
             echo "- [市场策略总控](../market_cycle/$TODAY/14_market_strategy.html)" >> "$DAILY_INDEX"
             echo "- [数据源健康](../market_cycle/$TODAY/13_source_health.html)" >> "$DAILY_INDEX"
             TODAY_ENV="$TODAY" python - <<'PY' >> "$DAILY_INDEX"
-import json
-import os
-from pathlib import Path
-today = os.environ["TODAY_ENV"]
-health_path = Path("docs/market_cycle") / today / "13_source_health.json"
-strategy_path = Path("docs/market_cycle") / today / "14_market_strategy.json"
-if health_path.exists():
-    health = json.loads(health_path.read_text(encoding="utf-8"))
-    print(f"- Macro context: `{health.get('macro_status')}`")
-    print(f"- Source health: `{health.get('usability_verdict')}`")
-    print(f"- Trade review usability: `{health.get('trade_review_usability')}`")
-if strategy_path.exists():
-    strategy = json.loads(strategy_path.read_text(encoding="utf-8"))
-    print(f"- Regime: `{strategy.get('regime')}`")
-PY
+          import json
+          import os
+          from pathlib import Path
+          today = os.environ["TODAY_ENV"]
+          health_path = Path("docs/market_cycle") / today / "13_source_health.json"
+          strategy_path = Path("docs/market_cycle") / today / "14_market_strategy.json"
+          if health_path.exists():
+              health = json.loads(health_path.read_text(encoding="utf-8"))
+              print(f"- Macro context: `{health.get('macro_status')}`")
+              print(f"- Source health: `{health.get('usability_verdict')}`")
+              print(f"- Trade review usability: `{health.get('trade_review_usability')}`")
+          if strategy_path.exists():
+              strategy = json.loads(strategy_path.read_text(encoding="utf-8"))
+              print(f"- Regime: `{strategy.get('regime')}`")
+          PY
           else
             echo "- ⚠️ market-cycle 三件套未生成" >> "$DAILY_INDEX"
           fi
