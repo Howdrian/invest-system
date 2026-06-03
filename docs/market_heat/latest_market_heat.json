@@ -1,7 +1,7 @@
 {
   "schema": "market_heat_v1",
   "status": "available",
-  "as_of": "2026-06-03T12:49:05.020018+00:00",
+  "as_of": "2026-06-03T13:03:25.889435+00:00",
   "watchlist": [
     "600519",
     "000858",
@@ -97,18 +97,18 @@
     },
     {
       "rank": 9,
-      "code": "SZ002579",
-      "name": "中京电子",
-      "price": 19.45,
-      "change_pct": -6.31,
-      "source": "东方财富人气榜"
-    },
-    {
-      "rank": 10,
       "code": "SH600578",
       "name": "京能电力",
       "price": 9.34,
       "change_pct": 10.01,
+      "source": "东方财富人气榜"
+    },
+    {
+      "rank": 10,
+      "code": "SZ002579",
+      "name": "中京电子",
+      "price": 19.45,
+      "change_pct": -6.31,
       "source": "东方财富人气榜"
     },
     {
