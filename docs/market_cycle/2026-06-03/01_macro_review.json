@@ -1,9 +1,9 @@
 {
   "schema": "macro_review_v1",
   "run_date": "2026-06-03",
-  "generated_at": "2026-06-02T17:21:41.007834+00:00",
+  "generated_at": "2026-06-03T05:40:41.631724+00:00",
   "status": "REFRESHED",
-  "headline": "风险偏好偏强，但仍需候选证据确认；VIX low: 15.92",
+  "headline": "风险偏好偏强，但仍需候选证据确认；VIX low: 15.77",
   "confidence": "LOW_TO_MEDIUM",
   "macro_dimensions": {
     "growth": {
@@ -34,7 +34,7 @@
     "risk_appetite": {
       "status": "available",
       "signal": "risk_on",
-      "evidence": "VIX low: 15.92"
+      "evidence": "VIX low: 15.77"
     },
     "market_heat": {
       "status": "available",
@@ -45,17 +45,17 @@
   "six_factor_regime": {
     "risk_state": "risk_on",
     "confidence": "medium",
-    "reason": "VIX low: 15.92",
+    "reason": "VIX low: 15.77",
     "classification": "risk_on_watch",
     "six_factor_status": "DEGRADED",
     "factors": {
       "market_concentration": {
         "status": "available",
         "symbol": "^GSPC",
-        "price": 7615.56,
-        "change_percentage": 0.20526,
-        "price_avg_50": 7078.043,
-        "price_avg_200": 6836.4966
+        "price": 7609.78,
+        "change_percentage": 0.12921,
+        "price_avg_50": 7100.109,
+        "price_avg_200": 6842.2026
       },
       "credit_conditions": {
         "status": "missing",
@@ -76,8 +76,8 @@
       "volatility": {
         "status": "available",
         "symbol": "^VIX",
-        "price": 15.92,
-        "change_percentage": -0.80997,
+        "price": 15.77,
+        "change_percentage": -1.74455,
         "price_avg_50": 19.7372,
         "price_avg_200": 18.3868
       }

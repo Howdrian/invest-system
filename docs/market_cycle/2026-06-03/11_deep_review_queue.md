@@ -7,9 +7,9 @@
 
 | Symbol | Verdict | Price risk | Evidence | Next action |
 |---|---|---|---|---|
-| `SH601991` | `DEEP_REVIEW_WAIT_ENTRY` | `OVERHEATED_WAIT_ENTRY` | hot_stock_rank, prediction_market_red_team_trigger | 读公告/研报和技术承接；不追高。 |
 | `SH600487` | `DEEP_REVIEW_WAIT_ENTRY` | `OVERHEATED_WAIT_ENTRY` | hot_stock_rank, prediction_market_red_team_trigger | 读公告/研报和技术承接；不追高。 |
+| `SH600584` | `DEEP_REVIEW_WAIT_ENTRY` | `OVERHEATED_WAIT_ENTRY` | hot_stock_rank, prediction_market_red_team_trigger | 读公告/研报和技术承接；不追高。 |
+| `SH601991` | `DEEP_REVIEW_WAIT_ENTRY` | `OVERHEATED_WAIT_ENTRY` | hot_stock_rank, prediction_market_red_team_trigger | 读公告/研报和技术承接；不追高。 |
+| `SZ002156` | `DEEP_REVIEW_WAIT_ENTRY` | `OVERHEATED_WAIT_ENTRY` | hot_stock_rank, prediction_market_red_team_trigger | 读公告/研报和技术承接；不追高。 |
 | `SH601138` | `DEEP_REVIEW_WAIT_ENTRY` | `OVERHEATED_WAIT_ENTRY` | hot_stock_rank, prediction_market_red_team_trigger | 读公告/研报和技术承接；不追高。 |
-| `SZ002579` | `DEEP_REVIEW_WAIT_ENTRY` | `OVERHEATED_WAIT_ENTRY` | hot_stock_rank, prediction_market_red_team_trigger | 读公告/研报和技术承接；不追高。 |
-| `SZ000636` | `DEEP_REVIEW_WAIT_ENTRY` | `OVERHEATED_WAIT_ENTRY` | hot_stock_rank, prediction_market_red_team_trigger | 读公告/研报和技术承接；不追高。 |
-| `SZ002384` | `DEEP_REVIEW_WAIT_ENTRY` | `OVERHEATED_WAIT_ENTRY` | hot_stock_rank, prediction_market_red_team_trigger | 读公告/研报和技术承接；不追高。 |
+| `SH600522` | `DEEP_REVIEW_WAIT_ENTRY` | `OVERHEATED_WAIT_ENTRY` | hot_stock_rank, prediction_market_red_team_trigger | 读公告/研报和技术承接；不追高。 |

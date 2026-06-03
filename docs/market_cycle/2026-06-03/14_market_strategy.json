@@ -1,6 +1,6 @@
 {
   "schema": "market_strategy_v1",
-  "generated_at": "2026-06-02T17:21:41.007968+00:00",
+  "generated_at": "2026-06-03T05:40:41.631848+00:00",
   "regime": "STRUCTURAL_RISK_ON",
   "confidence": "MEDIUM",
   "strategy": {
@@ -33,13 +33,25 @@
       "ordinary_participation": true
     },
     {
+      "symbol": "SH600487",
+      "bucket": "DEEP_REVIEW_WAIT_ENTRY",
+      "rule": "读公告/研报和技术承接；不追高。",
+      "ordinary_participation": false
+    },
+    {
+      "symbol": "SH600584",
+      "bucket": "DEEP_REVIEW_WAIT_ENTRY",
+      "rule": "读公告/研报和技术承接；不追高。",
+      "ordinary_participation": false
+    },
+    {
       "symbol": "SH601991",
       "bucket": "DEEP_REVIEW_WAIT_ENTRY",
       "rule": "读公告/研报和技术承接；不追高。",
       "ordinary_participation": false
     },
     {
-      "symbol": "SH600487",
+      "symbol": "SZ002156",
       "bucket": "DEEP_REVIEW_WAIT_ENTRY",
       "rule": "读公告/研报和技术承接；不追高。",
       "ordinary_participation": false
@@ -51,19 +63,7 @@
       "ordinary_participation": false
     },
     {
-      "symbol": "SZ002579",
-      "bucket": "DEEP_REVIEW_WAIT_ENTRY",
-      "rule": "读公告/研报和技术承接；不追高。",
-      "ordinary_participation": false
-    },
-    {
-      "symbol": "SZ000636",
-      "bucket": "DEEP_REVIEW_WAIT_ENTRY",
-      "rule": "读公告/研报和技术承接；不追高。",
-      "ordinary_participation": false
-    },
-    {
-      "symbol": "SZ002384",
+      "symbol": "SH600522",
       "bucket": "DEEP_REVIEW_WAIT_ENTRY",
       "rule": "读公告/研报和技术承接；不追高。",
       "ordinary_participation": false

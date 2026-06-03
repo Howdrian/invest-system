@@ -1,10 +1,42 @@
 {
   "schema": "deep_review_queue_v1",
-  "generated_at": "2026-06-02T17:21:41.007924+00:00",
+  "generated_at": "2026-06-03T05:40:41.631809+00:00",
   "status": "available",
   "max_candidates": 6,
   "auto_governed_candidates": [],
   "candidates": [
+    {
+      "symbol": "SH600487",
+      "name": "亨通光电",
+      "source": "hot_stocks",
+      "priority_score": 6.5,
+      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
+      "evidence": [
+        "hot_stock_rank",
+        "prediction_market_red_team_trigger"
+      ],
+      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
+      "price_risk": "OVERHEATED_WAIT_ENTRY",
+      "next_action": "读公告/研报和技术承接；不追高。",
+      "trade_execution": "disabled",
+      "macro_overlay": "地缘/预测市场差异触发红队复核。"
+    },
+    {
+      "symbol": "SH600584",
+      "name": "长电科技",
+      "source": "hot_stocks",
+      "priority_score": 6.5,
+      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
+      "evidence": [
+        "hot_stock_rank",
+        "prediction_market_red_team_trigger"
+      ],
+      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
+      "price_risk": "OVERHEATED_WAIT_ENTRY",
+      "next_action": "读公告/研报和技术承接；不追高。",
+      "trade_execution": "disabled",
+      "macro_overlay": "地缘/预测市场差异触发红队复核。"
+    },
     {
       "symbol": "SH601991",
       "name": "大唐发电",
@@ -22,8 +54,8 @@
       "macro_overlay": "地缘/预测市场差异触发红队复核。"
     },
     {
-      "symbol": "SH600487",
-      "name": "亨通光电",
+      "symbol": "SZ002156",
+      "name": "通富微电",
       "source": "hot_stocks",
       "priority_score": 6.5,
       "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
@@ -54,40 +86,8 @@
       "macro_overlay": "地缘/预测市场差异触发红队复核。"
     },
     {
-      "symbol": "SZ002579",
-      "name": "中京电子",
-      "source": "hot_stocks",
-      "priority_score": 6.5,
-      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
-      "evidence": [
-        "hot_stock_rank",
-        "prediction_market_red_team_trigger"
-      ],
-      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
-      "price_risk": "OVERHEATED_WAIT_ENTRY",
-      "next_action": "读公告/研报和技术承接；不追高。",
-      "trade_execution": "disabled",
-      "macro_overlay": "地缘/预测市场差异触发红队复核。"
-    },
-    {
-      "symbol": "SZ000636",
-      "name": "风华高科",
-      "source": "hot_stocks",
-      "priority_score": 6.5,
-      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
-      "evidence": [
-        "hot_stock_rank",
-        "prediction_market_red_team_trigger"
-      ],
-      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
-      "price_risk": "OVERHEATED_WAIT_ENTRY",
-      "next_action": "读公告/研报和技术承接；不追高。",
-      "trade_execution": "disabled",
-      "macro_overlay": "地缘/预测市场差异触发红队复核。"
-    },
-    {
-      "symbol": "SZ002384",
-      "name": "东山精密",
+      "symbol": "SH600522",
+      "name": "中天科技",
       "source": "hot_stocks",
       "priority_score": 6.5,
       "evidence_quality": "MEDIUM_MIXED_EVIDENCE",

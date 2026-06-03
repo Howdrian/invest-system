@@ -1,6 +1,6 @@
 # 投研日报 — 2026-06-03
 
-> 自动生成于 2026-06-03 01:21:42 北京时
+> 自动生成于 2026-06-03 13:40:42 北京时
 
 ## 自选股
 `301013,160644`
@@ -25,9 +25,9 @@
 ## 个股 Governed 报告
 | 文件 | 说明 |
 |---|---|
-| [market_review_20260602.md](../market_review_20260602.md) | 查看 |
+| [market_review_20260603.md](../market_review_20260603.md) | 查看 |
 | [report_20260601.md](../report_20260601.md) | 查看 |
-| [report_20260602.md](../report_20260602.md) | 查看 |
+| [report_20260603.md](../report_20260603.md) | 查看 |
 
 ---
-完整的 Actions 运行日志：[查看](https://github.com/Howdrian/invest-system/actions/runs/26835450359)
+完整的 Actions 运行日志：[查看](https://github.com/Howdrian/invest-system/actions/runs/26865542844)

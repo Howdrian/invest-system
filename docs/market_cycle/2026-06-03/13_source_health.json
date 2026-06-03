@@ -1,6 +1,6 @@
 {
   "schema": "source_health_v1",
-  "generated_at": "2026-06-02T17:21:41.007948+00:00",
+  "generated_at": "2026-06-03T05:40:41.631829+00:00",
   "macro_status": "REFRESHED",
   "usability_verdict": "degraded",
   "trade_review_usability": "usable",
@@ -70,7 +70,7 @@
       "blocking_level": "none",
       "warnings": [],
       "source": "reports/report_YYYYMMDD.md",
-      "count": 2
+      "count": 1
     }
   ],
   "blocking_summary": {
