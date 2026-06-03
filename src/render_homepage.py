@@ -35,7 +35,7 @@ def _extract_stock_cards(screening_json: Dict, deep_review_json: Dict, reports_d
     cards = []
     
     # Layer 1: user watchlist stocks (from screening funnel)
-    for row in screening_json.get("rows") or []:
+    for row in screening_json.get("candidates") or []:
         symbol = str(row.get("symbol") or "").strip()
         source = str(row.get("source") or "")
         verdict = str(row.get("verdict") or "")
@@ -47,11 +47,11 @@ def _extract_stock_cards(screening_json: Dict, deep_review_json: Dict, reports_d
         
         # Skip non-user stocks (market heat hot stocks)
         card = {
-            "symbol": symbol,
+            "symbol": symbol.replace("SH", "").replace("SZ", ""),
             "name": str(row.get("name") or symbol),
             "source": source,
             "verdict": verdict,
-            "score": str(row.get("base_score") or "?"),
+            "score": str(row.get("priority_score") or "?"),
             "price_risk": price_risk,
             "next_action": next_action[:200],
             "evidence": str(evidence)[:100],
@@ -59,25 +59,25 @@ def _extract_stock_cards(screening_json: Dict, deep_review_json: Dict, reports_d
         
         if source == "watchlist":
             card["icon"] = "📋"
-            card["tag"] = "自选观察"
+            card["tag"] = "自选"
             card["tag_class"] = "tag-blue"
-        elif verdict == "DEEP_REVIEW_WAIT_ENTRY":
-            card["icon"] = "🟡"
-            card["tag"] = "等待承接"
-            card["tag_class"] = "tag-yellow"
+        elif "DEEP_REVIEW" in verdict:
+            card["icon"] = "🔍"
+            card["tag"] = "深评候选"
+            card["tag_class"] = "tag-green"
         elif verdict == "WATCH_ONLY":
             card["icon"] = "📋"
-            card["tag"] = "继续观察"
+            card["tag"] = "观察"
             card["tag_class"] = "tag-blue"
         else:
-            card["icon"] = "🔍"
-            card["tag"] = "观察"
+            card["icon"] = "📌"
+            card["tag"] = "跟踪"
             card["tag_class"] = "tag-blue"
         
         cards.append(card)
     
     # Layer 2: deep review candidates
-    for row in deep_review_json.get("rows") or []:
+    for row in deep_review_json.get("candidates") or []:
         symbol = str(row.get("symbol") or "").strip()
         verdict = str(row.get("verdict") or "")
         price_risk = str(row.get("price_risk") or "")
