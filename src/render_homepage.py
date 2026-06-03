@@ -23,10 +23,14 @@ TZ_CN = timezone(timedelta(hours=8))
 
 def _read_json(path: Path) -> Dict[str, Any]:
     if not path.exists():
+        print(f"  ⚠️ _read_json: not found {path}", file=sys.stderr)
         return {}
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        print(f"  ✅ _read_json: {path.name} ({len(data)} keys)", file=sys.stderr)
+        return data
+    except Exception as e:
+        print(f"  ❌ _read_json: failed {path}: {e}", file=sys.stderr)
         return {}
 
 
@@ -135,14 +139,24 @@ def generate(
     today_compact = today.replace("-", "")
     stock_list_display = stock_list or "未设置"
 
-    # Data sources
+    # Data sources — try reports/ first, fallback to docs/
+    def _find_json(dir_path: Path, filename: str) -> Path:
+        primary = dir_path / today / filename
+        if primary.exists():
+            return primary
+        fallback = Path("docs/market_cycle") / today / filename
+        if fallback.exists():
+            print(f"  📎 using fallback: {fallback}", file=sys.stderr)
+            return fallback
+        return primary  # return primary even if missing — _read_json handles it
+
     macro = _read_json(macro_cache)
-    macro_review_json = _read_json(market_cycle_dir / today / "01_macro_review.json")
-    strategy_json = _read_json(market_cycle_dir / today / "14_market_strategy.json")
-    health_json = _read_json(market_cycle_dir / today / "13_source_health.json")
+    macro_review_json = _read_json(_find_json(market_cycle_dir, "01_macro_review.json"))
+    strategy_json = _read_json(_find_json(market_cycle_dir, "14_market_strategy.json"))
+    health_json = _read_json(_find_json(market_cycle_dir, "13_source_health.json"))
     heat_json = _read_json(market_heat_dir / "latest_market_heat.json")
-    screening_json = _read_json(market_cycle_dir / today / "09_screening_funnel.json")
-    deep_review_json = _read_json(market_cycle_dir / today / "11_deep_review_queue.json")
+    screening_json = _read_json(_find_json(market_cycle_dir, "09_screening_funnel.json"))
+    deep_review_json = _read_json(_find_json(market_cycle_dir, "11_deep_review_queue.json"))
 
     # Macro context — prefer macro_review (richer) over macro_cache
     macro_status = macro_review_json.get("status") or macro.get("status", "UNAVAILABLE")
