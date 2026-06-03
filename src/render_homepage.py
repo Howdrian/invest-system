@@ -30,44 +30,79 @@ def _read_json(path: Path) -> Dict[str, Any]:
         return {}
 
 
-def _extract_cio_from_report(report_path: Path) -> Optional[Dict[str, str]]:
-    """Parse a governed report .md for key CIO conclusions."""
-    if not report_path.exists():
-        return None
-    text = report_path.read_text(encoding="utf-8")
-    result: Dict[str, str] = {"file": str(report_path.name)}
-
-    # stock name & code
-    m = re.search(r"##\s*[⚪🟢🔴]\s*(.+?)\s*\((\d+)\)", text)
-    if m:
-        result["name"] = m.group(1).strip()
-        result["code"] = m.group(2).strip()
-    # CIO action
-    m = re.search(r"(?:治理层已阻断|最终动作为|操作建议).*?(\S+).*?(\d+%)", text)
-    if m:
-        result["cio_action"] = m.group(0).strip()[:120]
-    # block reasons
-    m = re.search(r"BLOCKED\s*\([^)]+\)[:\s]*(.+?)(?:\n|$)", text)
-    if m:
-        result["block_reason"] = m.group(1).strip()[:200]
-    # scoring
-    m = re.search(r"评分\s*(\d+)\s*[|/]\s*(\d+)", text)
-    if m:
-        result["score"] = f"{m.group(1)}/{m.group(2)}"
-    # key risks
-    risks = re.findall(r"🚨.*?\n.*?(?:^[-•].*?\n){0,3}", text, re.MULTILINE)
-    if risks:
-        result["risks"] = risks[0][:300]
-    # catalysts  
-    catalysts = re.findall(r"✨.*?\n.*?(?:^[-•].*?\n){0,2}", text, re.MULTILINE)
-    if catalysts:
-        result["catalysts"] = catalysts[0][:200]
-    # what would change
-    m = re.search(r"如果[^：]*?(?:重新评估|重新跑|可重新|等[^。]+)", text)
-    if m:
-        result["conditions"] = m.group(0).strip()[:200]
-
-    return result
+def _extract_stock_cards(screening_json: Dict, deep_review_json: Dict, reports_dir: Path, today: str) -> List[Dict[str, str]]:
+    """Build stock cards from screening funnel and deep review queue JSON."""
+    cards = []
+    
+    # Layer 1: user watchlist stocks (from screening funnel)
+    for row in screening_json.get("rows") or []:
+        symbol = str(row.get("symbol") or "").strip()
+        source = str(row.get("source") or "")
+        verdict = str(row.get("verdict") or "")
+        price_risk = str(row.get("price_risk") or "")
+        next_action = str(row.get("next_action") or "")
+        evidence = row.get("evidence") or []
+        if isinstance(evidence, list):
+            evidence = ", ".join(str(e) for e in evidence)
+        
+        # Skip non-user stocks (market heat hot stocks)
+        card = {
+            "symbol": symbol,
+            "name": str(row.get("name") or symbol),
+            "source": source,
+            "verdict": verdict,
+            "score": str(row.get("base_score") or "?"),
+            "price_risk": price_risk,
+            "next_action": next_action[:200],
+            "evidence": str(evidence)[:100],
+        }
+        
+        if source == "watchlist":
+            card["icon"] = "📋"
+            card["tag"] = "自选观察"
+            card["tag_class"] = "tag-blue"
+        elif verdict == "DEEP_REVIEW_WAIT_ENTRY":
+            card["icon"] = "🟡"
+            card["tag"] = "等待承接"
+            card["tag_class"] = "tag-yellow"
+        elif verdict == "WATCH_ONLY":
+            card["icon"] = "📋"
+            card["tag"] = "继续观察"
+            card["tag_class"] = "tag-blue"
+        else:
+            card["icon"] = "🔍"
+            card["tag"] = "观察"
+            card["tag_class"] = "tag-blue"
+        
+        cards.append(card)
+    
+    # Layer 2: deep review candidates
+    for row in deep_review_json.get("rows") or []:
+        symbol = str(row.get("symbol") or "").strip()
+        verdict = str(row.get("verdict") or "")
+        price_risk = str(row.get("price_risk") or "")
+        next_action = str(row.get("next_action") or "")
+        evidence = row.get("evidence") or ""
+        
+        # Only show DEEP_REVIEW candidates
+        if "DEEP_REVIEW" not in verdict:
+            continue
+        
+        cards.append({
+            "symbol": symbol,
+            "name": symbol,
+            "source": "deep_review",
+            "verdict": verdict,
+            "score": "待评分",
+            "price_risk": price_risk,
+            "next_action": next_action[:200],
+            "evidence": str(evidence)[:100],
+            "icon": "🔍",
+            "tag": "深度候选",
+            "tag_class": "tag-green",
+        })
+    
+    return cards
 
 
 def _html_escape(s: str) -> str:
@@ -169,41 +204,36 @@ def generate(
         if latest_report
         else '<span class="muted">暂无个股完整报告</span>'
     )
-    stock_conclusions: List[Dict[str, str]] = []
-    for rf in report_files[:30]:
-        c = _extract_cio_from_report(rf)
-        if c:
-            stock_conclusions.append(c)
+    # Build stock cards from market_cycle JSON (deterministic, not regex on .md)
+    stock_cards_data = _extract_stock_cards(screening_json, deep_review_json, reports_dir, today)
 
-    # Build stock cards
     stock_cards = ""
-    for s in stock_conclusions[:20]:
-        name = s.get("name", "?")
-        code = s.get("code", "?")
-        cio = s.get("cio_action", "未获取")
-        score = s.get("score", "?")
-        block = s.get("block_reason", "")
-        conditions = s.get("conditions", "")
-
-        is_blocked = "BLOCKED" in cio.upper() or "阻断" in cio
-        icon = "🔴" if is_blocked else "🟡"
-        tag_class = "tag-red" if is_blocked else "tag-yellow"
-        tag_text = "BLOCKED" if is_blocked else "观察中"
+    for s in stock_cards_data[:30]:
+        symbol = s.get("symbol", "?")
+        name = s.get("name", symbol)
+        verdict = s.get("verdict", "")
+        next_action = s.get("next_action", "")
+        evidence = s.get("evidence", "")
+        icon = s.get("icon", "📋")
+        tag_class = s.get("tag_class", "tag-blue")
+        tag_text = s.get("tag", "")
 
         stock_cards += f"""
         <div class="stock-card">
           <div class="stock-header">
             <span class="stock-icon">{icon}</span>
-            <span class="stock-name">{_html_escape(name)} ({code})</span>
+            <span class="stock-name">{_html_escape(name)} ({_html_escape(symbol)})</span>
             <span class="tag {tag_class}">{tag_text}</span>
-            <span class="score-badge">评分 {_html_escape(score)}</span>
+            <span class="score-badge">{_html_escape(verdict)}</span>
           </div>
-          <div class="stock-cio">{_html_escape(cio[:250])}</div>"""
+          <div class="stock-cio">{_html_escape(next_action[:250])}</div>"""
 
-        if block:
-            stock_cards += f'<div class="stock-reason">🚫 {_html_escape(block[:200])}</div>'
-        if conditions:
-            stock_cards += f'<div class="stock-conditions">📌 {_html_escape(conditions[:200])}</div>'
+        if evidence:
+            stock_cards += f'<div class="stock-conditions">📌 {_html_escape(evidence[:200])}</div>'
+        stock_cards += "</div>"
+
+    if not stock_cards:
+        stock_cards = '<div class="muted">暂无分析数据，等待下一次 Actions 触发。</div>'
 
         stock_cards += "</div>"
 
@@ -283,7 +313,7 @@ a:hover {{ text-decoration: underline; }}
 
 <!-- STOCK CIO CONCLUSIONS -->
 <div class="card">
-  <h2>🎯 个股 CIO 判断 ({len(stock_conclusions)} 只)</h2>
+  <h2>🎯 今日关注 ({len(stock_cards_data)} 条)</h2>
   {stock_cards}
 </div>
 
