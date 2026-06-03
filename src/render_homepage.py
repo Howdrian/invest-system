@@ -82,6 +82,12 @@ def _today_str() -> str:
     return datetime.now(TZ_CN).strftime("%Y-%m-%d")
 
 
+def _report_sort_key(path: Path) -> tuple[str, float]:
+    match = re.search(r"report_(\d{8})", path.name)
+    date_key = match.group(1) if match else ""
+    return date_key, path.stat().st_mtime
+
+
 def generate(
     reports_dir: Path = DEFAULT_REPORTS_DIR,
     market_cycle_dir: Path = DEFAULT_MARKET_CYCLE_DIR,
@@ -150,8 +156,19 @@ def generate(
     )
     source_status = "✅ 全部正常" if critical_ok else "⚠️ 有关键源异常"
 
-    # Parse governed reports
-    report_files = sorted(reports_dir.glob(f"*{today_compact}*.md"), key=lambda p: p.stat().st_mtime, reverse=True)
+    # Parse governed reports. A cloud run can publish a next-day market-cycle
+    # page while the latest governed stock report still carries the prior
+    # market date, so do not assume report_YYYYMMDD.md always exists for today.
+    all_report_files = sorted(reports_dir.glob("report_*.md"), key=_report_sort_key, reverse=True)
+    report_files = sorted(reports_dir.glob(f"*{today_compact}*.md"), key=_report_sort_key, reverse=True)
+    if not report_files and all_report_files:
+        report_files = all_report_files[:1]
+    latest_report = report_files[0] if report_files else (all_report_files[0] if all_report_files else None)
+    report_link_html = (
+        f'<a href="./{_html_escape(latest_report.name)}">个股完整报告</a>'
+        if latest_report
+        else '<span class="muted">暂无个股完整报告</span>'
+    )
     stock_conclusions: List[Dict[str, str]] = []
     for rf in report_files[:30]:
         c = _extract_cio_from_report(rf)
@@ -276,16 +293,13 @@ a:hover {{ text-decoration: underline; }}
     <h2>📋 完整报告</h2>
     <div class="section-links">
       <a href="./daily/{today}.md">日报 Markdown</a>
-      <a href="./report_{today_compact}.md">个股完整报告</a>
+      {report_link_html}
     </div>
   </div>
   <div class="card">
     <h2>📊 大盘看板</h2>
     <div class="section-links">
       <a href="./market_cycle/{today}/00_one_screen_brief.html">一屏总览</a>
-      <a href="./market_cycle/{today}/01_macro_review.html">宏观与地缘</a>
-      <a href="./market_cycle/{today}/09_screening_funnel.html">筛选漏斗</a>
-      <a href="./market_cycle/{today}/11_deep_review_queue.html">深评候选</a>
       <a href="./market_cycle/{today}/14_market_strategy.html">市场策略</a>
       <a href="./market_cycle/{today}/13_source_health.html">数据源健康</a>
       <a href="./market_heat/latest_market_heat.md">市场热度</a>
