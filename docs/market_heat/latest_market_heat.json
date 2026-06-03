@@ -1,7 +1,7 @@
 {
   "schema": "market_heat_v1",
   "status": "available",
-  "as_of": "2026-06-03T13:13:18.797019+00:00",
+  "as_of": "2026-06-03T17:27:11.768575+00:00",
   "watchlist": [
     "600519",
     "000858",
@@ -33,14 +33,6 @@
   "hot_stocks": [
     {
       "rank": 1,
-      "code": "SH601991",
-      "name": "大唐发电",
-      "price": 9.1,
-      "change_pct": -0.87,
-      "source": "东方财富人气榜"
-    },
-    {
-      "rank": 2,
       "code": "SH600487",
       "name": "亨通光电",
       "price": 91.43,
@@ -48,15 +40,15 @@
       "source": "东方财富人气榜"
     },
     {
-      "rank": 3,
-      "code": "SH600584",
-      "name": "长电科技",
-      "price": 80.13,
-      "change_pct": 6.34,
+      "rank": 2,
+      "code": "SH601991",
+      "name": "大唐发电",
+      "price": 9.1,
+      "change_pct": -0.87,
       "source": "东方财富人气榜"
     },
     {
-      "rank": 4,
+      "rank": 3,
       "code": "SZ002156",
       "name": "通富微电",
       "price": 70.22,
@@ -64,7 +56,7 @@
       "source": "东方财富人气榜"
     },
     {
-      "rank": 5,
+      "rank": 4,
       "code": "SH600396",
       "name": "华电辽能",
       "price": 21.34,
@@ -72,31 +64,15 @@
       "source": "东方财富人气榜"
     },
     {
+      "rank": 5,
+      "code": "SH600584",
+      "name": "长电科技",
+      "price": 80.13,
+      "change_pct": 6.34,
+      "source": "东方财富人气榜"
+    },
+    {
       "rank": 6,
-      "code": "SH601138",
-      "name": "工业富联",
-      "price": 81.05,
-      "change_pct": 1.3,
-      "source": "东方财富人气榜"
-    },
-    {
-      "rank": 7,
-      "code": "SZ000725",
-      "name": "京东方Ａ",
-      "price": 5.59,
-      "change_pct": 2.19,
-      "source": "东方财富人气榜"
-    },
-    {
-      "rank": 8,
-      "code": "SZ002185",
-      "name": "华天科技",
-      "price": 19.16,
-      "change_pct": 4.53,
-      "source": "东方财富人气榜"
-    },
-    {
-      "rank": 9,
       "code": "SH600578",
       "name": "京能电力",
       "price": 9.34,
@@ -104,15 +80,7 @@
       "source": "东方财富人气榜"
     },
     {
-      "rank": 10,
-      "code": "SZ002579",
-      "name": "中京电子",
-      "price": 19.45,
-      "change_pct": -6.31,
-      "source": "东方财富人气榜"
-    },
-    {
-      "rank": 11,
+      "rank": 7,
       "code": "SZ001896",
       "name": "豫能控股",
       "price": 20.08,
@@ -120,7 +88,47 @@
       "source": "东方财富人气榜"
     },
     {
+      "rank": 8,
+      "code": "SH601138",
+      "name": "工业富联",
+      "price": 81.05,
+      "change_pct": 1.3,
+      "source": "东方财富人气榜"
+    },
+    {
+      "rank": 9,
+      "code": "SZ000725",
+      "name": "京东方Ａ",
+      "price": 5.59,
+      "change_pct": 2.19,
+      "source": "东方财富人气榜"
+    },
+    {
+      "rank": 10,
+      "code": "SZ002185",
+      "name": "华天科技",
+      "price": 19.16,
+      "change_pct": 4.53,
+      "source": "东方财富人气榜"
+    },
+    {
+      "rank": 11,
+      "code": "SH600310",
+      "name": "广西能源",
+      "price": 6.35,
+      "change_pct": 10.05,
+      "source": "东方财富人气榜"
+    },
+    {
       "rank": 12,
+      "code": "SZ002579",
+      "name": "中京电子",
+      "price": 19.45,
+      "change_pct": -6.31,
+      "source": "东方财富人气榜"
+    },
+    {
+      "rank": 13,
       "code": "SH600522",
       "name": "中天科技",
       "price": 44.98,
@@ -128,7 +136,31 @@
       "source": "东方财富人气榜"
     },
     {
-      "rank": 13,
+      "rank": 14,
+      "code": "SH600121",
+      "name": "郑州煤电",
+      "price": 5.69,
+      "change_pct": 10.06,
+      "source": "东方财富人气榜"
+    },
+    {
+      "rank": 15,
+      "code": "SZ002137",
+      "name": "实益达",
+      "price": 10.4,
+      "change_pct": 10.05,
+      "source": "东方财富人气榜"
+    },
+    {
+      "rank": 16,
+      "code": "SH600255",
+      "name": "鑫科材料",
+      "price": 4.39,
+      "change_pct": 10.03,
+      "source": "东方财富人气榜"
+    },
+    {
+      "rank": 17,
       "code": "SZ300308",
       "name": "中际旭创",
       "price": 1275.0,
@@ -136,7 +168,7 @@
       "source": "东方财富人气榜"
     },
     {
-      "rank": 14,
+      "rank": 18,
       "code": "SZ002384",
       "name": "东山精密",
       "price": 223.99,
@@ -144,7 +176,7 @@
       "source": "东方财富人气榜"
     },
     {
-      "rank": 15,
+      "rank": 19,
       "code": "SH600172",
       "name": "黄河旋风",
       "price": 15.04,
@@ -152,43 +184,11 @@
       "source": "东方财富人气榜"
     },
     {
-      "rank": 16,
+      "rank": 20,
       "code": "SH601869",
       "name": "长飞光纤",
       "price": 444.99,
       "change_pct": 8.87,
-      "source": "东方财富人气榜"
-    },
-    {
-      "rank": 17,
-      "code": "SZ300394",
-      "name": "天孚通信",
-      "price": 497.38,
-      "change_pct": 8.84,
-      "source": "东方财富人气榜"
-    },
-    {
-      "rank": 18,
-      "code": "SH603890",
-      "name": "春秋电子",
-      "price": 31.33,
-      "change_pct": 4.36,
-      "source": "东方财富人气榜"
-    },
-    {
-      "rank": 19,
-      "code": "SH600105",
-      "name": "永鼎股份",
-      "price": 51.92,
-      "change_pct": 4.64,
-      "source": "东方财富人气榜"
-    },
-    {
-      "rank": 20,
-      "code": "SH600310",
-      "name": "广西能源",
-      "price": 6.35,
-      "change_pct": 10.05,
       "source": "东方财富人气榜"
     }
   ],
