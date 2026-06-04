@@ -82,7 +82,7 @@ def _extract_stock_cards(screening_json: Dict, deep_review_json: Dict, reports_d
     
     # Layer 2: deep review candidates
     for row in deep_review_json.get("candidates") or []:
-        symbol = str(row.get("symbol") or "").strip()
+        symbol = str(row.get("symbol") or "").replace("SH", "").replace("SZ", "").strip()
         verdict = str(row.get("verdict") or "")
         price_risk = str(row.get("price_risk") or "")
         next_action = str(row.get("next_action") or "")
