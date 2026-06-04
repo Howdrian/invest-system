@@ -482,9 +482,9 @@ jobs:
           if [ "$MODE" = "market-only" ]; then
             python main.py --market-review $FORCE_RUN_ARG
           elif [ "$MODE" = "stocks-only" ]; then
-            python main.py --no-market-review $FORCE_RUN_ARG
+            python main.py --no-market-review --force-run
           else
-            python main.py $FORCE_RUN_ARG
+            python main.py --force-run
           fi
 
           TODAY=$(TZ='Asia/Shanghai' date +%Y-%m-%d)
