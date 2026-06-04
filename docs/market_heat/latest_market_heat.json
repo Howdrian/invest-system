@@ -1,7 +1,7 @@
 {
   "schema": "market_heat_v1",
   "status": "available",
-  "as_of": "2026-06-04T08:42:44.678816+00:00",
+  "as_of": "2026-06-04T11:21:22.068603+00:00",
   "watchlist": [
     "600519",
     "000858",
@@ -89,14 +89,6 @@
     },
     {
       "rank": 8,
-      "code": "SZ002156",
-      "name": "通富微电",
-      "price": 71.1,
-      "change_pct": 1.25,
-      "source": "东方财富人气榜"
-    },
-    {
-      "rank": 9,
       "code": "SZ000636",
       "name": "风华高科",
       "price": 63.5,
@@ -104,11 +96,19 @@
       "source": "东方财富人气榜"
     },
     {
+      "rank": 9,
+      "code": "SZ002156",
+      "name": "通富微电",
+      "price": 71.1,
+      "change_pct": 1.25,
+      "source": "东方财富人气榜"
+    },
+    {
       "rank": 10,
-      "code": "SH600578",
-      "name": "京能电力",
-      "price": 9.36,
-      "change_pct": 0.21,
+      "code": "SH600703",
+      "name": "三安光电",
+      "price": 17.06,
+      "change_pct": 9.99,
       "source": "东方财富人气榜"
     },
     {
@@ -121,26 +121,26 @@
     },
     {
       "rank": 12,
-      "code": "SH600703",
-      "name": "三安光电",
-      "price": 17.06,
-      "change_pct": 9.99,
+      "code": "SZ002491",
+      "name": "通鼎互联",
+      "price": 26.83,
+      "change_pct": 10.0,
       "source": "东方财富人气榜"
     },
     {
       "rank": 13,
-      "code": "SH603986",
-      "name": "兆易创新",
-      "price": 529.31,
-      "change_pct": 7.53,
+      "code": "SH600667",
+      "name": "太极实业",
+      "price": 16.36,
+      "change_pct": 10.02,
       "source": "东方财富人气榜"
     },
     {
       "rank": 14,
-      "code": "SZ002463",
-      "name": "沪电股份",
-      "price": 140.82,
-      "change_pct": 8.49,
+      "code": "SZ002585",
+      "name": "双星新材",
+      "price": 11.8,
+      "change_pct": 9.97,
       "source": "东方财富人气榜"
     },
     {
@@ -153,42 +153,42 @@
     },
     {
       "rank": 16,
-      "code": "SZ002491",
-      "name": "通鼎互联",
-      "price": 26.83,
-      "change_pct": 10.0,
+      "code": "SH603986",
+      "name": "兆易创新",
+      "price": 529.31,
+      "change_pct": 7.53,
       "source": "东方财富人气榜"
     },
     {
       "rank": 17,
-      "code": "SH601138",
-      "name": "工业富联",
-      "price": 78.55,
-      "change_pct": -3.08,
+      "code": "SZ002463",
+      "name": "沪电股份",
+      "price": 140.82,
+      "change_pct": 8.49,
       "source": "东方财富人气榜"
     },
     {
       "rank": 18,
-      "code": "SH600667",
-      "name": "太极实业",
-      "price": 16.36,
-      "change_pct": 10.02,
+      "code": "SH600578",
+      "name": "京能电力",
+      "price": 9.36,
+      "change_pct": 0.21,
       "source": "东方财富人气榜"
     },
     {
       "rank": 19,
-      "code": "SZ002585",
-      "name": "双星新材",
-      "price": 11.8,
-      "change_pct": 9.97,
+      "code": "SZ300726",
+      "name": "宏达电子",
+      "price": 79.92,
+      "change_pct": 20.0,
       "source": "东方财富人气榜"
     },
     {
       "rank": 20,
-      "code": "SZ002384",
-      "name": "东山精密",
-      "price": 237.8,
-      "change_pct": 6.17,
+      "code": "SH601138",
+      "name": "工业富联",
+      "price": 78.55,
+      "change_pct": -3.08,
       "source": "东方财富人气榜"
     }
   ],
