@@ -1,6 +1,6 @@
 # 投研日报 — 2026-06-05
 
-> 自动生成于 2026-06-05 14:50:25 北京时
+> 自动生成于 2026-06-05 18:17:30 北京时
 
 ## 自选股
 `600519,000858,300750,002594,601318,000001,600036,000333,300059,600276,601899,002415,000725,600900,601857,AAPL,MSFT,NVDA,GOOGL,AMZN,META,TSLA,BABA,SPY,QQQ,IWM`
@@ -33,7 +33,6 @@
 | 文件 | 说明 |
 |---|---|
 | [report_20260601.md](../report_20260601.md) | 查看 |
-| [report_20260605.md](../report_20260605.md) | 查看 |
 
 ---
-完整的 Actions 运行日志：[查看](https://github.com/Howdrian/invest-system/actions/runs/26999567755)
+完整的 Actions 运行日志：[查看](https://github.com/Howdrian/invest-system/actions/runs/27008487420)
