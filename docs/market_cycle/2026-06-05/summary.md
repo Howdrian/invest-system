@@ -3,7 +3,7 @@
 - Macro status: `REFRESHED`
 - Macro review: `REFRESHED`
 - Prediction market: `AVAILABLE`
-- Source health: `degraded`
+- Source health: `usable`
 - Trade review usability: `usable`
 - Regime: `NEUTRAL_WATCH`
 - Deep review candidates: `6`

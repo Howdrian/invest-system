@@ -1,8 +1,8 @@
 {
   "schema": "source_health_v1",
-  "generated_at": "2026-06-05T14:05:26.966532+00:00",
+  "generated_at": "2026-06-05T15:35:21.434387+00:00",
   "macro_status": "REFRESHED",
-  "usability_verdict": "degraded",
+  "usability_verdict": "usable",
   "trade_review_usability": "usable",
   "rows": [
     {
@@ -26,12 +26,10 @@
     {
       "component": "prediction_market",
       "status": "AVAILABLE",
-      "usability": "degraded",
+      "usability": "usable",
       "criticality": "optional",
       "blocking_level": "none",
-      "warnings": [
-        "prediction_market_probability_gap_red_team_trigger"
-      ],
+      "warnings": [],
       "source": "src.prediction_market.polymarket"
     },
     {
@@ -76,9 +74,7 @@
   "blocking_summary": {
     "critical_unavailable_components": [],
     "optional_unavailable_components": [],
-    "optional_degraded_components": [
-      "prediction_market"
-    ],
+    "optional_degraded_components": [],
     "supporting_degraded_components": []
   }
 }

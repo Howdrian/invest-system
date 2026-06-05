@@ -1,105 +1,99 @@
 {
   "schema": "deep_review_queue_v1",
-  "generated_at": "2026-06-05T14:05:26.966510+00:00",
+  "generated_at": "2026-06-05T15:35:21.434366+00:00",
   "status": "available",
   "max_candidates": 6,
   "auto_governed_candidates": [],
   "candidates": [
     {
-      "symbol": "SH600519",
-      "name": "贵州茅台",
+      "symbol": "SZ000725",
+      "name": "京东方Ａ",
       "source": "hot_stocks",
       "priority_score": 6.5,
       "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
       "evidence": [
-        "hot_stock_rank",
-        "prediction_market_red_team_trigger"
+        "hot_stock_rank"
       ],
       "verdict": "DEEP_REVIEW_WAIT_ENTRY",
       "price_risk": "OVERHEATED_WAIT_ENTRY",
       "next_action": "读公告/研报和技术承接；不追高。",
       "trade_execution": "disabled",
-      "macro_overlay": "地缘/预测市场差异触发红队复核。"
+      "macro_overlay": "macro_risk_state=neutral"
     },
     {
-      "symbol": "SH601318",
-      "name": "中国平安",
+      "symbol": "SZ300308",
+      "name": "中际旭创",
       "source": "hot_stocks",
       "priority_score": 6.5,
       "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
       "evidence": [
-        "hot_stock_rank",
-        "prediction_market_red_team_trigger"
+        "hot_stock_rank"
       ],
       "verdict": "DEEP_REVIEW_WAIT_ENTRY",
       "price_risk": "OVERHEATED_WAIT_ENTRY",
       "next_action": "读公告/研报和技术承接；不追高。",
       "trade_execution": "disabled",
-      "macro_overlay": "地缘/预测市场差异触发红队复核。"
+      "macro_overlay": "macro_risk_state=neutral"
     },
     {
-      "symbol": "SH600036",
-      "name": "招商银行",
+      "symbol": "SH688017",
+      "name": "绿的谐波",
       "source": "hot_stocks",
       "priority_score": 6.5,
       "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
       "evidence": [
-        "hot_stock_rank",
-        "prediction_market_red_team_trigger"
+        "hot_stock_rank"
       ],
       "verdict": "DEEP_REVIEW_WAIT_ENTRY",
       "price_risk": "OVERHEATED_WAIT_ENTRY",
       "next_action": "读公告/研报和技术承接；不追高。",
       "trade_execution": "disabled",
-      "macro_overlay": "地缘/预测市场差异触发红队复核。"
+      "macro_overlay": "macro_risk_state=neutral"
     },
     {
-      "symbol": "SZ000651",
-      "name": "格力电器",
+      "symbol": "SH601991",
+      "name": "大唐发电",
       "source": "hot_stocks",
       "priority_score": 6.5,
       "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
       "evidence": [
-        "hot_stock_rank",
-        "prediction_market_red_team_trigger"
+        "hot_stock_rank"
       ],
       "verdict": "DEEP_REVIEW_WAIT_ENTRY",
       "price_risk": "OVERHEATED_WAIT_ENTRY",
       "next_action": "读公告/研报和技术承接；不追高。",
       "trade_execution": "disabled",
-      "macro_overlay": "地缘/预测市场差异触发红队复核。"
+      "macro_overlay": "macro_risk_state=neutral"
     },
     {
-      "symbol": "SZ002594",
-      "name": "比亚迪",
+      "symbol": "SH600487",
+      "name": "亨通光电",
       "source": "hot_stocks",
       "priority_score": 6.5,
       "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
       "evidence": [
-        "hot_stock_rank",
-        "prediction_market_red_team_trigger"
+        "hot_stock_rank"
       ],
       "verdict": "DEEP_REVIEW_WAIT_ENTRY",
       "price_risk": "OVERHEATED_WAIT_ENTRY",
       "next_action": "读公告/研报和技术承接；不追高。",
       "trade_execution": "disabled",
-      "macro_overlay": "地缘/预测市场差异触发红队复核。"
+      "macro_overlay": "macro_risk_state=neutral"
     },
     {
-      "symbol": "SZ000002",
-      "name": "万科A",
+      "symbol": "SH600522",
+      "name": "中天科技",
       "source": "hot_stocks",
       "priority_score": 6.5,
       "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
       "evidence": [
-        "hot_stock_rank",
-        "prediction_market_red_team_trigger"
+        "hot_stock_rank"
       ],
       "verdict": "DEEP_REVIEW_WAIT_ENTRY",
       "price_risk": "OVERHEATED_WAIT_ENTRY",
       "next_action": "读公告/研报和技术承接；不追高。",
       "trade_execution": "disabled",
-      "macro_overlay": "地缘/预测市场差异触发红队复核。"
+      "macro_overlay": "macro_risk_state=neutral"
     }
   ],
   "watch_only": [
@@ -110,14 +104,13 @@
       "priority_score": 4.0,
       "evidence_quality": "LOW_WATCHLIST_EVIDENCE",
       "evidence": [
-        "watchlist_member",
-        "prediction_market_red_team_trigger"
+        "watchlist_member"
       ],
       "verdict": "WATCH_ONLY",
       "price_risk": "NORMAL_RECHECK",
       "next_action": "继续观察；等待公告/研报/市场热度/技术形态触发。",
       "trade_execution": "disabled",
-      "macro_overlay": "地缘/预测市场差异触发红队复核。"
+      "macro_overlay": "macro_risk_state=neutral"
     },
     {
       "symbol": "000858",
@@ -126,14 +119,13 @@
       "priority_score": 4.0,
       "evidence_quality": "LOW_WATCHLIST_EVIDENCE",
       "evidence": [
-        "watchlist_member",
-        "prediction_market_red_team_trigger"
+        "watchlist_member"
       ],
       "verdict": "WATCH_ONLY",
       "price_risk": "NORMAL_RECHECK",
       "next_action": "继续观察；等待公告/研报/市场热度/技术形态触发。",
       "trade_execution": "disabled",
-      "macro_overlay": "地缘/预测市场差异触发红队复核。"
+      "macro_overlay": "macro_risk_state=neutral"
     },
     {
       "symbol": "300750",
@@ -142,14 +134,13 @@
       "priority_score": 4.0,
       "evidence_quality": "LOW_WATCHLIST_EVIDENCE",
       "evidence": [
-        "watchlist_member",
-        "prediction_market_red_team_trigger"
+        "watchlist_member"
       ],
       "verdict": "WATCH_ONLY",
       "price_risk": "NORMAL_RECHECK",
       "next_action": "继续观察；等待公告/研报/市场热度/技术形态触发。",
       "trade_execution": "disabled",
-      "macro_overlay": "地缘/预测市场差异触发红队复核。"
+      "macro_overlay": "macro_risk_state=neutral"
     },
     {
       "symbol": "002594",
@@ -158,14 +149,13 @@
       "priority_score": 4.0,
       "evidence_quality": "LOW_WATCHLIST_EVIDENCE",
       "evidence": [
-        "watchlist_member",
-        "prediction_market_red_team_trigger"
+        "watchlist_member"
       ],
       "verdict": "WATCH_ONLY",
       "price_risk": "NORMAL_RECHECK",
       "next_action": "继续观察；等待公告/研报/市场热度/技术形态触发。",
       "trade_execution": "disabled",
-      "macro_overlay": "地缘/预测市场差异触发红队复核。"
+      "macro_overlay": "macro_risk_state=neutral"
     },
     {
       "symbol": "601318",
@@ -174,14 +164,13 @@
       "priority_score": 4.0,
       "evidence_quality": "LOW_WATCHLIST_EVIDENCE",
       "evidence": [
-        "watchlist_member",
-        "prediction_market_red_team_trigger"
+        "watchlist_member"
       ],
       "verdict": "WATCH_ONLY",
       "price_risk": "NORMAL_RECHECK",
       "next_action": "继续观察；等待公告/研报/市场热度/技术形态触发。",
       "trade_execution": "disabled",
-      "macro_overlay": "地缘/预测市场差异触发红队复核。"
+      "macro_overlay": "macro_risk_state=neutral"
     },
     {
       "symbol": "000001",
@@ -190,14 +179,13 @@
       "priority_score": 4.0,
       "evidence_quality": "LOW_WATCHLIST_EVIDENCE",
       "evidence": [
-        "watchlist_member",
-        "prediction_market_red_team_trigger"
+        "watchlist_member"
       ],
       "verdict": "WATCH_ONLY",
       "price_risk": "NORMAL_RECHECK",
       "next_action": "继续观察；等待公告/研报/市场热度/技术形态触发。",
       "trade_execution": "disabled",
-      "macro_overlay": "地缘/预测市场差异触发红队复核。"
+      "macro_overlay": "macro_risk_state=neutral"
     }
   ],
   "policy": {

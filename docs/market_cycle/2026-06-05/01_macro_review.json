@@ -1,9 +1,9 @@
 {
   "schema": "macro_review_v1",
   "run_date": "2026-06-05",
-  "generated_at": "2026-06-05T14:05:26.966379+00:00",
+  "generated_at": "2026-06-05T15:35:21.434231+00:00",
   "status": "REFRESHED",
-  "headline": "宏观中性，等待价格和证据共振；VIX neutral: 16.64",
+  "headline": "宏观中性，等待价格和证据共振；VIX neutral: 16.71",
   "confidence": "LOW_TO_MEDIUM",
   "macro_dimensions": {
     "growth": {
@@ -34,7 +34,7 @@
     "risk_appetite": {
       "status": "available",
       "signal": "neutral",
-      "evidence": "VIX neutral: 16.64"
+      "evidence": "VIX neutral: 16.71"
     },
     "market_heat": {
       "status": "available",
@@ -45,15 +45,15 @@
   "six_factor_regime": {
     "risk_state": "neutral",
     "confidence": "medium",
-    "reason": "VIX neutral: 16.64",
+    "reason": "VIX neutral: 16.71",
     "classification": "neutral_watch",
     "six_factor_status": "DEGRADED",
     "factors": {
       "market_concentration": {
         "status": "available",
         "symbol": "^GSPC",
-        "price": 7506.36,
-        "change_percentage": -1.02778,
+        "price": 7489.79,
+        "change_percentage": -1.24626,
         "price_avg_50": 7119.5625,
         "price_avg_200": 6847.722
       },
@@ -76,8 +76,8 @@
       "volatility": {
         "status": "available",
         "symbol": "^VIX",
-        "price": 16.64,
-        "change_percentage": 8.05195,
+        "price": 16.71,
+        "change_percentage": 8.50649,
         "price_avg_50": 19.3118,
         "price_avg_200": 18.39555
       }

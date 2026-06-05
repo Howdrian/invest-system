@@ -1,6 +1,6 @@
 # 投研日报 — 2026-06-05
 
-> 自动生成于 2026-06-05 22:18:02 北京时
+> 自动生成于 2026-06-05 23:47:04 北京时
 
 ## 自选股
 `600519,000858,300750,002594,601318,000001,600036,000333,300059,600276,601899,002415,000725,600900,601857,AAPL,MSFT,NVDA,GOOGL,AMZN,META,TSLA,BABA,SPY,QQQ,IWM`
@@ -20,7 +20,7 @@
 - [市场策略总控](../market_cycle/2026-06-05/14_market_strategy.html)
 - [数据源健康](../market_cycle/2026-06-05/13_source_health.html)
 - Macro context: `REFRESHED`
-- Source health: `degraded`
+- Source health: `usable`
 - Trade review usability: `usable`
 - Macro review: `REFRESHED` / `LOW_TO_MEDIUM`
 - Polymarket: `available`
@@ -35,4 +35,4 @@
 | [report_20260601.md](../report_20260601.md) | 查看 |
 
 ---
-完整的 Actions 运行日志：[查看](https://github.com/Howdrian/invest-system/actions/runs/27019433349)
+完整的 Actions 运行日志：[查看](https://github.com/Howdrian/invest-system/actions/runs/27024216608)
