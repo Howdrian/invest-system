@@ -80,7 +80,7 @@ def main() -> None:
     strategy = _read_json(_path(DEFAULT_MARKET_CYCLE_DIR, "14_market_strategy.json")) or {}
     health = _read_json(_path(DEFAULT_MARKET_CYCLE_DIR, "13_source_health.json")) or {}
     screening = _read_json(_path(DEFAULT_MARKET_CYCLE_DIR, "09_screening_funnel.json")) or {}
-    governed = _read_json(DEFAULT_REPORTS_DIR / "governed_results.json") or []
+    governed = _read_json(Path("docs/governed_results.json")) or _read_json(DEFAULT_REPORTS_DIR / "governed_results.json") or []
 
     regime = strategy.get("regime", "UNKNOWN")
     headline = (strategy.get("strategy") or {}).get("headline", "")

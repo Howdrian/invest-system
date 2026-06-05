@@ -2716,7 +2716,7 @@ class StockAnalysisPipeline:
                 })
         if governed_results:
             import json as _json
-            out_path = Path("reports/governed_results.json")
+            out_path = Path("docs/governed_results.json")
             out_path.parent.mkdir(parents=True, exist_ok=True)
             out_path.write_text(_json.dumps(governed_results, ensure_ascii=False, indent=2), encoding="utf-8")
             logger.info(f"Wrote governed_results.json: {len(governed_results)} stocks")
