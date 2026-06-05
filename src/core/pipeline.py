@@ -2681,6 +2681,46 @@ class StockAnalysisPipeline:
         # 统计
         elapsed_time = time.time() - start_time
         
+        # Write governed_results.json for homepage rendering
+        governed_results = []
+        for r in results:
+            gov = getattr(r, '_governance', None)
+            if gov:
+                governed_results.append({
+                    "code": r.code,
+                    "name": r.stock_name or r.code,
+                    "cio_status": gov.get("cio_status", ""),
+                    "score": gov.get("score", 0),
+                    "gate": gov.get("gate", ""),
+                    "direction": gov.get("cio", {}).get("direction", ""),
+                    "headline": gov.get("cio", {}).get("headline", ""),
+                    "red_blue_verdict": gov.get("red_blue_verdict", ""),
+                    "red_blue": {
+                        "stronger_side": gov.get("red_blue", {}).get("arbitration", {}).get("stronger_side", ""),
+                        "verdict": gov.get("red_blue", {}).get("arbitration", {}).get("verdict", ""),
+                    },
+                    "scoring": {
+                        "total": gov.get("scoring", {}).get("total_score", 0),
+                        "gate": gov.get("scoring", {}).get("gate_result", ""),
+                        "dimensions": gov.get("scoring", {}).get("scores", {}),
+                    },
+                    "trade_plan": {
+                        "action": gov.get("trade_plan", {}).get("action", ""),
+                        "target_pct": gov.get("trade_plan", {}).get("target_position_pct"),
+                        "entry_zone": gov.get("trade_plan", {}).get("entry_zone"),
+                        "stop_loss": gov.get("trade_plan", {}).get("stop_loss"),
+                        "conditions": gov.get("trade_plan", {}).get("conditions", []),
+                        "invalidations": gov.get("trade_plan", {}).get("invalidations", []),
+                    },
+                    "next_action": gov.get("cio", {}).get("next_user_action", ""),
+                })
+        if governed_results:
+            import json as _json
+            out_path = Path("reports/governed_results.json")
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            out_path.write_text(_json.dumps(governed_results, ensure_ascii=False, indent=2), encoding="utf-8")
+            logger.info(f"Wrote governed_results.json: {len(governed_results)} stocks")
+        
         # dry-run 模式下，数据获取成功即视为成功
         if dry_run:
             # 检查哪些股票的最新可复用交易日数据已存在
