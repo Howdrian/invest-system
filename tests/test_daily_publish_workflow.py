@@ -30,6 +30,7 @@ def test_daily_workflow_publishes_market_cycle_without_docs_index_conflict():
     assert "governed_selection_reason.txt" in workflow
     assert "DEEP_REVIEW_NOW" in workflow
     assert "--stocks \"$GOVERNED_STOCK_LIST\"" in workflow
+    assert "python main.py --stocks \"$GOVERNED_STOCK_LIST\" --no-market-review --force-run" in workflow
 
     assert workflow.index("python -m src.market_cycle") < workflow.index("python main.py --stocks")
 

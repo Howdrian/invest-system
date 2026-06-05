@@ -595,7 +595,8 @@ jobs:
             fi
           else
             echo "started" > "$RUN_STATUS_DIR/stock_analysis_status.txt"
-            if python main.py --stocks "$GOVERNED_STOCK_LIST" --force-run; then
+            # full 模式的大盘部分已经由 market-cycle 产出；这里避免重复跑旧版大盘复盘导致超时。
+            if python main.py --stocks "$GOVERNED_STOCK_LIST" --no-market-review --force-run; then
               echo "success" > "$RUN_STATUS_DIR/stock_analysis_status.txt"
             else
               echo "failed" > "$RUN_STATUS_DIR/stock_analysis_status.txt"
