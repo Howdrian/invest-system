@@ -1,7 +1,7 @@
 {
   "schema": "market_heat_v1",
   "status": "available",
-  "as_of": "2026-06-04T15:59:11.296744+00:00",
+  "as_of": "2026-06-05T04:58:15.861432+00:00",
   "watchlist": [
     "600519",
     "000858",
@@ -33,247 +33,247 @@
   "hot_stocks": [
     {
       "rank": 1,
-      "code": "SH600519",
-      "name": "贵州茅台",
-      "price": 1268.0,
-      "change_pct": null,
-      "source": "雪球关注榜"
+      "code": "SZ000725",
+      "name": "京东方Ａ",
+      "price": 6.7,
+      "change_pct": 8.94,
+      "source": "东方财富人气榜"
     },
     {
       "rank": 2,
-      "code": "SH601318",
-      "name": "中国平安",
-      "price": 53.23,
-      "change_pct": null,
-      "source": "雪球关注榜"
+      "code": "SH600487",
+      "name": "亨通光电",
+      "price": 98.52,
+      "change_pct": 0.66,
+      "source": "东方财富人气榜"
     },
     {
       "rank": 3,
-      "code": "SH600036",
-      "name": "招商银行",
-      "price": 38.1,
-      "change_pct": null,
-      "source": "雪球关注榜"
+      "code": "SH600667",
+      "name": "太极实业",
+      "price": 16.66,
+      "change_pct": 1.83,
+      "source": "东方财富人气榜"
     },
     {
       "rank": 4,
-      "code": "SZ000651",
-      "name": "格力电器",
-      "price": 38.88,
-      "change_pct": null,
-      "source": "雪球关注榜"
+      "code": "SH600105",
+      "name": "永鼎股份",
+      "price": 57.8,
+      "change_pct": 6.47,
+      "source": "东方财富人气榜"
     },
     {
       "rank": 5,
-      "code": "SZ002594",
-      "name": "比亚迪",
-      "price": 93.44,
-      "change_pct": null,
-      "source": "雪球关注榜"
+      "code": "SZ001896",
+      "name": "豫能控股",
+      "price": 21.14,
+      "change_pct": -4.3,
+      "source": "东方财富人气榜"
     },
     {
       "rank": 6,
-      "code": "SZ000002",
-      "name": "万科A",
-      "price": 3.21,
-      "change_pct": null,
-      "source": "雪球关注榜"
+      "code": "SZ002585",
+      "name": "双星新材",
+      "price": 12.36,
+      "change_pct": 4.75,
+      "source": "东方财富人气榜"
     },
     {
       "rank": 7,
-      "code": "SH600887",
-      "name": "伊利股份",
-      "price": 26.56,
-      "change_pct": null,
-      "source": "雪球关注榜"
+      "code": "SH600522",
+      "name": "中天科技",
+      "price": 47.7,
+      "change_pct": 3.56,
+      "source": "东方财富人气榜"
     },
     {
       "rank": 8,
-      "code": "SZ000858",
-      "name": "五粮液",
-      "price": 81.1,
-      "change_pct": null,
-      "source": "雪球关注榜"
+      "code": "SZ002491",
+      "name": "通鼎互联",
+      "price": 26.69,
+      "change_pct": -0.52,
+      "source": "东方财富人气榜"
     },
     {
       "rank": 9,
-      "code": "SH601166",
-      "name": "兴业银行",
-      "price": 18.29,
-      "change_pct": null,
-      "source": "雪球关注榜"
+      "code": "SH600703",
+      "name": "三安光电",
+      "price": 17.34,
+      "change_pct": 1.64,
+      "source": "东方财富人气榜"
     },
     {
       "rank": 10,
-      "code": "SH600276",
-      "name": "恒瑞医药",
-      "price": 46.63,
-      "change_pct": null,
-      "source": "雪球关注榜"
+      "code": "SZ000063",
+      "name": "中兴通讯",
+      "price": 40.43,
+      "change_pct": 7.13,
+      "source": "东方财富人气榜"
     },
     {
       "rank": 11,
-      "code": "SH601919",
-      "name": "中远海控",
-      "price": 14.47,
-      "change_pct": null,
-      "source": "雪球关注榜"
+      "code": "SH600498",
+      "name": "烽火通信",
+      "price": 58.03,
+      "change_pct": 10.01,
+      "source": "东方财富人气榜"
     },
     {
       "rank": 12,
-      "code": "SZ300059",
-      "name": "东方财富",
-      "price": 18.74,
-      "change_pct": null,
-      "source": "雪球关注榜"
+      "code": "SH600396",
+      "name": "华电辽能",
+      "price": 21.82,
+      "change_pct": -0.68,
+      "source": "东方财富人气榜"
     },
     {
       "rank": 13,
-      "code": "SZ000333",
-      "name": "美的集团",
-      "price": 82.42,
-      "change_pct": null,
-      "source": "雪球关注榜"
+      "code": "SH601991",
+      "name": "大唐发电",
+      "price": 8.46,
+      "change_pct": -3.97,
+      "source": "东方财富人气榜"
     },
     {
       "rank": 14,
-      "code": "SH601012",
-      "name": "隆基绿能",
-      "price": 13.34,
-      "change_pct": null,
-      "source": "雪球关注榜"
+      "code": "SZ000636",
+      "name": "风华高科",
+      "price": 60.85,
+      "change_pct": -4.17,
+      "source": "东方财富人气榜"
     },
     {
       "rank": 15,
-      "code": "SZ300750",
-      "name": "宁德时代",
-      "price": 408.2,
-      "change_pct": null,
-      "source": "雪球关注榜"
+      "code": "SZ002421",
+      "name": "达实智能",
+      "price": 5.21,
+      "change_pct": 9.92,
+      "source": "东方财富人气榜"
     },
     {
       "rank": 16,
-      "code": "SH603288",
-      "name": "海天味业",
-      "price": 33.8,
-      "change_pct": null,
-      "source": "雪球关注榜"
+      "code": "SH603773",
+      "name": "沃格光电",
+      "price": 134.64,
+      "change_pct": 10.0,
+      "source": "东方财富人气榜"
     },
     {
       "rank": 17,
-      "code": "SZ000725",
-      "name": "京东方A",
-      "price": 6.15,
-      "change_pct": null,
-      "source": "雪球关注榜"
+      "code": "SH600584",
+      "name": "长电科技",
+      "price": 78.38,
+      "change_pct": -2.12,
+      "source": "东方财富人气榜"
     },
     {
       "rank": 18,
-      "code": "SZ002415",
-      "name": "海康威视",
-      "price": 30.63,
-      "change_pct": null,
-      "source": "雪球关注榜"
+      "code": "SH600403",
+      "name": "大有能源",
+      "price": 8.14,
+      "change_pct": 10.0,
+      "source": "东方财富人气榜"
     },
     {
       "rank": 19,
-      "code": "SZ000895",
-      "name": "双汇发展",
-      "price": 24.33,
-      "change_pct": null,
-      "source": "雪球关注榜"
+      "code": "SZ002361",
+      "name": "神剑股份",
+      "price": 16.81,
+      "change_pct": 10.01,
+      "source": "东方财富人气榜"
     },
     {
       "rank": 20,
-      "code": "SH600900",
-      "name": "长江电力",
-      "price": 27.72,
-      "change_pct": null,
-      "source": "雪球关注榜"
+      "code": "SZ002354",
+      "name": "天娱数科",
+      "price": 6.66,
+      "change_pct": 10.08,
+      "source": "东方财富人气榜"
     }
   ],
   "sector_top": [
     {
+      "name": "家具制造业",
+      "change_pct": 3.3731710041327
+    },
+    {
+      "name": "通用设备制造业",
+      "change_pct": 2.8755910228454
+    },
+    {
+      "name": "文化艺术业",
+      "change_pct": 2.8176933649881
+    },
+    {
+      "name": "化学纤维制造业",
+      "change_pct": 2.7255776925817
+    },
+    {
+      "name": "黑色金属矿采选业",
+      "change_pct": 2.4010034044078
+    },
+    {
       "name": "仪器仪表制造业",
-      "change_pct": 3.4105187867697
+      "change_pct": 2.2860334184577
     },
     {
-      "name": "建筑安装业",
-      "change_pct": 3.3092375313306
+      "name": "非金属矿物制品业",
+      "change_pct": 1.9054571533692
     },
     {
-      "name": "专用设备制造业",
-      "change_pct": 2.0655647055767
+      "name": "专业技术服务业",
+      "change_pct": 1.7743309094391
     },
     {
-      "name": "金属制品业",
-      "change_pct": 1.9298911314848
+      "name": "仓储业",
+      "change_pct": 1.7472510920319
     },
     {
-      "name": "木材加工和木、竹、藤、棕、草制品业",
-      "change_pct": 1.761252446184
-    },
-    {
-      "name": "煤炭开采和洗选业",
-      "change_pct": 1.7141223767197
-    },
-    {
-      "name": "批发业",
-      "change_pct": 1.4353485439511
-    },
-    {
-      "name": "橡胶和塑料制品业",
-      "change_pct": 1.2118710335639
-    },
-    {
-      "name": "计算机、通信和其他电子设备制造业",
-      "change_pct": 1.1802811241676
-    },
-    {
-      "name": "建筑装饰和其他建筑业",
-      "change_pct": 0.94817792536922
+      "name": "住宿业",
+      "change_pct": 1.7247431964223
     }
   ],
   "sector_bottom": [
     {
-      "name": "开采辅助活动",
-      "change_pct": -4.7723515197762
-    },
-    {
-      "name": "林业",
-      "change_pct": -3.7229783827062
-    },
-    {
       "name": "科技推广和应用服务业",
-      "change_pct": -3.6599763872491
+      "change_pct": -3.921568627451
     },
     {
-      "name": "装卸搬运和运输代理业",
-      "change_pct": -3.3454545454545
+      "name": "电力、热力生产和供应业",
+      "change_pct": -2.5418544511062
+    },
+    {
+      "name": "其他金融业",
+      "change_pct": -1.8199817240329
     },
     {
       "name": "畜牧业",
-      "change_pct": -3.2666007579502
+      "change_pct": -1.7476406850751
     },
     {
-      "name": "农副食品加工业",
-      "change_pct": -2.8735494101535
+      "name": "石油加工、炼焦和核燃料加工业",
+      "change_pct": -1.15709835336
     },
     {
-      "name": "黑色金属矿采选业",
-      "change_pct": -2.6937494551478
+      "name": "建筑装饰和其他建筑业",
+      "change_pct": -1.0542722923387
     },
     {
-      "name": "水的生产和供应业",
-      "change_pct": -2.4342891278375
+      "name": "铁路、船舶、航空航天和其他运输设备制造业",
+      "change_pct": -0.47106325706595
     },
     {
-      "name": "餐饮业",
-      "change_pct": -2.4180719058225
+      "name": "煤炭开采和洗选业",
+      "change_pct": -0.29703897767826
     },
     {
       "name": "石油和天然气开采业",
-      "change_pct": -2.3731673874064
+      "change_pct": -0.20195300434793
+    },
+    {
+      "name": "燃气生产和供应业",
+      "change_pct": -0.13819449334554
     }
   ],
   "concept_top": [],
