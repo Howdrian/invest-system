@@ -1,17 +1,16 @@
 # 投研日报 — 2026-06-05
 
-> 自动生成于 2026-06-05 19:31:39 北京时
+> 自动生成于 2026-06-05 19:46:31 北京时
 
 ## 自选股
 `600519,000858,300750,002594,601318,000001,600036,000333,300059,600276,601899,002415,000725,600900,601857,AAPL,MSFT,NVDA,GOOGL,AMZN,META,TSLA,BABA,SPY,QQQ,IWM`
 
 ## 运行状态
 - Market cycle: `success`
-- Governed stock analysis: `started`
+- Governed stock analysis: `success`
 - Governed deep-review symbols: `600519,000858,300750`
 - Governed selection reason: `fallback_stock_list`
 - Governed daily limit: `3`
-- ⚠️ 有步骤只写入了 started 状态，表示 Actions 可能在完成前被取消或超时；以本页文件链接和 Actions 日志为准。
 
 ## 大盘 / 云端看盘三件套
 - [一屏总览](../market_cycle/2026-06-05/00_one_screen_brief.html)
@@ -36,4 +35,4 @@
 | [report_20260601.md](../report_20260601.md) | 查看 |
 
 ---
-完整的 Actions 运行日志：[查看](https://github.com/Howdrian/invest-system/actions/runs/27011975522)
+完整的 Actions 运行日志：[查看](https://github.com/Howdrian/invest-system/actions/runs/27012340605)

@@ -1,269 +1,13 @@
 {
   "schema": "screening_funnel_v1",
   "run_date": "2026-06-05",
-  "generated_at": "2026-06-05T11:26:02.038769+00:00",
+  "generated_at": "2026-06-05T11:34:30.701312+00:00",
   "status": "available",
   "candidate_count": 46,
   "candidates": [
     {
-      "symbol": "SH600519",
-      "name": "贵州茅台",
-      "source": "hot_stocks",
-      "priority_score": 6.5,
-      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
-      "evidence": [
-        "hot_stock_rank",
-        "prediction_market_red_team_trigger"
-      ],
-      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
-      "price_risk": "OVERHEATED_WAIT_ENTRY",
-      "next_action": "读公告/研报和技术承接；不追高。",
-      "trade_execution": "disabled",
-      "macro_overlay": "地缘/预测市场差异触发红队复核。"
-    },
-    {
-      "symbol": "SH601318",
-      "name": "中国平安",
-      "source": "hot_stocks",
-      "priority_score": 6.5,
-      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
-      "evidence": [
-        "hot_stock_rank",
-        "prediction_market_red_team_trigger"
-      ],
-      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
-      "price_risk": "OVERHEATED_WAIT_ENTRY",
-      "next_action": "读公告/研报和技术承接；不追高。",
-      "trade_execution": "disabled",
-      "macro_overlay": "地缘/预测市场差异触发红队复核。"
-    },
-    {
-      "symbol": "SH600036",
-      "name": "招商银行",
-      "source": "hot_stocks",
-      "priority_score": 6.5,
-      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
-      "evidence": [
-        "hot_stock_rank",
-        "prediction_market_red_team_trigger"
-      ],
-      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
-      "price_risk": "OVERHEATED_WAIT_ENTRY",
-      "next_action": "读公告/研报和技术承接；不追高。",
-      "trade_execution": "disabled",
-      "macro_overlay": "地缘/预测市场差异触发红队复核。"
-    },
-    {
-      "symbol": "SZ000651",
-      "name": "格力电器",
-      "source": "hot_stocks",
-      "priority_score": 6.5,
-      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
-      "evidence": [
-        "hot_stock_rank",
-        "prediction_market_red_team_trigger"
-      ],
-      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
-      "price_risk": "OVERHEATED_WAIT_ENTRY",
-      "next_action": "读公告/研报和技术承接；不追高。",
-      "trade_execution": "disabled",
-      "macro_overlay": "地缘/预测市场差异触发红队复核。"
-    },
-    {
-      "symbol": "SZ002594",
-      "name": "比亚迪",
-      "source": "hot_stocks",
-      "priority_score": 6.5,
-      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
-      "evidence": [
-        "hot_stock_rank",
-        "prediction_market_red_team_trigger"
-      ],
-      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
-      "price_risk": "OVERHEATED_WAIT_ENTRY",
-      "next_action": "读公告/研报和技术承接；不追高。",
-      "trade_execution": "disabled",
-      "macro_overlay": "地缘/预测市场差异触发红队复核。"
-    },
-    {
-      "symbol": "SZ000002",
-      "name": "万科A",
-      "source": "hot_stocks",
-      "priority_score": 6.5,
-      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
-      "evidence": [
-        "hot_stock_rank",
-        "prediction_market_red_team_trigger"
-      ],
-      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
-      "price_risk": "OVERHEATED_WAIT_ENTRY",
-      "next_action": "读公告/研报和技术承接；不追高。",
-      "trade_execution": "disabled",
-      "macro_overlay": "地缘/预测市场差异触发红队复核。"
-    },
-    {
-      "symbol": "SH600887",
-      "name": "XD伊利股",
-      "source": "hot_stocks",
-      "priority_score": 6.5,
-      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
-      "evidence": [
-        "hot_stock_rank",
-        "prediction_market_red_team_trigger"
-      ],
-      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
-      "price_risk": "OVERHEATED_WAIT_ENTRY",
-      "next_action": "读公告/研报和技术承接；不追高。",
-      "trade_execution": "disabled",
-      "macro_overlay": "地缘/预测市场差异触发红队复核。"
-    },
-    {
-      "symbol": "SZ000858",
-      "name": "五粮液",
-      "source": "hot_stocks",
-      "priority_score": 6.5,
-      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
-      "evidence": [
-        "hot_stock_rank",
-        "prediction_market_red_team_trigger"
-      ],
-      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
-      "price_risk": "OVERHEATED_WAIT_ENTRY",
-      "next_action": "读公告/研报和技术承接；不追高。",
-      "trade_execution": "disabled",
-      "macro_overlay": "地缘/预测市场差异触发红队复核。"
-    },
-    {
-      "symbol": "SH601166",
-      "name": "兴业银行",
-      "source": "hot_stocks",
-      "priority_score": 6.5,
-      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
-      "evidence": [
-        "hot_stock_rank",
-        "prediction_market_red_team_trigger"
-      ],
-      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
-      "price_risk": "OVERHEATED_WAIT_ENTRY",
-      "next_action": "读公告/研报和技术承接；不追高。",
-      "trade_execution": "disabled",
-      "macro_overlay": "地缘/预测市场差异触发红队复核。"
-    },
-    {
-      "symbol": "SH600276",
-      "name": "恒瑞医药",
-      "source": "hot_stocks",
-      "priority_score": 6.5,
-      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
-      "evidence": [
-        "hot_stock_rank",
-        "prediction_market_red_team_trigger"
-      ],
-      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
-      "price_risk": "OVERHEATED_WAIT_ENTRY",
-      "next_action": "读公告/研报和技术承接；不追高。",
-      "trade_execution": "disabled",
-      "macro_overlay": "地缘/预测市场差异触发红队复核。"
-    },
-    {
-      "symbol": "SH601919",
-      "name": "中远海控",
-      "source": "hot_stocks",
-      "priority_score": 6.5,
-      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
-      "evidence": [
-        "hot_stock_rank",
-        "prediction_market_red_team_trigger"
-      ],
-      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
-      "price_risk": "OVERHEATED_WAIT_ENTRY",
-      "next_action": "读公告/研报和技术承接；不追高。",
-      "trade_execution": "disabled",
-      "macro_overlay": "地缘/预测市场差异触发红队复核。"
-    },
-    {
-      "symbol": "SZ300059",
-      "name": "东方财富",
-      "source": "hot_stocks",
-      "priority_score": 6.5,
-      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
-      "evidence": [
-        "hot_stock_rank",
-        "prediction_market_red_team_trigger"
-      ],
-      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
-      "price_risk": "OVERHEATED_WAIT_ENTRY",
-      "next_action": "读公告/研报和技术承接；不追高。",
-      "trade_execution": "disabled",
-      "macro_overlay": "地缘/预测市场差异触发红队复核。"
-    },
-    {
-      "symbol": "SZ000333",
-      "name": "美的集团",
-      "source": "hot_stocks",
-      "priority_score": 6.5,
-      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
-      "evidence": [
-        "hot_stock_rank",
-        "prediction_market_red_team_trigger"
-      ],
-      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
-      "price_risk": "OVERHEATED_WAIT_ENTRY",
-      "next_action": "读公告/研报和技术承接；不追高。",
-      "trade_execution": "disabled",
-      "macro_overlay": "地缘/预测市场差异触发红队复核。"
-    },
-    {
-      "symbol": "SH601012",
-      "name": "隆基绿能",
-      "source": "hot_stocks",
-      "priority_score": 6.5,
-      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
-      "evidence": [
-        "hot_stock_rank",
-        "prediction_market_red_team_trigger"
-      ],
-      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
-      "price_risk": "OVERHEATED_WAIT_ENTRY",
-      "next_action": "读公告/研报和技术承接；不追高。",
-      "trade_execution": "disabled",
-      "macro_overlay": "地缘/预测市场差异触发红队复核。"
-    },
-    {
-      "symbol": "SZ300750",
-      "name": "宁德时代",
-      "source": "hot_stocks",
-      "priority_score": 6.5,
-      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
-      "evidence": [
-        "hot_stock_rank",
-        "prediction_market_red_team_trigger"
-      ],
-      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
-      "price_risk": "OVERHEATED_WAIT_ENTRY",
-      "next_action": "读公告/研报和技术承接；不追高。",
-      "trade_execution": "disabled",
-      "macro_overlay": "地缘/预测市场差异触发红队复核。"
-    },
-    {
-      "symbol": "SH603288",
-      "name": "海天味业",
-      "source": "hot_stocks",
-      "priority_score": 6.5,
-      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
-      "evidence": [
-        "hot_stock_rank",
-        "prediction_market_red_team_trigger"
-      ],
-      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
-      "price_risk": "OVERHEATED_WAIT_ENTRY",
-      "next_action": "读公告/研报和技术承接；不追高。",
-      "trade_execution": "disabled",
-      "macro_overlay": "地缘/预测市场差异触发红队复核。"
-    },
-    {
       "symbol": "SZ000725",
-      "name": "京东方A",
+      "name": "京东方Ａ",
       "source": "hot_stocks",
       "priority_score": 6.5,
       "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
@@ -278,8 +22,8 @@
       "macro_overlay": "地缘/预测市场差异触发红队复核。"
     },
     {
-      "symbol": "SZ002415",
-      "name": "海康威视",
+      "symbol": "SH601991",
+      "name": "大唐发电",
       "source": "hot_stocks",
       "priority_score": 6.5,
       "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
@@ -294,8 +38,8 @@
       "macro_overlay": "地缘/预测市场差异触发红队复核。"
     },
     {
-      "symbol": "SZ000895",
-      "name": "双汇发展",
+      "symbol": "SZ300308",
+      "name": "中际旭创",
       "source": "hot_stocks",
       "priority_score": 6.5,
       "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
@@ -310,8 +54,264 @@
       "macro_overlay": "地缘/预测市场差异触发红队复核。"
     },
     {
-      "symbol": "SH600900",
-      "name": "长江电力",
+      "symbol": "SH600487",
+      "name": "亨通光电",
+      "source": "hot_stocks",
+      "priority_score": 6.5,
+      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
+      "evidence": [
+        "hot_stock_rank",
+        "prediction_market_red_team_trigger"
+      ],
+      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
+      "price_risk": "OVERHEATED_WAIT_ENTRY",
+      "next_action": "读公告/研报和技术承接；不追高。",
+      "trade_execution": "disabled",
+      "macro_overlay": "地缘/预测市场差异触发红队复核。"
+    },
+    {
+      "symbol": "SH688017",
+      "name": "绿的谐波",
+      "source": "hot_stocks",
+      "priority_score": 6.5,
+      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
+      "evidence": [
+        "hot_stock_rank",
+        "prediction_market_red_team_trigger"
+      ],
+      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
+      "price_risk": "OVERHEATED_WAIT_ENTRY",
+      "next_action": "读公告/研报和技术承接；不追高。",
+      "trade_execution": "disabled",
+      "macro_overlay": "地缘/预测市场差异触发红队复核。"
+    },
+    {
+      "symbol": "SZ001896",
+      "name": "豫能控股",
+      "source": "hot_stocks",
+      "priority_score": 6.5,
+      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
+      "evidence": [
+        "hot_stock_rank",
+        "prediction_market_red_team_trigger"
+      ],
+      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
+      "price_risk": "OVERHEATED_WAIT_ENTRY",
+      "next_action": "读公告/研报和技术承接；不追高。",
+      "trade_execution": "disabled",
+      "macro_overlay": "地缘/预测市场差异触发红队复核。"
+    },
+    {
+      "symbol": "SH600105",
+      "name": "永鼎股份",
+      "source": "hot_stocks",
+      "priority_score": 6.5,
+      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
+      "evidence": [
+        "hot_stock_rank",
+        "prediction_market_red_team_trigger"
+      ],
+      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
+      "price_risk": "OVERHEATED_WAIT_ENTRY",
+      "next_action": "读公告/研报和技术承接；不追高。",
+      "trade_execution": "disabled",
+      "macro_overlay": "地缘/预测市场差异触发红队复核。"
+    },
+    {
+      "symbol": "SH600522",
+      "name": "中天科技",
+      "source": "hot_stocks",
+      "priority_score": 6.5,
+      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
+      "evidence": [
+        "hot_stock_rank",
+        "prediction_market_red_team_trigger"
+      ],
+      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
+      "price_risk": "OVERHEATED_WAIT_ENTRY",
+      "next_action": "读公告/研报和技术承接；不追高。",
+      "trade_execution": "disabled",
+      "macro_overlay": "地缘/预测市场差异触发红队复核。"
+    },
+    {
+      "symbol": "SH600498",
+      "name": "烽火通信",
+      "source": "hot_stocks",
+      "priority_score": 6.5,
+      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
+      "evidence": [
+        "hot_stock_rank",
+        "prediction_market_red_team_trigger"
+      ],
+      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
+      "price_risk": "OVERHEATED_WAIT_ENTRY",
+      "next_action": "读公告/研报和技术承接；不追高。",
+      "trade_execution": "disabled",
+      "macro_overlay": "地缘/预测市场差异触发红队复核。"
+    },
+    {
+      "symbol": "SZ000063",
+      "name": "中兴通讯",
+      "source": "hot_stocks",
+      "priority_score": 6.5,
+      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
+      "evidence": [
+        "hot_stock_rank",
+        "prediction_market_red_team_trigger"
+      ],
+      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
+      "price_risk": "OVERHEATED_WAIT_ENTRY",
+      "next_action": "读公告/研报和技术承接；不追高。",
+      "trade_execution": "disabled",
+      "macro_overlay": "地缘/预测市场差异触发红队复核。"
+    },
+    {
+      "symbol": "SZ002421",
+      "name": "达实智能",
+      "source": "hot_stocks",
+      "priority_score": 6.5,
+      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
+      "evidence": [
+        "hot_stock_rank",
+        "prediction_market_red_team_trigger"
+      ],
+      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
+      "price_risk": "OVERHEATED_WAIT_ENTRY",
+      "next_action": "读公告/研报和技术承接；不追高。",
+      "trade_execution": "disabled",
+      "macro_overlay": "地缘/预测市场差异触发红队复核。"
+    },
+    {
+      "symbol": "SH600396",
+      "name": "华电辽能",
+      "source": "hot_stocks",
+      "priority_score": 6.5,
+      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
+      "evidence": [
+        "hot_stock_rank",
+        "prediction_market_red_team_trigger"
+      ],
+      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
+      "price_risk": "OVERHEATED_WAIT_ENTRY",
+      "next_action": "读公告/研报和技术承接；不追高。",
+      "trade_execution": "disabled",
+      "macro_overlay": "地缘/预测市场差异触发红队复核。"
+    },
+    {
+      "symbol": "SH600745",
+      "name": "*ST闻泰",
+      "source": "hot_stocks",
+      "priority_score": 6.5,
+      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
+      "evidence": [
+        "hot_stock_rank",
+        "prediction_market_red_team_trigger"
+      ],
+      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
+      "price_risk": "OVERHEATED_WAIT_ENTRY",
+      "next_action": "读公告/研报和技术承接；不追高。",
+      "trade_execution": "disabled",
+      "macro_overlay": "地缘/预测市场差异触发红队复核。"
+    },
+    {
+      "symbol": "SZ002361",
+      "name": "神剑股份",
+      "source": "hot_stocks",
+      "priority_score": 6.5,
+      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
+      "evidence": [
+        "hot_stock_rank",
+        "prediction_market_red_team_trigger"
+      ],
+      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
+      "price_risk": "OVERHEATED_WAIT_ENTRY",
+      "next_action": "读公告/研报和技术承接；不追高。",
+      "trade_execution": "disabled",
+      "macro_overlay": "地缘/预测市场差异触发红队复核。"
+    },
+    {
+      "symbol": "SH600667",
+      "name": "太极实业",
+      "source": "hot_stocks",
+      "priority_score": 6.5,
+      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
+      "evidence": [
+        "hot_stock_rank",
+        "prediction_market_red_team_trigger"
+      ],
+      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
+      "price_risk": "OVERHEATED_WAIT_ENTRY",
+      "next_action": "读公告/研报和技术承接；不追高。",
+      "trade_execution": "disabled",
+      "macro_overlay": "地缘/预测市场差异触发红队复核。"
+    },
+    {
+      "symbol": "SH600879",
+      "name": "航天电子",
+      "source": "hot_stocks",
+      "priority_score": 6.5,
+      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
+      "evidence": [
+        "hot_stock_rank",
+        "prediction_market_red_team_trigger"
+      ],
+      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
+      "price_risk": "OVERHEATED_WAIT_ENTRY",
+      "next_action": "读公告/研报和技术承接；不追高。",
+      "trade_execution": "disabled",
+      "macro_overlay": "地缘/预测市场差异触发红队复核。"
+    },
+    {
+      "symbol": "SH600584",
+      "name": "长电科技",
+      "source": "hot_stocks",
+      "priority_score": 6.5,
+      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
+      "evidence": [
+        "hot_stock_rank",
+        "prediction_market_red_team_trigger"
+      ],
+      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
+      "price_risk": "OVERHEATED_WAIT_ENTRY",
+      "next_action": "读公告/研报和技术承接；不追高。",
+      "trade_execution": "disabled",
+      "macro_overlay": "地缘/预测市场差异触发红队复核。"
+    },
+    {
+      "symbol": "SH600403",
+      "name": "大有能源",
+      "source": "hot_stocks",
+      "priority_score": 6.5,
+      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
+      "evidence": [
+        "hot_stock_rank",
+        "prediction_market_red_team_trigger"
+      ],
+      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
+      "price_risk": "OVERHEATED_WAIT_ENTRY",
+      "next_action": "读公告/研报和技术承接；不追高。",
+      "trade_execution": "disabled",
+      "macro_overlay": "地缘/预测市场差异触发红队复核。"
+    },
+    {
+      "symbol": "SH601138",
+      "name": "工业富联",
+      "source": "hot_stocks",
+      "priority_score": 6.5,
+      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
+      "evidence": [
+        "hot_stock_rank",
+        "prediction_market_red_team_trigger"
+      ],
+      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
+      "price_risk": "OVERHEATED_WAIT_ENTRY",
+      "next_action": "读公告/研报和技术承接；不追高。",
+      "trade_execution": "disabled",
+      "macro_overlay": "地缘/预测市场差异触发红队复核。"
+    },
+    {
+      "symbol": "SH603773",
+      "name": "沃格光电",
       "source": "hot_stocks",
       "priority_score": 6.5,
       "evidence_quality": "MEDIUM_MIXED_EVIDENCE",

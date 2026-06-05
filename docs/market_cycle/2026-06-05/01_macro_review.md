@@ -7,7 +7,7 @@
 
 ## 主结论
 
-风险偏好偏强，但仍需候选证据确认；VIX low: 15.65
+风险偏好偏强，但仍需候选证据确认；VIX low: 15.62
 
 ## 宏观四维度 / 风险温度
 
@@ -18,14 +18,14 @@
 | `rates_liquidity` | `available_limited` | `neutral_or_unknown` | 官方宏观源刷新入口已接入；无 key 时只提供降级上下文。 |
 | `energy_commodities` | `degraded` | `watch` | WTI/EIA/FRED not fully wired; Polymarket energy scenarios can only be optional hints. |
 | `usd_fx` | `missing` | `unknown` | DXY/USD/CNH not wired in v1. |
-| `risk_appetite` | `available` | `risk_on` | VIX low: 15.65 |
+| `risk_appetite` | `available` | `risk_on` | VIX low: 15.62 |
 | `market_heat` | `available` | `watchlist_or_hotspot` | focus_items=26 |
 
 ## 6 因子 Regime
 
 - Risk state: `risk_on`
 - Six-factor status: `DEGRADED`
-- Reason: VIX low: 15.65
+- Reason: VIX low: 15.62
 - Boundary: 六因子缺项时只作为宏观降级判断，不冒充满血 Regime。
 
 ## 地缘四场景 / Polymarket 融合
