@@ -1,0 +1,210 @@
+{
+  "schema": "deep_review_queue_v1",
+  "generated_at": "2026-06-05T06:37:28.908489+00:00",
+  "status": "available",
+  "max_candidates": 6,
+  "auto_governed_candidates": [],
+  "candidates": [
+    {
+      "symbol": "SZ000725",
+      "name": "京东方Ａ",
+      "source": "hot_stocks",
+      "priority_score": 6.5,
+      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
+      "evidence": [
+        "hot_stock_rank",
+        "prediction_market_red_team_trigger"
+      ],
+      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
+      "price_risk": "OVERHEATED_WAIT_ENTRY",
+      "next_action": "读公告/研报和技术承接；不追高。",
+      "trade_execution": "disabled",
+      "macro_overlay": "地缘/预测市场差异触发红队复核。"
+    },
+    {
+      "symbol": "SH600487",
+      "name": "亨通光电",
+      "source": "hot_stocks",
+      "priority_score": 6.5,
+      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
+      "evidence": [
+        "hot_stock_rank",
+        "prediction_market_red_team_trigger"
+      ],
+      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
+      "price_risk": "OVERHEATED_WAIT_ENTRY",
+      "next_action": "读公告/研报和技术承接；不追高。",
+      "trade_execution": "disabled",
+      "macro_overlay": "地缘/预测市场差异触发红队复核。"
+    },
+    {
+      "symbol": "SH600105",
+      "name": "永鼎股份",
+      "source": "hot_stocks",
+      "priority_score": 6.5,
+      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
+      "evidence": [
+        "hot_stock_rank",
+        "prediction_market_red_team_trigger"
+      ],
+      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
+      "price_risk": "OVERHEATED_WAIT_ENTRY",
+      "next_action": "读公告/研报和技术承接；不追高。",
+      "trade_execution": "disabled",
+      "macro_overlay": "地缘/预测市场差异触发红队复核。"
+    },
+    {
+      "symbol": "SZ001896",
+      "name": "豫能控股",
+      "source": "hot_stocks",
+      "priority_score": 6.5,
+      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
+      "evidence": [
+        "hot_stock_rank",
+        "prediction_market_red_team_trigger"
+      ],
+      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
+      "price_risk": "OVERHEATED_WAIT_ENTRY",
+      "next_action": "读公告/研报和技术承接；不追高。",
+      "trade_execution": "disabled",
+      "macro_overlay": "地缘/预测市场差异触发红队复核。"
+    },
+    {
+      "symbol": "SH600667",
+      "name": "太极实业",
+      "source": "hot_stocks",
+      "priority_score": 6.5,
+      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
+      "evidence": [
+        "hot_stock_rank",
+        "prediction_market_red_team_trigger"
+      ],
+      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
+      "price_risk": "OVERHEATED_WAIT_ENTRY",
+      "next_action": "读公告/研报和技术承接；不追高。",
+      "trade_execution": "disabled",
+      "macro_overlay": "地缘/预测市场差异触发红队复核。"
+    },
+    {
+      "symbol": "SH600522",
+      "name": "中天科技",
+      "source": "hot_stocks",
+      "priority_score": 6.5,
+      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
+      "evidence": [
+        "hot_stock_rank",
+        "prediction_market_red_team_trigger"
+      ],
+      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
+      "price_risk": "OVERHEATED_WAIT_ENTRY",
+      "next_action": "读公告/研报和技术承接；不追高。",
+      "trade_execution": "disabled",
+      "macro_overlay": "地缘/预测市场差异触发红队复核。"
+    }
+  ],
+  "watch_only": [
+    {
+      "symbol": "600519",
+      "name": "",
+      "source": "watchlist",
+      "priority_score": 4.0,
+      "evidence_quality": "LOW_WATCHLIST_EVIDENCE",
+      "evidence": [
+        "watchlist_member",
+        "prediction_market_red_team_trigger"
+      ],
+      "verdict": "WATCH_ONLY",
+      "price_risk": "NORMAL_RECHECK",
+      "next_action": "继续观察；等待公告/研报/市场热度/技术形态触发。",
+      "trade_execution": "disabled",
+      "macro_overlay": "地缘/预测市场差异触发红队复核。"
+    },
+    {
+      "symbol": "000858",
+      "name": "",
+      "source": "watchlist",
+      "priority_score": 4.0,
+      "evidence_quality": "LOW_WATCHLIST_EVIDENCE",
+      "evidence": [
+        "watchlist_member",
+        "prediction_market_red_team_trigger"
+      ],
+      "verdict": "WATCH_ONLY",
+      "price_risk": "NORMAL_RECHECK",
+      "next_action": "继续观察；等待公告/研报/市场热度/技术形态触发。",
+      "trade_execution": "disabled",
+      "macro_overlay": "地缘/预测市场差异触发红队复核。"
+    },
+    {
+      "symbol": "300750",
+      "name": "",
+      "source": "watchlist",
+      "priority_score": 4.0,
+      "evidence_quality": "LOW_WATCHLIST_EVIDENCE",
+      "evidence": [
+        "watchlist_member",
+        "prediction_market_red_team_trigger"
+      ],
+      "verdict": "WATCH_ONLY",
+      "price_risk": "NORMAL_RECHECK",
+      "next_action": "继续观察；等待公告/研报/市场热度/技术形态触发。",
+      "trade_execution": "disabled",
+      "macro_overlay": "地缘/预测市场差异触发红队复核。"
+    },
+    {
+      "symbol": "002594",
+      "name": "",
+      "source": "watchlist",
+      "priority_score": 4.0,
+      "evidence_quality": "LOW_WATCHLIST_EVIDENCE",
+      "evidence": [
+        "watchlist_member",
+        "prediction_market_red_team_trigger"
+      ],
+      "verdict": "WATCH_ONLY",
+      "price_risk": "NORMAL_RECHECK",
+      "next_action": "继续观察；等待公告/研报/市场热度/技术形态触发。",
+      "trade_execution": "disabled",
+      "macro_overlay": "地缘/预测市场差异触发红队复核。"
+    },
+    {
+      "symbol": "601318",
+      "name": "",
+      "source": "watchlist",
+      "priority_score": 4.0,
+      "evidence_quality": "LOW_WATCHLIST_EVIDENCE",
+      "evidence": [
+        "watchlist_member",
+        "prediction_market_red_team_trigger"
+      ],
+      "verdict": "WATCH_ONLY",
+      "price_risk": "NORMAL_RECHECK",
+      "next_action": "继续观察；等待公告/研报/市场热度/技术形态触发。",
+      "trade_execution": "disabled",
+      "macro_overlay": "地缘/预测市场差异触发红队复核。"
+    },
+    {
+      "symbol": "000001",
+      "name": "",
+      "source": "watchlist",
+      "priority_score": 4.0,
+      "evidence_quality": "LOW_WATCHLIST_EVIDENCE",
+      "evidence": [
+        "watchlist_member",
+        "prediction_market_red_team_trigger"
+      ],
+      "verdict": "WATCH_ONLY",
+      "price_risk": "NORMAL_RECHECK",
+      "next_action": "继续观察；等待公告/研报/市场热度/技术形态触发。",
+      "trade_execution": "disabled",
+      "macro_overlay": "地缘/预测市场差异触发红队复核。"
+    }
+  ],
+  "policy": {
+    "DEEP_REVIEW_NOW": "自动进入 governed 个股分析候选。",
+    "DEEP_REVIEW_WAIT_ENTRY": "值得跟踪，但等待承接/证据确认，不追高。",
+    "WATCH_ONLY": "只展示，不深跑。"
+  },
+  "protected_writeback": false,
+  "trade_execution": "disabled"
+}

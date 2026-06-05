@@ -1,0 +1,166 @@
+{
+  "schema": "macro_review_v1",
+  "run_date": "2026-06-05",
+  "generated_at": "2026-06-05T06:37:28.908355+00:00",
+  "status": "REFRESHED",
+  "headline": "风险偏好偏强，但仍需候选证据确认；VIX low: 15.4",
+  "confidence": "LOW_TO_MEDIUM",
+  "macro_dimensions": {
+    "growth": {
+      "status": "degraded",
+      "signal": "unknown",
+      "evidence": "GDP/PMI/employment official extensions not yet fully wired in invest-system."
+    },
+    "inflation": {
+      "status": "degraded",
+      "signal": "unknown",
+      "evidence": "CPI/PCE/EIA/FRED extension points pending; use original 投研 source as migration reference."
+    },
+    "rates_liquidity": {
+      "status": "available_limited",
+      "signal": "neutral_or_unknown",
+      "evidence": "官方宏观源刷新入口已接入；无 key 时只提供降级上下文。"
+    },
+    "energy_commodities": {
+      "status": "degraded",
+      "signal": "watch",
+      "evidence": "WTI/EIA/FRED not fully wired; Polymarket energy scenarios can only be optional hints."
+    },
+    "usd_fx": {
+      "status": "missing",
+      "signal": "unknown",
+      "evidence": "DXY/USD/CNH not wired in v1."
+    },
+    "risk_appetite": {
+      "status": "available",
+      "signal": "risk_on",
+      "evidence": "VIX low: 15.4"
+    },
+    "market_heat": {
+      "status": "available",
+      "signal": "watchlist_or_hotspot",
+      "evidence": "focus_items=26"
+    }
+  },
+  "six_factor_regime": {
+    "risk_state": "risk_on",
+    "confidence": "medium",
+    "reason": "VIX low: 15.4",
+    "classification": "risk_on_watch",
+    "six_factor_status": "DEGRADED",
+    "factors": {
+      "market_concentration": {
+        "status": "available",
+        "symbol": "^GSPC",
+        "price": 7584.31,
+        "change_percentage": 0.4055,
+        "price_avg_50": 7119.5625,
+        "price_avg_200": 6847.722
+      },
+      "credit_conditions": {
+        "status": "missing",
+        "note": "HYG/LQD not wired in invest-system v1"
+      },
+      "size_factor": {
+        "status": "missing",
+        "note": "IWM/SPY not wired in invest-system v1"
+      },
+      "equity_bond": {
+        "status": "missing",
+        "note": "SPY/TLT correlation not wired in invest-system v1"
+      },
+      "sector_rotation": {
+        "status": "missing",
+        "note": "XLY/XLP not wired in invest-system v1"
+      },
+      "volatility": {
+        "status": "available",
+        "symbol": "^VIX",
+        "price": 15.4,
+        "change_percentage": -4.10959,
+        "price_avg_50": 19.3118,
+        "price_avg_200": 18.39555
+      }
+    },
+    "missing_factors": [
+      "credit_conditions",
+      "size_factor",
+      "equity_bond",
+      "sector_rotation"
+    ],
+    "boundary": "六因子缺项时只作为宏观降级判断，不冒充满血 Regime。"
+  },
+  "geopolitical_scenarios": [
+    {
+      "scenario_id": "A_controlled_deescalation",
+      "label": "A 管控下降",
+      "internal_probability": 0.3,
+      "market_probability": null,
+      "fusion_weight": 0.0,
+      "fused_probability": 0.35,
+      "red_team_trigger": false,
+      "implication": "冲突可控、缓慢修复；避险资产逐步降权。",
+      "probability_note": "主观估计精度不超过 ±15pp；排序比数字更重要。"
+    },
+    {
+      "scenario_id": "B_crisis_cascade",
+      "label": "B 危机级联",
+      "internal_probability": 0.4,
+      "market_probability": null,
+      "fusion_weight": 0.0,
+      "fused_probability": 0.35,
+      "red_team_trigger": false,
+      "implication": "多点冲突或供应链断裂；商品、黄金、能源风险预算上升。",
+      "probability_note": "主观估计精度不超过 ±15pp；排序比数字更重要。"
+    },
+    {
+      "scenario_id": "C_great_power_conflict",
+      "label": "C 大国冲突",
+      "internal_probability": 0.2,
+      "market_probability": null,
+      "fusion_weight": 0.0,
+      "fused_probability": 0.15,
+      "red_team_trigger": false,
+      "implication": "直接军事对抗；全面 risk-off。",
+      "probability_note": "主观估计精度不超过 ±15pp；排序比数字更重要。"
+    },
+    {
+      "scenario_id": "D_nuclear_tail",
+      "label": "D 核武尾部",
+      "internal_probability": 0.1,
+      "market_probability": null,
+      "fusion_weight": 0.0,
+      "fused_probability": 0.1,
+      "red_team_trigger": false,
+      "implication": "极端尾部；现金、实物黄金和流动性优先。",
+      "probability_note": "主观估计精度不超过 ±15pp；排序比数字更重要。"
+    }
+  ],
+  "prediction_market_status": "available",
+  "prediction_market_policy": {
+    "high_quality_weight": 0.25,
+    "medium_quality_weight": 0.15,
+    "max_weight": 0.3,
+    "low_quality": "observe_only",
+    "score_gate_bypass": false,
+    "trade_execution": "disabled"
+  },
+  "asset_implications": [
+    "可观察高质量成长/科技候选，但不得追高或跳过评分。",
+    "Polymarket 和宏观只影响候选优先级、风险预算和红队问题，不直接交易。"
+  ],
+  "portfolio_and_candidate_implications": [
+    "持仓每日轻量复核；只有公告、价格、宏观或风险触发时进入 governed 深评。",
+    "宏观和地缘只能调整风险预算、候选优先级和红队问题，不能直接触发交易。"
+  ],
+  "red_team_flags": [],
+  "data_gaps": [
+    "six_factor_missing:credit_conditions",
+    "six_factor_missing:size_factor",
+    "six_factor_missing:equity_bond",
+    "six_factor_missing:sector_rotation"
+  ],
+  "warnings": [],
+  "protected_writeback": false,
+  "trade_execution": "disabled"
+}
