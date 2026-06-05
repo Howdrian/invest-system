@@ -1,6 +1,6 @@
 # Market Regime Strategy
 
-- Regime: `STRUCTURAL_RISK_ON`
+- Regime: `NEUTRAL_WATCH`
 - Confidence: `MEDIUM`
 - Stance: `watch_conditions_ready`
 - Participation allowed: `True`
@@ -8,7 +8,7 @@
 
 ## 主结论
 
-宏观风险偏好偏强；候选可进入人工预审，但不得跳过红蓝和评分。
+宏观中性；维持观察，等待价格和证据共振。
 
 ## 应该做
 
@@ -38,9 +38,9 @@
 | `600276` | `watch` | 仅作为关注线索；进入交易前必须经过 governed 个股分析、红蓝、评分和 CIO。 |
 | `601899` | `watch` | 仅作为关注线索；进入交易前必须经过 governed 个股分析、红蓝、评分和 CIO。 |
 | `002415` | `watch` | 仅作为关注线索；进入交易前必须经过 governed 个股分析、红蓝、评分和 CIO。 |
-| `SZ000725` | `DEEP_REVIEW_WAIT_ENTRY` | 读公告/研报和技术承接；不追高。 |
-| `SH601991` | `DEEP_REVIEW_WAIT_ENTRY` | 读公告/研报和技术承接；不追高。 |
-| `SZ300308` | `DEEP_REVIEW_WAIT_ENTRY` | 读公告/研报和技术承接；不追高。 |
-| `SH600487` | `DEEP_REVIEW_WAIT_ENTRY` | 读公告/研报和技术承接；不追高。 |
-| `SH688017` | `DEEP_REVIEW_WAIT_ENTRY` | 读公告/研报和技术承接；不追高。 |
-| `SZ001896` | `DEEP_REVIEW_WAIT_ENTRY` | 读公告/研报和技术承接；不追高。 |
+| `SH600519` | `DEEP_REVIEW_WAIT_ENTRY` | 读公告/研报和技术承接；不追高。 |
+| `SH601318` | `DEEP_REVIEW_WAIT_ENTRY` | 读公告/研报和技术承接；不追高。 |
+| `SH600036` | `DEEP_REVIEW_WAIT_ENTRY` | 读公告/研报和技术承接；不追高。 |
+| `SZ000651` | `DEEP_REVIEW_WAIT_ENTRY` | 读公告/研报和技术承接；不追高。 |
+| `SZ002594` | `DEEP_REVIEW_WAIT_ENTRY` | 读公告/研报和技术承接；不追高。 |
+| `SZ000002` | `DEEP_REVIEW_WAIT_ENTRY` | 读公告/研报和技术承接；不追高。 |
