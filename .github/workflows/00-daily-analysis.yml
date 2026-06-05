@@ -377,6 +377,7 @@ jobs:
           AGENT_ORCHESTRATOR_MODE: ${{ vars.AGENT_ORCHESTRATOR_MODE || secrets.AGENT_ORCHESTRATOR_MODE || 'governed' }}
           AGENT_GOVERNED_PARALLEL: ${{ vars.AGENT_GOVERNED_PARALLEL || secrets.AGENT_GOVERNED_PARALLEL || 'true' }}
           AGENT_GOVERNED_PARALLEL_MAX_WORKERS: ${{ vars.AGENT_GOVERNED_PARALLEL_MAX_WORKERS || secrets.AGENT_GOVERNED_PARALLEL_MAX_WORKERS || '3' }}
+          AGENT_GOVERNED_DAILY_LIMIT: ${{ vars.AGENT_GOVERNED_DAILY_LIMIT || secrets.AGENT_GOVERNED_DAILY_LIMIT || '3' }}
           
           # ==========================================
           # 系统配置
@@ -473,31 +474,137 @@ jobs:
             echo "⚡ 已启用强制运行模式（跳过交易日检查）"
           fi
 
-          # governed 支撑上下文：失败不阻断主分析
-          python -m src.macro.official_sources --refresh || echo "⚠️ 宏观上下文刷新失败，主分析将降级运行"
-          python -m src.intel.market_heat --symbols "$STOCK_LIST" --output-dir "$MARKET_HEAT_OUTPUT_DIR" --live || echo "⚠️ 市场热度摘要生成失败，主分析将降级运行"
-          python -m src.prediction_market.polymarket --output-dir reports/prediction_market --live || echo "⚠️ Polymarket 只读概率刷新失败，主分析将降级运行"
-
-          # 执行分析
-          if [ "$MODE" = "market-only" ]; then
-            python main.py --market-review $FORCE_RUN_ARG
-          elif [ "$MODE" = "stocks-only" ]; then
-            python main.py --no-market-review --force-run
-          else
-            python main.py --force-run
-          fi
-
           TODAY=$(TZ='Asia/Shanghai' date +%Y-%m-%d)
+          RUN_STATUS_DIR="reports/run_status"
+          mkdir -p "$RUN_STATUS_DIR"
+          echo "$TODAY" > "$RUN_STATUS_DIR/run_date.txt"
+          echo "started" > "$RUN_STATUS_DIR/market_cycle_status.txt"
+          echo "not_started" > "$RUN_STATUS_DIR/stock_analysis_status.txt"
+          echo "$STOCK_LIST" > "$RUN_STATUS_DIR/observation_universe.txt"
+
+          # governed 支撑上下文：失败不阻断日报生成
+          python -m src.macro.official_sources --refresh || echo "⚠️ 宏观上下文刷新失败，market-cycle 将降级运行"
+          python -m src.intel.market_heat --symbols "$STOCK_LIST" --output-dir "$MARKET_HEAT_OUTPUT_DIR" --live || echo "⚠️ 市场热度摘要生成失败，market-cycle 将降级运行"
+          python -m src.prediction_market.polymarket --output-dir reports/prediction_market --live || echo "⚠️ Polymarket 只读概率刷新失败，market-cycle 将降级运行"
+
+          # 先生成大盘/宏观/源健康/候选池，避免个股深跑超时导致当天日报空白
           echo "🧭 生成云端看盘三件套: reports/market_cycle/$TODAY"
-          python -m src.market_cycle \
+          if python -m src.market_cycle \
             --symbols "$STOCK_LIST" \
             --output-dir "reports/market_cycle/$TODAY" \
             --market-heat-output-dir "$MARKET_HEAT_OUTPUT_DIR" \
             --prediction-market-output-dir reports/prediction_market \
-            --date "$TODAY"
+            --date "$TODAY"; then
+            echo "success" > "$RUN_STATUS_DIR/market_cycle_status.txt"
+          else
+            echo "failed" > "$RUN_STATUS_DIR/market_cycle_status.txt"
+            echo "⚠️ market-cycle 生成失败；后续个股分析仍会尝试运行"
+          fi
+
+          # 自选池是观察宇宙；每日 governed 深评只取候选池前 N 只，避免 26 只全量深跑导致 workflow 超时。
+          GOVERNED_STOCK_LIST="$(
+            TODAY_ENV="$TODAY" \
+            ORIGINAL_STOCK_LIST="$STOCK_LIST" \
+            MAX_GOVERNED_STOCKS="${AGENT_GOVERNED_DAILY_LIMIT:-3}" \
+            RUN_STATUS_DIR="$RUN_STATUS_DIR" \
+            python - <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          today = os.environ["TODAY_ENV"]
+          original = [s.strip() for s in os.environ.get("ORIGINAL_STOCK_LIST", "").split(",") if s.strip()]
+          try:
+              limit = int(os.environ.get("MAX_GOVERNED_STOCKS") or "3")
+          except ValueError:
+              limit = 3
+          limit = max(1, min(limit, 6))
+
+          def normalize(symbol):
+              value = str(symbol or "").strip()
+              if not value:
+                  return ""
+              value = value.replace(" ", "")
+              value = re.sub(r"^(SH|SZ|BJ)(?=\d{6}$)", "", value, flags=re.IGNORECASE)
+              value = re.sub(r"\.(SH|SZ|BJ)$", "", value, flags=re.IGNORECASE)
+              return value.upper() if not value.isdigit() else value
+
+          def symbol_of(item):
+              if isinstance(item, str):
+                  return item
+              if isinstance(item, dict):
+                  return item.get("symbol") or item.get("code") or item.get("ticker") or item.get("stock_code") or ""
+              return ""
+
+          picked = []
+          selection_reason = ""
+          queue_path = Path("reports/market_cycle") / today / "11_deep_review_queue.json"
+          if queue_path.exists():
+              queue = json.loads(queue_path.read_text(encoding="utf-8"))
+              entries = queue.get("auto_governed_candidates") or []
+              if isinstance(entries, dict):
+                  entries = entries.values()
+              for item in entries:
+                  symbol = normalize(symbol_of(item))
+                  if symbol and symbol not in picked:
+                      picked.append(symbol)
+              if picked:
+                  selection_reason = "auto_governed_candidates"
+
+              entries = queue.get("candidates") or []
+              if isinstance(entries, dict):
+                  entries = entries.values()
+              for item in entries:
+                  if not isinstance(item, dict) or item.get("verdict") != "DEEP_REVIEW_NOW":
+                      continue
+                  symbol = normalize(symbol_of(item))
+                  if symbol and symbol not in picked:
+                      picked.append(symbol)
+              if picked and not selection_reason:
+                  selection_reason = "deep_review_now"
+
+          if not picked:
+              picked = [normalize(s) for s in original if normalize(s)]
+              selection_reason = "fallback_stock_list"
+
+          status_dir = Path(os.environ.get("RUN_STATUS_DIR") or "reports/run_status")
+          status_dir.mkdir(parents=True, exist_ok=True)
+          (status_dir / "governed_selection_reason.txt").write_text(selection_reason, encoding="utf-8")
+
+          print(",".join(picked[:limit]))
+          PY
+          )"
+          if [ -z "$GOVERNED_STOCK_LIST" ]; then
+            GOVERNED_STOCK_LIST="$(echo "$STOCK_LIST" | cut -d, -f1)"
+          fi
+          echo "$GOVERNED_STOCK_LIST" > "$RUN_STATUS_DIR/governed_stock_list.txt"
+          echo "🤖 governed_deep_review_symbols=$GOVERNED_STOCK_LIST limit=${AGENT_GOVERNED_DAILY_LIMIT:-3}"
+
+          # 执行个股 governed 深评
+          if [ "$MODE" = "market-only" ]; then
+            echo "skipped_market_only" > "$RUN_STATUS_DIR/stock_analysis_status.txt"
+            echo "📊 market-only 模式：已生成 market-cycle，跳过个股 governed 深评"
+          elif [ "$MODE" = "stocks-only" ]; then
+            echo "started" > "$RUN_STATUS_DIR/stock_analysis_status.txt"
+            if python main.py --stocks "$GOVERNED_STOCK_LIST" --no-market-review --force-run; then
+              echo "success" > "$RUN_STATUS_DIR/stock_analysis_status.txt"
+            else
+              echo "failed" > "$RUN_STATUS_DIR/stock_analysis_status.txt"
+              exit 1
+            fi
+          else
+            echo "started" > "$RUN_STATUS_DIR/stock_analysis_status.txt"
+            if python main.py --stocks "$GOVERNED_STOCK_LIST" --force-run; then
+              echo "success" > "$RUN_STATUS_DIR/stock_analysis_status.txt"
+            else
+              echo "failed" > "$RUN_STATUS_DIR/stock_analysis_status.txt"
+              exit 1
+            fi
+          fi
           echo "macro status: see market-cycle log above"
           echo "polymarket status: see market-cycle log above"
-          echo "🤖 governed_parallel=$AGENT_GOVERNED_PARALLEL max_workers=$AGENT_GOVERNED_PARALLEL_MAX_WORKERS"
+          echo "🤖 governed_parallel=$AGENT_GOVERNED_PARALLEL max_workers=$AGENT_GOVERNED_PARALLEL_MAX_WORKERS daily_limit=${AGENT_GOVERNED_DAILY_LIMIT:-3}"
       
       - name: 上传分析报告
         uses: actions/upload-artifact@v6
@@ -535,10 +642,17 @@ jobs:
           MARKET_HEAT_OUTPUT_DIR: ${{ vars.MARKET_HEAT_OUTPUT_DIR || secrets.MARKET_HEAT_OUTPUT_DIR || 'reports/market_heat' }}
           AGENT_GOVERNED_PARALLEL: ${{ vars.AGENT_GOVERNED_PARALLEL || secrets.AGENT_GOVERNED_PARALLEL || 'true' }}
           AGENT_GOVERNED_PARALLEL_MAX_WORKERS: ${{ vars.AGENT_GOVERNED_PARALLEL_MAX_WORKERS || secrets.AGENT_GOVERNED_PARALLEL_MAX_WORKERS || '3' }}
+          AGENT_GOVERNED_DAILY_LIMIT: ${{ vars.AGENT_GOVERNED_DAILY_LIMIT || secrets.AGENT_GOVERNED_DAILY_LIMIT || '3' }}
         run: |
           TODAY=$(TZ='Asia/Shanghai' date +%Y-%m-%d)
           MARKET_CYCLE_REPORTS="reports/market_cycle/$TODAY"
           MARKET_CYCLE_DOCS="docs/market_cycle/$TODAY"
+          RUN_STATUS_DIR="reports/run_status"
+          MARKET_CYCLE_STATUS="$(cat "$RUN_STATUS_DIR/market_cycle_status.txt" 2>/dev/null || echo missing)"
+          STOCK_ANALYSIS_STATUS="$(cat "$RUN_STATUS_DIR/stock_analysis_status.txt" 2>/dev/null || echo missing)"
+          GOVERNED_STOCK_LIST_ACTUAL="$(cat "$RUN_STATUS_DIR/governed_stock_list.txt" 2>/dev/null || echo '')"
+          GOVERNED_SELECTION_REASON="$(cat "$RUN_STATUS_DIR/governed_selection_reason.txt" 2>/dev/null || echo missing)"
+          OBSERVATION_UNIVERSE="$(cat "$RUN_STATUS_DIR/observation_universe.txt" 2>/dev/null || echo "$STOCK_LIST")"
           TARGET_BRANCH="${GITHUB_REF_NAME:-main}"
 
           # 先同步远端分支，避免多个 Actions 或人工提交让最终 push 被 non-fast-forward 拒绝。
@@ -553,7 +667,17 @@ jobs:
           echo "> 自动生成于 $(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S') 北京时" >> "$DAILY_INDEX"
           echo "" >> "$DAILY_INDEX"
           echo "## 自选股" >> "$DAILY_INDEX"
-          echo "\`$STOCK_LIST\`" >> "$DAILY_INDEX"
+          echo "\`$OBSERVATION_UNIVERSE\`" >> "$DAILY_INDEX"
+          echo "" >> "$DAILY_INDEX"
+          echo "## 运行状态" >> "$DAILY_INDEX"
+          echo "- Market cycle: \`$MARKET_CYCLE_STATUS\`" >> "$DAILY_INDEX"
+          echo "- Governed stock analysis: \`$STOCK_ANALYSIS_STATUS\`" >> "$DAILY_INDEX"
+          echo "- Governed deep-review symbols: \`${GOVERNED_STOCK_LIST_ACTUAL:-none}\`" >> "$DAILY_INDEX"
+          echo "- Governed selection reason: \`$GOVERNED_SELECTION_REASON\`" >> "$DAILY_INDEX"
+          echo "- Governed daily limit: \`${AGENT_GOVERNED_DAILY_LIMIT:-3}\`" >> "$DAILY_INDEX"
+          if [ "$MARKET_CYCLE_STATUS" = "started" ] || [ "$STOCK_ANALYSIS_STATUS" = "started" ]; then
+            echo "- ⚠️ 有步骤只写入了 started 状态，表示 Actions 可能在完成前被取消或超时；以本页文件链接和 Actions 日志为准。" >> "$DAILY_INDEX"
+          fi
           echo "" >> "$DAILY_INDEX"
           echo "## 大盘 / 云端看盘三件套" >> "$DAILY_INDEX"
           if [ -f "$MARKET_CYCLE_REPORTS/summary.md" ]; then

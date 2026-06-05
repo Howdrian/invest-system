@@ -22,6 +22,16 @@ def test_daily_workflow_publishes_market_cycle_without_docs_index_conflict():
     assert "governed_parallel" in workflow
     assert "MARKET_HEAT_OUTPUT_DIR: ${{ vars.MARKET_HEAT_OUTPUT_DIR" in workflow
     assert "AGENT_GOVERNED_PARALLEL_MAX_WORKERS: ${{ vars.AGENT_GOVERNED_PARALLEL_MAX_WORKERS" in workflow
+    assert "AGENT_GOVERNED_DAILY_LIMIT: ${{ vars.AGENT_GOVERNED_DAILY_LIMIT" in workflow
+    assert "reports/run_status" in workflow
+    assert "market_cycle_status.txt" in workflow
+    assert "stock_analysis_status.txt" in workflow
+    assert "governed_stock_list.txt" in workflow
+    assert "governed_selection_reason.txt" in workflow
+    assert "DEEP_REVIEW_NOW" in workflow
+    assert "--stocks \"$GOVERNED_STOCK_LIST\"" in workflow
+
+    assert workflow.index("python -m src.market_cycle") < workflow.index("python main.py --stocks")
 
 
 def test_daily_workflow_does_not_touch_web_dashboard_layout():
