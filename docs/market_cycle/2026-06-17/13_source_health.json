@@ -1,6 +1,6 @@
 {
   "schema": "source_health_v1",
-  "generated_at": "2026-06-17T12:07:17.336401+00:00",
+  "generated_at": "2026-06-17T12:17:00.800470+00:00",
   "macro_status": "DEGRADED",
   "usability_verdict": "degraded",
   "trade_review_usability": "usable_limited",
@@ -42,9 +42,9 @@
       "blocking_level": "none",
       "warnings": [],
       "source": "src.intel.portfolio_holdings",
-      "holding_status": "EMPTY",
-      "holding_source": "portfolio_service",
-      "selected_count": 0,
+      "holding_status": "AVAILABLE",
+      "holding_source": "env",
+      "selected_count": 2,
       "omitted_count": 0
     },
     {

@@ -1,6 +1,6 @@
 {
   "schema": "deep_review_queue_v1",
-  "generated_at": "2026-06-17T12:07:17.336367+00:00",
+  "generated_at": "2026-06-17T12:17:00.800434+00:00",
   "status": "available",
   "max_candidates": 6,
   "auto_governed_candidates": [],

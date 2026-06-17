@@ -1,6 +1,6 @@
 # 投研日报 — 2026-06-17
 
-> 自动生成于 2026-06-17 20:07:18 北京时
+> 自动生成于 2026-06-17 20:17:02 北京时
 
 ## 自选股
 `600519,000858,300750,002594,601318,000001,600036,000333,300059,600276,601899,002415,000725,600900,601857,AAPL,MSFT,NVDA,GOOGL,AMZN,META,TSLA,BABA,SPY,QQQ,IWM`
@@ -8,13 +8,13 @@
 ## 运行状态
 - Market cycle: `success`
 - Governed stock analysis: `failed`
-- Governed deep-review symbols: `600519,000858,300750`
-- Governed selection reason: `fallback_stock_list`
-- Portfolio holdings included: `none`
-- Governed omitted symbols: `002594,601318,000001,600036,000333,300059,600276,601899,002415,000725,600900,601857,AAPL,MSFT,NVDA,GOOGL,AMZN,META,TSLA,BABA,SPY,QQQ,IWM`
+- Governed deep-review symbols: `160644,301013`
+- Governed selection reason: `portfolio_holdings`
+- Portfolio holdings included: `160644,301013`
+- Governed omitted symbols: `none`
 - Governed daily limit: `3`
 - Governed completed symbols: `none`
-- Governed missing symbols: `600519,000858,300750`
+- Governed missing symbols: `160644,301013`
 - Governed today report exists: `False`
 - Governed failure reasons: `missing_today_report,missing_governed_results,incomplete_governed_symbols`
 
@@ -28,7 +28,7 @@
 - Macro context: `DEGRADED`
 - Source health: `degraded`
 - Trade review usability: `usable_limited`
-- Portfolio holdings status: `EMPTY` / selected=`0`
+- Portfolio holdings status: `AVAILABLE` / selected=`2`
 - Macro review: `DEGRADED` / `LOW_TO_MEDIUM`
 - Polymarket: `available`
 - Deep review candidates: `6`
@@ -43,4 +43,4 @@
 | 今日报告缺失 | `reports/report_20260617.md` 未生成；看上方运行状态和 Actions 日志 |
 
 ---
-完整的 Actions 运行日志：[查看](https://github.com/Howdrian/invest-system/actions/runs/27687407066)
+完整的 Actions 运行日志：[查看](https://github.com/Howdrian/invest-system/actions/runs/27687847952)

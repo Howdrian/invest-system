@@ -7,7 +7,7 @@
 
 ## 主结论
 
-宏观中性，等待价格和证据共振；VIX neutral: 16.41
+宏观中性，等待价格和证据共振；VIX neutral: 16.47
 
 ## 宏观四维度 / 风险温度
 
@@ -18,14 +18,14 @@
 | `rates_liquidity` | `available_limited` | `neutral_or_unknown` | 官方宏观源刷新入口已接入；无 key 时只提供降级上下文。 |
 | `energy_commodities` | `degraded` | `watch` | WTI/EIA/FRED not fully wired; Polymarket energy scenarios can only be optional hints. |
 | `usd_fx` | `missing` | `unknown` | DXY/USD/CNH not wired in v1. |
-| `risk_appetite` | `degraded` | `neutral` | VIX neutral: 16.41 |
+| `risk_appetite` | `degraded` | `neutral` | VIX neutral: 16.47 |
 | `market_heat` | `available` | `watchlist_or_hotspot` | focus_items=26 |
 
 ## 6 因子 Regime
 
 - Risk state: `neutral`
 - Six-factor status: `DEGRADED`
-- Reason: VIX neutral: 16.41
+- Reason: VIX neutral: 16.47
 - Boundary: 六因子缺项时只作为宏观降级判断，不冒充满血 Regime。
 
 ## 地缘四场景 / Polymarket 融合
