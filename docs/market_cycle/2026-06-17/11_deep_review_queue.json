@@ -1,6 +1,6 @@
 {
   "schema": "deep_review_queue_v1",
-  "generated_at": "2026-06-17T12:17:00.800434+00:00",
+  "generated_at": "2026-06-17T12:46:43.228079+00:00",
   "status": "available",
   "max_candidates": 6,
   "auto_governed_candidates": [],
@@ -8,21 +8,6 @@
     {
       "symbol": "SZ000725",
       "name": "京东方Ａ",
-      "source": "hot_stocks",
-      "priority_score": 6.5,
-      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
-      "evidence": [
-        "hot_stock_rank"
-      ],
-      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
-      "price_risk": "OVERHEATED_WAIT_ENTRY",
-      "next_action": "读公告/研报和技术承接；不追高。",
-      "trade_execution": "disabled",
-      "macro_overlay": "macro_risk_state=neutral"
-    },
-    {
-      "symbol": "SH601991",
-      "name": "大唐发电",
       "source": "hot_stocks",
       "priority_score": 6.5,
       "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
@@ -51,6 +36,21 @@
       "macro_overlay": "macro_risk_state=neutral"
     },
     {
+      "symbol": "SH601991",
+      "name": "大唐发电",
+      "source": "hot_stocks",
+      "priority_score": 6.5,
+      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
+      "evidence": [
+        "hot_stock_rank"
+      ],
+      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
+      "price_risk": "OVERHEATED_WAIT_ENTRY",
+      "next_action": "读公告/研报和技术承接；不追高。",
+      "trade_execution": "disabled",
+      "macro_overlay": "macro_risk_state=neutral"
+    },
+    {
       "symbol": "SH600110",
       "name": "诺德股份",
       "source": "hot_stocks",
@@ -66,8 +66,8 @@
       "macro_overlay": "macro_risk_state=neutral"
     },
     {
-      "symbol": "SH600584",
-      "name": "长电科技",
+      "symbol": "SZ300475",
+      "name": "香农芯创",
       "source": "hot_stocks",
       "priority_score": 6.5,
       "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
@@ -81,8 +81,8 @@
       "macro_overlay": "macro_risk_state=neutral"
     },
     {
-      "symbol": "SZ300475",
-      "name": "香农芯创",
+      "symbol": "SH600584",
+      "name": "长电科技",
       "source": "hot_stocks",
       "priority_score": 6.5,
       "evidence_quality": "MEDIUM_MIXED_EVIDENCE",

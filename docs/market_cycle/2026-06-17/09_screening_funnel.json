@@ -1,28 +1,13 @@
 {
   "schema": "screening_funnel_v1",
   "run_date": "2026-06-17",
-  "generated_at": "2026-06-17T12:17:00.800415+00:00",
+  "generated_at": "2026-06-17T12:46:43.228058+00:00",
   "status": "available",
   "candidate_count": 46,
   "candidates": [
     {
       "symbol": "SZ000725",
       "name": "京东方Ａ",
-      "source": "hot_stocks",
-      "priority_score": 6.5,
-      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
-      "evidence": [
-        "hot_stock_rank"
-      ],
-      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
-      "price_risk": "OVERHEATED_WAIT_ENTRY",
-      "next_action": "读公告/研报和技术承接；不追高。",
-      "trade_execution": "disabled",
-      "macro_overlay": "macro_risk_state=neutral"
-    },
-    {
-      "symbol": "SH601991",
-      "name": "大唐发电",
       "source": "hot_stocks",
       "priority_score": 6.5,
       "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
@@ -51,6 +36,21 @@
       "macro_overlay": "macro_risk_state=neutral"
     },
     {
+      "symbol": "SH601991",
+      "name": "大唐发电",
+      "source": "hot_stocks",
+      "priority_score": 6.5,
+      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
+      "evidence": [
+        "hot_stock_rank"
+      ],
+      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
+      "price_risk": "OVERHEATED_WAIT_ENTRY",
+      "next_action": "读公告/研报和技术承接；不追高。",
+      "trade_execution": "disabled",
+      "macro_overlay": "macro_risk_state=neutral"
+    },
+    {
       "symbol": "SH600110",
       "name": "诺德股份",
       "source": "hot_stocks",
@@ -66,8 +66,8 @@
       "macro_overlay": "macro_risk_state=neutral"
     },
     {
-      "symbol": "SH600584",
-      "name": "长电科技",
+      "symbol": "SZ300475",
+      "name": "香农芯创",
       "source": "hot_stocks",
       "priority_score": 6.5,
       "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
@@ -81,8 +81,8 @@
       "macro_overlay": "macro_risk_state=neutral"
     },
     {
-      "symbol": "SZ300475",
-      "name": "香农芯创",
+      "symbol": "SH600584",
+      "name": "长电科技",
       "source": "hot_stocks",
       "priority_score": 6.5,
       "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
@@ -171,8 +171,8 @@
       "macro_overlay": "macro_risk_state=neutral"
     },
     {
-      "symbol": "SH600522",
-      "name": "中天科技",
+      "symbol": "SZ002579",
+      "name": "中京电子",
       "source": "hot_stocks",
       "priority_score": 6.5,
       "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
@@ -186,8 +186,8 @@
       "macro_overlay": "macro_risk_state=neutral"
     },
     {
-      "symbol": "SZ002579",
-      "name": "中京电子",
+      "symbol": "SH600522",
+      "name": "中天科技",
       "source": "hot_stocks",
       "priority_score": 6.5,
       "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
@@ -216,8 +216,8 @@
       "macro_overlay": "macro_risk_state=neutral"
     },
     {
-      "symbol": "SZ300285",
-      "name": "国瓷材料",
+      "symbol": "SH603773",
+      "name": "沃格光电",
       "source": "hot_stocks",
       "priority_score": 6.5,
       "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
@@ -231,8 +231,8 @@
       "macro_overlay": "macro_risk_state=neutral"
     },
     {
-      "symbol": "SH603773",
-      "name": "沃格光电",
+      "symbol": "SZ300285",
+      "name": "国瓷材料",
       "source": "hot_stocks",
       "priority_score": 6.5,
       "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
@@ -276,8 +276,8 @@
       "macro_overlay": "macro_risk_state=neutral"
     },
     {
-      "symbol": "SH600186",
-      "name": "莲花控股",
+      "symbol": "SZ002436",
+      "name": "兴森科技",
       "source": "hot_stocks",
       "priority_score": 6.5,
       "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
@@ -291,8 +291,8 @@
       "macro_overlay": "macro_risk_state=neutral"
     },
     {
-      "symbol": "SZ002436",
-      "name": "兴森科技",
+      "symbol": "SH600186",
+      "name": "莲花控股",
       "source": "hot_stocks",
       "priority_score": 6.5,
       "evidence_quality": "MEDIUM_MIXED_EVIDENCE",

@@ -1,7 +1,7 @@
 {
   "schema": "market_heat_v1",
   "status": "available",
-  "as_of": "2026-06-17T12:11:47.027448+00:00",
+  "as_of": "2026-06-17T12:41:46.588750+00:00",
   "watchlist": [
     "600519",
     "000858",
@@ -41,18 +41,18 @@
     },
     {
       "rank": 2,
-      "code": "SH601991",
-      "name": "大唐发电",
-      "price": 9.13,
-      "change_pct": 4.94,
-      "source": "东方财富人气榜"
-    },
-    {
-      "rank": 3,
       "code": "SH603986",
       "name": "兆易创新",
       "price": 586.04,
       "change_pct": 10.0,
+      "source": "东方财富人气榜"
+    },
+    {
+      "rank": 3,
+      "code": "SH601991",
+      "name": "大唐发电",
+      "price": 9.13,
+      "change_pct": 4.94,
       "source": "东方财富人气榜"
     },
     {
@@ -65,18 +65,18 @@
     },
     {
       "rank": 5,
-      "code": "SH600584",
-      "name": "长电科技",
-      "price": 81.76,
-      "change_pct": 6.28,
-      "source": "东方财富人气榜"
-    },
-    {
-      "rank": 6,
       "code": "SZ300475",
       "name": "香农芯创",
       "price": 245.29,
       "change_pct": 20.0,
+      "source": "东方财富人气榜"
+    },
+    {
+      "rank": 6,
+      "code": "SH600584",
+      "name": "长电科技",
+      "price": 81.76,
+      "change_pct": 6.28,
       "source": "东方财富人气榜"
     },
     {
@@ -121,18 +121,18 @@
     },
     {
       "rank": 12,
-      "code": "SH600522",
-      "name": "中天科技",
-      "price": 54.91,
-      "change_pct": 1.4,
-      "source": "东方财富人气榜"
-    },
-    {
-      "rank": 13,
       "code": "SZ002579",
       "name": "中京电子",
       "price": 18.47,
       "change_pct": 10.01,
+      "source": "东方财富人气榜"
+    },
+    {
+      "rank": 13,
+      "code": "SH600522",
+      "name": "中天科技",
+      "price": 54.91,
+      "change_pct": 1.4,
       "source": "东方财富人气榜"
     },
     {
@@ -145,18 +145,18 @@
     },
     {
       "rank": 15,
-      "code": "SZ300285",
-      "name": "国瓷材料",
-      "price": 78.5,
-      "change_pct": 16.42,
-      "source": "东方财富人气榜"
-    },
-    {
-      "rank": 16,
       "code": "SH603773",
       "name": "沃格光电",
       "price": 166.13,
       "change_pct": 10.0,
+      "source": "东方财富人气榜"
+    },
+    {
+      "rank": 16,
+      "code": "SZ300285",
+      "name": "国瓷材料",
+      "price": 78.5,
+      "change_pct": 16.42,
       "source": "东方财富人气榜"
     },
     {
@@ -177,18 +177,18 @@
     },
     {
       "rank": 19,
-      "code": "SH600186",
-      "name": "莲花控股",
-      "price": 14.66,
-      "change_pct": 9.98,
-      "source": "东方财富人气榜"
-    },
-    {
-      "rank": 20,
       "code": "SZ002436",
       "name": "兴森科技",
       "price": 47.8,
       "change_pct": 8.39,
+      "source": "东方财富人气榜"
+    },
+    {
+      "rank": 20,
+      "code": "SH600186",
+      "name": "莲花控股",
+      "price": 14.66,
+      "change_pct": 9.98,
       "source": "东方财富人气榜"
     }
   ],
