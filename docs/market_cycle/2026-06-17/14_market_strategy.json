@@ -1,0 +1,134 @@
+{
+  "schema": "market_strategy_v1",
+  "generated_at": "2026-06-17T12:07:17.336429+00:00",
+  "regime": "NEUTRAL_WATCH",
+  "confidence": "MEDIUM",
+  "strategy": {
+    "headline": "宏观中性；维持观察，等待价格和证据共振。",
+    "stance": "watch_conditions_ready",
+    "actions": [
+      "把热度和宏观作为候选发现，不直接触发交易",
+      "NORMAL_RECHECK 候选必须进入 governed 个股分析",
+      "任何买卖前仍需红蓝、评分、CIO 和人工确认"
+    ],
+    "avoid": [
+      "只因热度高就追买",
+      "跳过评分卡",
+      "把降级数据当满血信号"
+    ]
+  },
+  "participation_allowed": true,
+  "participation_gate_reason": "allowed",
+  "candidate_routing": [
+    {
+      "symbol": "600519",
+      "bucket": "watch",
+      "rule": "仅作为关注线索；进入交易前必须经过 governed 个股分析、红蓝、评分和 CIO。",
+      "ordinary_participation": true
+    },
+    {
+      "symbol": "000858",
+      "bucket": "watch",
+      "rule": "仅作为关注线索；进入交易前必须经过 governed 个股分析、红蓝、评分和 CIO。",
+      "ordinary_participation": true
+    },
+    {
+      "symbol": "300750",
+      "bucket": "watch",
+      "rule": "仅作为关注线索；进入交易前必须经过 governed 个股分析、红蓝、评分和 CIO。",
+      "ordinary_participation": true
+    },
+    {
+      "symbol": "002594",
+      "bucket": "watch",
+      "rule": "仅作为关注线索；进入交易前必须经过 governed 个股分析、红蓝、评分和 CIO。",
+      "ordinary_participation": true
+    },
+    {
+      "symbol": "601318",
+      "bucket": "watch",
+      "rule": "仅作为关注线索；进入交易前必须经过 governed 个股分析、红蓝、评分和 CIO。",
+      "ordinary_participation": true
+    },
+    {
+      "symbol": "000001",
+      "bucket": "watch",
+      "rule": "仅作为关注线索；进入交易前必须经过 governed 个股分析、红蓝、评分和 CIO。",
+      "ordinary_participation": true
+    },
+    {
+      "symbol": "600036",
+      "bucket": "watch",
+      "rule": "仅作为关注线索；进入交易前必须经过 governed 个股分析、红蓝、评分和 CIO。",
+      "ordinary_participation": true
+    },
+    {
+      "symbol": "000333",
+      "bucket": "watch",
+      "rule": "仅作为关注线索；进入交易前必须经过 governed 个股分析、红蓝、评分和 CIO。",
+      "ordinary_participation": true
+    },
+    {
+      "symbol": "300059",
+      "bucket": "watch",
+      "rule": "仅作为关注线索；进入交易前必须经过 governed 个股分析、红蓝、评分和 CIO。",
+      "ordinary_participation": true
+    },
+    {
+      "symbol": "600276",
+      "bucket": "watch",
+      "rule": "仅作为关注线索；进入交易前必须经过 governed 个股分析、红蓝、评分和 CIO。",
+      "ordinary_participation": true
+    },
+    {
+      "symbol": "601899",
+      "bucket": "watch",
+      "rule": "仅作为关注线索；进入交易前必须经过 governed 个股分析、红蓝、评分和 CIO。",
+      "ordinary_participation": true
+    },
+    {
+      "symbol": "002415",
+      "bucket": "watch",
+      "rule": "仅作为关注线索；进入交易前必须经过 governed 个股分析、红蓝、评分和 CIO。",
+      "ordinary_participation": true
+    },
+    {
+      "symbol": "SZ000725",
+      "bucket": "DEEP_REVIEW_WAIT_ENTRY",
+      "rule": "读公告/研报和技术承接；不追高。",
+      "ordinary_participation": false
+    },
+    {
+      "symbol": "SH601991",
+      "bucket": "DEEP_REVIEW_WAIT_ENTRY",
+      "rule": "读公告/研报和技术承接；不追高。",
+      "ordinary_participation": false
+    },
+    {
+      "symbol": "SH603986",
+      "bucket": "DEEP_REVIEW_WAIT_ENTRY",
+      "rule": "读公告/研报和技术承接；不追高。",
+      "ordinary_participation": false
+    },
+    {
+      "symbol": "SH600110",
+      "bucket": "DEEP_REVIEW_WAIT_ENTRY",
+      "rule": "读公告/研报和技术承接；不追高。",
+      "ordinary_participation": false
+    },
+    {
+      "symbol": "SH600584",
+      "bucket": "DEEP_REVIEW_WAIT_ENTRY",
+      "rule": "读公告/研报和技术承接；不追高。",
+      "ordinary_participation": false
+    },
+    {
+      "symbol": "SZ300475",
+      "bucket": "DEEP_REVIEW_WAIT_ENTRY",
+      "rule": "读公告/研报和技术承接；不追高。",
+      "ordinary_participation": false
+    }
+  ],
+  "scoring_impact": 0,
+  "trade_execution": "disabled"
+}

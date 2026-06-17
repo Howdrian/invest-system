@@ -1,0 +1,102 @@
+{
+  "schema": "source_health_v1",
+  "generated_at": "2026-06-17T12:07:17.336401+00:00",
+  "macro_status": "DEGRADED",
+  "usability_verdict": "degraded",
+  "trade_review_usability": "usable_limited",
+  "rows": [
+    {
+      "component": "macro_context",
+      "status": "DEGRADED",
+      "usability": "degraded",
+      "criticality": "critical",
+      "blocking_level": "none",
+      "warnings": [
+        "fmp_unavailable"
+      ],
+      "source": "src.macro.official_sources"
+    },
+    {
+      "component": "market_heat",
+      "status": "AVAILABLE",
+      "usability": "usable",
+      "criticality": "supporting",
+      "blocking_level": "none",
+      "warnings": [],
+      "source": "src.intel.market_heat"
+    },
+    {
+      "component": "prediction_market",
+      "status": "AVAILABLE",
+      "usability": "usable",
+      "criticality": "optional",
+      "blocking_level": "none",
+      "warnings": [],
+      "source": "src.prediction_market.polymarket"
+    },
+    {
+      "component": "portfolio_holdings",
+      "status": "AVAILABLE",
+      "usability": "usable",
+      "criticality": "supporting",
+      "blocking_level": "none",
+      "warnings": [],
+      "source": "src.intel.portfolio_holdings",
+      "holding_status": "EMPTY",
+      "holding_source": "portfolio_service",
+      "selected_count": 0,
+      "omitted_count": 0
+    },
+    {
+      "component": "macro_review",
+      "status": "DEGRADED",
+      "usability": "degraded",
+      "criticality": "critical",
+      "blocking_level": "none",
+      "warnings": [
+        "fmp_unavailable"
+      ],
+      "source": "src.macro.review"
+    },
+    {
+      "component": "screening_funnel",
+      "status": "AVAILABLE",
+      "usability": "usable",
+      "criticality": "supporting",
+      "blocking_level": "none",
+      "warnings": [],
+      "source": "src.intel.candidate_selector"
+    },
+    {
+      "component": "deep_review_queue",
+      "status": "AVAILABLE",
+      "usability": "usable",
+      "criticality": "critical",
+      "blocking_level": "none",
+      "warnings": [],
+      "source": "src.intel.candidate_selector",
+      "candidate_count": 6
+    },
+    {
+      "component": "governed_reports",
+      "status": "DEGRADED",
+      "usability": "degraded",
+      "criticality": "optional",
+      "blocking_level": "none",
+      "warnings": [
+        "report_file_missing_for_today"
+      ],
+      "source": "reports/report_YYYYMMDD.md",
+      "count": 0,
+      "files": []
+    }
+  ],
+  "blocking_summary": {
+    "critical_unavailable_components": [],
+    "optional_unavailable_components": [],
+    "optional_degraded_components": [
+      "governed_reports"
+    ],
+    "supporting_degraded_components": []
+  }
+}
