@@ -1,6 +1,6 @@
 {
   "schema": "source_health_v1",
-  "generated_at": "2026-06-17T12:46:43.228115+00:00",
+  "generated_at": "2026-06-17T13:53:49.127326+00:00",
   "macro_status": "DEGRADED",
   "usability_verdict": "degraded",
   "trade_review_usability": "usable_limited",
@@ -81,24 +81,22 @@
     },
     {
       "component": "governed_reports",
-      "status": "DEGRADED",
-      "usability": "degraded",
+      "status": "AVAILABLE",
+      "usability": "usable",
       "criticality": "optional",
       "blocking_level": "none",
-      "warnings": [
-        "report_file_missing_for_today"
-      ],
+      "warnings": [],
       "source": "reports/report_YYYYMMDD.md",
-      "count": 0,
-      "files": []
+      "count": 1,
+      "files": [
+        "report_20260617.md"
+      ]
     }
   ],
   "blocking_summary": {
     "critical_unavailable_components": [],
     "optional_unavailable_components": [],
-    "optional_degraded_components": [
-      "governed_reports"
-    ],
+    "optional_degraded_components": [],
     "supporting_degraded_components": []
   }
 }

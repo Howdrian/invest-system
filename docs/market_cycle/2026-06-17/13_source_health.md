@@ -12,4 +12,4 @@
 | `macro_review` | `DEGRADED` | `degraded` | `critical` | fmp_unavailable |
 | `screening_funnel` | `AVAILABLE` | `usable` | `supporting` | - |
 | `deep_review_queue` | `AVAILABLE` | `usable` | `critical` | - |
-| `governed_reports` | `DEGRADED` | `degraded` | `optional` | report_file_missing_for_today |
+| `governed_reports` | `AVAILABLE` | `usable` | `optional` | - |

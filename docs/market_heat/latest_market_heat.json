@@ -1,7 +1,7 @@
 {
   "schema": "market_heat_v1",
   "status": "available",
-  "as_of": "2026-06-17T12:41:46.588750+00:00",
+  "as_of": "2026-06-17T13:42:33.572368+00:00",
   "watchlist": [
     "600519",
     "000858",
@@ -73,18 +73,18 @@
     },
     {
       "rank": 6,
-      "code": "SH600584",
-      "name": "长电科技",
-      "price": 81.76,
-      "change_pct": 6.28,
-      "source": "东方财富人气榜"
-    },
-    {
-      "rank": 7,
       "code": "SH600176",
       "name": "中国巨石",
       "price": 54.6,
       "change_pct": 9.99,
+      "source": "东方财富人气榜"
+    },
+    {
+      "rank": 7,
+      "code": "SH600584",
+      "name": "长电科技",
+      "price": 81.76,
+      "change_pct": 6.28,
       "source": "东方财富人气榜"
     },
     {
@@ -113,18 +113,18 @@
     },
     {
       "rank": 11,
-      "code": "SH600487",
-      "name": "亨通光电",
-      "price": 111.0,
-      "change_pct": 3.26,
-      "source": "东方财富人气榜"
-    },
-    {
-      "rank": 12,
       "code": "SZ002579",
       "name": "中京电子",
       "price": 18.47,
       "change_pct": 10.01,
+      "source": "东方财富人气榜"
+    },
+    {
+      "rank": 12,
+      "code": "SH600487",
+      "name": "亨通光电",
+      "price": 111.0,
+      "change_pct": 3.26,
       "source": "东方财富人气榜"
     },
     {
@@ -137,14 +137,6 @@
     },
     {
       "rank": 14,
-      "code": "SZ002585",
-      "name": "双星新材",
-      "price": 14.86,
-      "change_pct": 6.07,
-      "source": "东方财富人气榜"
-    },
-    {
-      "rank": 15,
       "code": "SH603773",
       "name": "沃格光电",
       "price": 166.13,
@@ -152,7 +144,7 @@
       "source": "东方财富人气榜"
     },
     {
-      "rank": 16,
+      "rank": 15,
       "code": "SZ300285",
       "name": "国瓷材料",
       "price": 78.5,
@@ -160,7 +152,7 @@
       "source": "东方财富人气榜"
     },
     {
-      "rank": 17,
+      "rank": 16,
       "code": "SH600378",
       "name": "昊华科技",
       "price": 63.8,
@@ -168,15 +160,15 @@
       "source": "东方财富人气榜"
     },
     {
-      "rank": 18,
-      "code": "SH600667",
-      "name": "太极实业",
-      "price": 19.02,
-      "change_pct": 5.73,
+      "rank": 17,
+      "code": "SZ002585",
+      "name": "双星新材",
+      "price": 14.86,
+      "change_pct": 6.07,
       "source": "东方财富人气榜"
     },
     {
-      "rank": 19,
+      "rank": 18,
       "code": "SZ002436",
       "name": "兴森科技",
       "price": 47.8,
@@ -184,11 +176,19 @@
       "source": "东方财富人气榜"
     },
     {
-      "rank": 20,
+      "rank": 19,
       "code": "SH600186",
       "name": "莲花控股",
       "price": 14.66,
       "change_pct": 9.98,
+      "source": "东方财富人气榜"
+    },
+    {
+      "rank": 20,
+      "code": "SH600667",
+      "name": "太极实业",
+      "price": 19.02,
+      "change_pct": 5.73,
       "source": "东方财富人气榜"
     }
   ],

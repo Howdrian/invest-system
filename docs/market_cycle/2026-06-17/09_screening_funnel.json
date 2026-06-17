@@ -1,7 +1,7 @@
 {
   "schema": "screening_funnel_v1",
   "run_date": "2026-06-17",
-  "generated_at": "2026-06-17T12:46:43.228058+00:00",
+  "generated_at": "2026-06-17T13:53:49.127271+00:00",
   "status": "available",
   "candidate_count": 46,
   "candidates": [
@@ -81,8 +81,8 @@
       "macro_overlay": "macro_risk_state=neutral"
     },
     {
-      "symbol": "SH600584",
-      "name": "长电科技",
+      "symbol": "SH600176",
+      "name": "中国巨石",
       "source": "hot_stocks",
       "priority_score": 6.5,
       "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
@@ -96,8 +96,8 @@
       "macro_overlay": "macro_risk_state=neutral"
     },
     {
-      "symbol": "SH600176",
-      "name": "中国巨石",
+      "symbol": "SH600584",
+      "name": "长电科技",
       "source": "hot_stocks",
       "priority_score": 6.5,
       "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
@@ -156,21 +156,6 @@
       "macro_overlay": "macro_risk_state=neutral"
     },
     {
-      "symbol": "SH600487",
-      "name": "亨通光电",
-      "source": "hot_stocks",
-      "priority_score": 6.5,
-      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
-      "evidence": [
-        "hot_stock_rank"
-      ],
-      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
-      "price_risk": "OVERHEATED_WAIT_ENTRY",
-      "next_action": "读公告/研报和技术承接；不追高。",
-      "trade_execution": "disabled",
-      "macro_overlay": "macro_risk_state=neutral"
-    },
-    {
       "symbol": "SZ002579",
       "name": "中京电子",
       "source": "hot_stocks",
@@ -186,8 +171,8 @@
       "macro_overlay": "macro_risk_state=neutral"
     },
     {
-      "symbol": "SH600522",
-      "name": "中天科技",
+      "symbol": "SH600487",
+      "name": "亨通光电",
       "source": "hot_stocks",
       "priority_score": 6.5,
       "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
@@ -201,8 +186,8 @@
       "macro_overlay": "macro_risk_state=neutral"
     },
     {
-      "symbol": "SZ002585",
-      "name": "双星新材",
+      "symbol": "SH600522",
+      "name": "中天科技",
       "source": "hot_stocks",
       "priority_score": 6.5,
       "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
@@ -261,8 +246,8 @@
       "macro_overlay": "macro_risk_state=neutral"
     },
     {
-      "symbol": "SH600667",
-      "name": "太极实业",
+      "symbol": "SZ002585",
+      "name": "双星新材",
       "source": "hot_stocks",
       "priority_score": 6.5,
       "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
@@ -293,6 +278,21 @@
     {
       "symbol": "SH600186",
       "name": "莲花控股",
+      "source": "hot_stocks",
+      "priority_score": 6.5,
+      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
+      "evidence": [
+        "hot_stock_rank"
+      ],
+      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
+      "price_risk": "OVERHEATED_WAIT_ENTRY",
+      "next_action": "读公告/研报和技术承接；不追高。",
+      "trade_execution": "disabled",
+      "macro_overlay": "macro_risk_state=neutral"
+    },
+    {
+      "symbol": "SH600667",
+      "name": "太极实业",
       "source": "hot_stocks",
       "priority_score": 6.5,
       "evidence_quality": "MEDIUM_MIXED_EVIDENCE",

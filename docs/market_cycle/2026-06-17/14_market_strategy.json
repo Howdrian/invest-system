@@ -1,6 +1,6 @@
 {
   "schema": "market_strategy_v1",
-  "generated_at": "2026-06-17T12:46:43.228147+00:00",
+  "generated_at": "2026-06-17T13:53:49.127359+00:00",
   "regime": "NEUTRAL_WATCH",
   "confidence": "MEDIUM",
   "strategy": {
@@ -123,7 +123,7 @@
       "ordinary_participation": false
     },
     {
-      "symbol": "SH600584",
+      "symbol": "SH600176",
       "bucket": "DEEP_REVIEW_WAIT_ENTRY",
       "rule": "读公告/研报和技术承接；不追高。",
       "ordinary_participation": false

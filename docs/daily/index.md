@@ -1,13 +1,13 @@
 # 投研日报 — 2026-06-17
 
-> 自动生成于 2026-06-17 20:46:45 北京时
+> 自动生成于 2026-06-17 21:53:50 北京时
 
 ## 自选股
 `600519,000858,300750,002594,601318,000001,600036,000333,300059,600276,601899,002415,000725,600900,601857,AAPL,MSFT,NVDA,GOOGL,AMZN,META,TSLA,BABA,SPY,QQQ,IWM`
 
 ## 运行状态
 - Market cycle: `success`
-- Governed stock analysis: `failed`
+- Governed stock analysis: `success`
 - Governed deep-review symbols: `301013`
 - Governed selection reason: `portfolio_holdings`
 - Portfolio holdings: `160644,301013`
@@ -15,10 +15,9 @@
 - Portfolio light-review only: `160644`
 - Governed omitted symbols: `none`
 - Governed daily limit: `3`
-- Governed completed symbols: `none`
-- Governed missing symbols: `301013`
-- Governed today report exists: `False`
-- Governed failure reasons: `missing_today_report,missing_governed_results,incomplete_governed_symbols`
+- Governed completed symbols: `301013`
+- Governed missing symbols: `none`
+- Governed today report exists: `True`
 
 ## 大盘 / 云端看盘三件套
 - [一屏总览](../market_cycle/2026-06-17/00_one_screen_brief.html)
@@ -42,7 +41,8 @@
 ## 个股 Governed 报告
 | 文件 | 说明 |
 |---|---|
-| 今日报告缺失 | `reports/report_20260617.md` 未生成；看上方运行状态和 Actions 日志 |
+| [report_20260617.md](../report_20260617.md) | 今日 governed 个股报告 |
+| [governed_results.json](../governed_results.json) | 今日 governed 结构化结果 |
 
 ---
-完整的 Actions 运行日志：[查看](https://github.com/Howdrian/invest-system/actions/runs/27689553011)
+完整的 Actions 运行日志：[查看](https://github.com/Howdrian/invest-system/actions/runs/27693234701)
