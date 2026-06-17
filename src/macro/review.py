@@ -122,10 +122,10 @@ def _build_regime(macro: Dict[str, Any]) -> Dict[str, Any]:
     price_map = {str(row.get("symbol") or row.get("name") or "").upper(): row for row in data if isinstance(row, dict)}
     six_factors = {
         "market_concentration": _factor_from_index(price_map, "^GSPC"),
-        "credit_conditions": {"status": "missing", "note": "HYG/LQD not wired in invest-system v1"},
-        "size_factor": {"status": "missing", "note": "IWM/SPY not wired in invest-system v1"},
-        "equity_bond": {"status": "missing", "note": "SPY/TLT correlation not wired in invest-system v1"},
-        "sector_rotation": {"status": "missing", "note": "XLY/XLP not wired in invest-system v1"},
+        "credit_conditions": _factor_from_pair(price_map, "HYG", "LQD", "high_yield_vs_ig_credit_proxy"),
+        "size_factor": _factor_from_pair(price_map, "IWM", "SPY", "small_vs_large_cap_proxy"),
+        "equity_bond": _factor_from_pair(price_map, "SPY", "TLT", "equity_vs_long_duration_bond_proxy"),
+        "sector_rotation": _factor_from_pair(price_map, "XLY", "XLP", "cyclical_vs_defensive_proxy"),
         "volatility": _factor_from_index(price_map, "^VIX"),
     }
     missing = [k for k, v in six_factors.items() if v.get("status") == "missing"]
@@ -153,6 +153,35 @@ def _factor_from_index(price_map: Dict[str, Dict[str, Any]], key: str) -> Dict[s
         "price_avg_50": row.get("priceAvg50"),
         "price_avg_200": row.get("priceAvg200"),
     }
+
+
+def _factor_from_pair(price_map: Dict[str, Dict[str, Any]], numerator: str, denominator: str, label: str) -> Dict[str, Any]:
+    left = price_map.get(numerator)
+    right = price_map.get(denominator)
+    if not left or not right:
+        missing = numerator if not left else denominator
+        return {"status": "missing", "note": f"{missing} missing for {label}"}
+    left_price = _to_float(left.get("price"))
+    right_price = _to_float(right.get("price"))
+    left_change = _to_float(left.get("changePercentage"))
+    right_change = _to_float(right.get("changePercentage"))
+    ratio = (left_price / right_price) if left_price is not None and right_price not in {None, 0} else None
+    spread = (left_change - right_change) if left_change is not None and right_change is not None else None
+    return {
+        "status": "available",
+        "proxy": label,
+        "numerator": numerator,
+        "denominator": denominator,
+        "ratio": ratio,
+        "change_spread": spread,
+    }
+
+
+def _to_float(value: Any) -> Optional[float]:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _classification(risk_state: str) -> str:

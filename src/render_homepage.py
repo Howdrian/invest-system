@@ -35,6 +35,24 @@ def _read_json(path: Path) -> Any:
         return None
 
 
+def _load_today_governed_results(today: str) -> List[Dict[str, Any]]:
+    """Prefer current runtime results and ignore stale governed rows."""
+    payload = _read_json(DEFAULT_REPORTS_DIR / "governed_results.json")
+    if payload is None:
+        payload = _read_json(Path("docs/governed_results.json"))
+    if not isinstance(payload, list):
+        return []
+    rows: List[Dict[str, Any]] = []
+    for item in payload:
+        if not isinstance(item, dict):
+            continue
+        run_date = str(item.get("run_date") or "").strip()
+        if run_date != today:
+            continue
+        rows.append(item)
+    return rows
+
+
 def _esc(s: str) -> str:
     return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
 
@@ -80,7 +98,7 @@ def main() -> None:
     strategy = _read_json(_path(DEFAULT_MARKET_CYCLE_DIR, "14_market_strategy.json")) or {}
     health = _read_json(_path(DEFAULT_MARKET_CYCLE_DIR, "13_source_health.json")) or {}
     screening = _read_json(_path(DEFAULT_MARKET_CYCLE_DIR, "09_screening_funnel.json")) or {}
-    governed = _read_json(Path("docs/governed_results.json")) or _read_json(DEFAULT_REPORTS_DIR / "governed_results.json") or []
+    governed = _load_today_governed_results(today)
 
     regime = strategy.get("regime", "UNKNOWN")
     headline = (strategy.get("strategy") or {}).get("headline", "")

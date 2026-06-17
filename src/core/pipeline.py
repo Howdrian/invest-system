@@ -12,6 +12,7 @@ A股自选股智能分析系统 - 核心分析流水线
 """
 
 import logging
+import os
 import re
 import threading
 import time
@@ -19,6 +20,7 @@ import uuid
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple, Callable
 
 import pandas as pd
@@ -2683,12 +2685,15 @@ class StockAnalysisPipeline:
         
         # Write governed_results.json for homepage rendering
         governed_results = []
+        run_date = os.getenv("ANALYSIS_RUN_DATE") or datetime.now().strftime("%Y-%m-%d")
         for r in results:
             gov = getattr(r, '_governance', None)
             if gov:
+                display_name = getattr(r, "stock_name", None) or getattr(r, "name", None) or r.code
                 governed_results.append({
+                    "run_date": run_date,
                     "code": r.code,
-                    "name": r.stock_name or r.code,
+                    "name": display_name,
                     "cio_status": gov.get("cio_status", ""),
                     "score": gov.get("score", 0),
                     "gate": gov.get("gate", ""),
@@ -2716,7 +2721,7 @@ class StockAnalysisPipeline:
                 })
         if governed_results:
             import json as _json
-            out_path = Path("docs/governed_results.json")
+            out_path = Path("reports/governed_results.json")
             out_path.parent.mkdir(parents=True, exist_ok=True)
             out_path.write_text(_json.dumps(governed_results, ensure_ascii=False, indent=2), encoding="utf-8")
             logger.info(f"Wrote governed_results.json: {len(governed_results)} stocks")

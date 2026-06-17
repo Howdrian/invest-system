@@ -26,11 +26,21 @@ def test_daily_workflow_publishes_market_cycle_without_docs_index_conflict():
     assert "reports/run_status" in workflow
     assert "market_cycle_status.txt" in workflow
     assert "stock_analysis_status.txt" in workflow
+    assert "governed_result_summary.json" in workflow
+    assert "scripts/validate_governed_run.py" in workflow
+    assert "--fail-on-non-success" in workflow
+    assert "portfolio_holding_symbols.txt" in workflow
+    assert "portfolio_holding_summary.json" in workflow
+    assert "portfolio_holdings" in workflow
+    assert "PORTFOLIO_HOLDINGS: ${{ vars.PORTFOLIO_HOLDINGS" in workflow
     assert "governed_stock_list.txt" in workflow
     assert "governed_selection_reason.txt" in workflow
     assert "DEEP_REVIEW_NOW" in workflow
+    assert "build_portfolio_holding_snapshot" in workflow
     assert "--stocks \"$GOVERNED_STOCK_LIST\"" in workflow
     assert "python main.py --stocks \"$GOVERNED_STOCK_LIST\" --no-market-review --force-run" in workflow
+    assert "reports/report_${TODAY_COMPACT}.md" in workflow
+    assert "reports/*.md reports/*.html reports/*.json" not in workflow
 
     assert workflow.index("python -m src.market_cycle") < workflow.index("python main.py --stocks")
 

@@ -19,6 +19,7 @@ from typing import Any, Dict, Iterable, List, Optional
 
 from src.intel.market_heat import DEFAULT_OUTPUT_DIR as DEFAULT_MARKET_HEAT_DIR
 from src.intel.market_heat import build_market_heat_snapshot, load_latest_market_heat
+from src.intel.portfolio_holdings import build_portfolio_holding_snapshot
 from src.intel.candidate_selector import (
     build_deep_review_queue,
     build_screening_funnel,
@@ -54,8 +55,9 @@ def build_market_cycle_payload(
     symbols: Iterable[str],
     macro_context: Optional[Dict[str, Any]],
     market_heat: Optional[Dict[str, Any]],
-    prediction_market: Optional[Dict[str, Any]] = None,
     report_files: Iterable[Path],
+    prediction_market: Optional[Dict[str, Any]] = None,
+    portfolio_holdings: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Build deterministic market-cycle view-model from runtime artifacts."""
     symbol_list = [str(s).strip() for s in symbols if str(s).strip()]
@@ -66,6 +68,7 @@ def build_market_cycle_payload(
     macro_status = str(macro.get("status") or "UNAVAILABLE").upper()
     heat_status = str(heat.get("status") or "UNAVAILABLE").upper()
     prediction = prediction_market if isinstance(prediction_market, dict) else {}
+    holdings = portfolio_holdings if isinstance(portfolio_holdings, dict) else {}
     macro_review = build_macro_review(
         run_date=run_date,
         macro_context=macro,
@@ -90,6 +93,7 @@ def build_market_cycle_payload(
         heat,
         reports,
         prediction_market=prediction,
+        portfolio_holdings=holdings,
         macro_review=macro_review,
         screening_funnel=screening_funnel,
         deep_review_queue=deep_review_queue,
@@ -107,6 +111,8 @@ def build_market_cycle_payload(
         "market_heat": heat,
         "prediction_market_status": str(prediction.get("status") or "MISSING").upper(),
         "prediction_market": prediction,
+        "portfolio_holdings_status": str(holdings.get("status") or "MISSING").upper(),
+        "portfolio_holdings": holdings,
         "macro_review": macro_review,
         "event_context": event_context,
         "screening_funnel": screening_funnel,
@@ -125,6 +131,7 @@ def build_source_health(
     report_files: List[Path],
     *,
     prediction_market: Optional[Dict[str, Any]] = None,
+    portfolio_holdings: Optional[Dict[str, Any]] = None,
     macro_review: Optional[Dict[str, Any]] = None,
     screening_funnel: Optional[Dict[str, Any]] = None,
     deep_review_queue: Optional[Dict[str, Any]] = None,
@@ -151,6 +158,21 @@ def build_source_health(
         criticality="optional",
         warnings=list(prediction.get("warnings") or []),
         source="src.prediction_market.polymarket",
+    ))
+    holdings = portfolio_holdings if isinstance(portfolio_holdings, dict) else {}
+    holdings_status = str(holdings.get("status") or "UNAVAILABLE")
+    rows.append(_component_row(
+        component="portfolio_holdings",
+        status="available" if holdings_status.lower() == "empty" else holdings_status,
+        criticality="supporting",
+        warnings=list(holdings.get("warnings") or []),
+        source="src.intel.portfolio_holdings",
+        extra={
+            "holding_status": holdings_status.upper(),
+            "holding_source": holdings.get("source"),
+            "selected_count": len(holdings.get("symbols") or []) if holdings else 0,
+            "omitted_count": len(holdings.get("omitted_symbols") or []) if holdings else 0,
+        },
     ))
     macro_payload = macro_review if isinstance(macro_review, dict) else {}
     rows.append(_component_row(
@@ -183,7 +205,7 @@ def build_source_health(
         criticality="optional",
         warnings=[] if report_files else ["report_file_missing_for_today"],
         source="reports/report_YYYYMMDD.md",
-        extra={"count": len(report_files)},
+        extra={"count": len(report_files), "files": [p.name for p in report_files]},
     ))
 
     usability = _global_usability(rows)
@@ -598,8 +620,7 @@ def _split_symbols(raw: Optional[str]) -> List[str]:
 def _find_report_files(run_date: str, report_glob: str) -> List[Path]:
     compact = run_date.replace("-", "")
     candidates = [Path(p) for p in sorted(Path().glob(report_glob))]
-    today = [p for p in candidates if compact in p.name]
-    return today or candidates
+    return [p for p in candidates if compact in p.name]
 
 
 def main(argv: Optional[List[str]] = None) -> int:
@@ -633,6 +654,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             keywords=keywords,
             live=bool(args.refresh_prediction_market),
         )
+    portfolio_holdings = build_portfolio_holding_snapshot(max_symbols=6)
     report_files = _find_report_files(run_date, args.report_glob)
     payload = build_market_cycle_payload(
         run_date=run_date,
@@ -640,6 +662,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         macro_context=macro_context,
         market_heat=market_heat,
         prediction_market=prediction_market,
+        portfolio_holdings=portfolio_holdings,
         report_files=report_files,
     )
     paths = write_market_cycle_outputs(payload, output_dir)
@@ -647,6 +670,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         "market_cycle "
         f"macro status={payload.get('macro_status')} "
         f"polymarket status={payload.get('prediction_market_status')} "
+        f"portfolio_holdings={payload.get('portfolio_holdings_status')} "
         f"source_health={payload['source_health'].get('usability_verdict')} "
         f"trade_review_usability={payload['source_health'].get('trade_review_usability')} "
         f"deep_review_candidates={len(payload['deep_review_queue'].get('candidates') or [])} "

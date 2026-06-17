@@ -91,7 +91,7 @@ class MacroContextService:
 
     def _fetch_fmp_market_context(self, api_key: str) -> Dict[str, Any]:
         base = "https://financialmodelingprep.com/stable/quote"
-        symbols = ["^GSPC", "^IXIC", "^VIX"]
+        symbols = ["^GSPC", "^IXIC", "^VIX", "HYG", "LQD", "IWM", "SPY", "TLT", "XLY", "XLP"]
         rows: list[Dict[str, Any]] = []
         errors: Dict[str, str] = {}
         for symbol in symbols:

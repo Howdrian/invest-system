@@ -105,3 +105,37 @@ def test_prediction_market_optional_failure_only_degrades_daily_report():
     assert payload["source_health"]["trade_review_usability"] == "usable_limited"
     assert payload["source_health"]["usability_verdict"] == "degraded"
     assert payload["market_strategy"]["participation_allowed"] is True
+
+
+def test_market_cycle_report_files_are_date_scoped(tmp_path, monkeypatch):
+    from src.market_cycle import _find_report_files
+
+    reports = tmp_path / "reports"
+    reports.mkdir()
+    old_report = reports / "report_20260601.md"
+    old_report.write_text("# old\n", encoding="utf-8")
+    today_report = reports / "report_20260615.md"
+    today_report.write_text("# today\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    assert _find_report_files("2026-06-15", "reports/report_*.md") == [Path("reports/report_20260615.md")]
+    assert _find_report_files("2026-06-16", "reports/report_*.md") == []
+
+
+def test_market_cycle_source_health_includes_empty_portfolio_as_non_blocking():
+    from src.market_cycle import build_market_cycle_payload
+
+    payload = build_market_cycle_payload(
+        run_date="2026-06-17",
+        symbols=["600519"],
+        macro_context={"status": "REFRESHED", "regime": {"risk_state": "neutral", "confidence": "medium"}, "warnings": []},
+        market_heat={"status": "available", "focus_items": [], "warnings": []},
+        prediction_market={"status": "available", "warnings": [], "scenario_fusion": []},
+        portfolio_holdings={"status": "empty", "symbols": [], "warnings": []},
+        report_files=[],
+    )
+
+    rows = {row["component"]: row for row in payload["source_health"]["rows"]}
+    assert rows["portfolio_holdings"]["holding_status"] == "EMPTY"
+    assert rows["portfolio_holdings"]["usability"] == "usable"
+    assert rows["portfolio_holdings"]["selected_count"] == 0
