@@ -171,6 +171,8 @@ def build_source_health(
             "holding_status": holdings_status.upper(),
             "holding_source": holdings.get("source"),
             "selected_count": len(holdings.get("symbols") or []) if holdings else 0,
+            "governed_count": len(holdings.get("governed_symbols") or []) if holdings else 0,
+            "light_review_count": len(holdings.get("light_review_symbols") or []) if holdings else 0,
             "omitted_count": len(holdings.get("omitted_symbols") or []) if holdings else 0,
         },
     ))

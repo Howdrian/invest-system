@@ -139,3 +139,30 @@ def test_market_cycle_source_health_includes_empty_portfolio_as_non_blocking():
     assert rows["portfolio_holdings"]["holding_status"] == "EMPTY"
     assert rows["portfolio_holdings"]["usability"] == "usable"
     assert rows["portfolio_holdings"]["selected_count"] == 0
+    assert rows["portfolio_holdings"]["governed_count"] == 0
+    assert rows["portfolio_holdings"]["light_review_count"] == 0
+
+
+def test_market_cycle_source_health_reports_portfolio_review_tiers():
+    from src.market_cycle import build_market_cycle_payload
+
+    payload = build_market_cycle_payload(
+        run_date="2026-06-17",
+        symbols=["301013", "160644"],
+        macro_context={"status": "REFRESHED", "regime": {"risk_state": "neutral", "confidence": "medium"}, "warnings": []},
+        market_heat={"status": "available", "focus_items": [], "warnings": []},
+        prediction_market={"status": "available", "warnings": [], "scenario_fusion": []},
+        portfolio_holdings={
+            "status": "available",
+            "symbols": ["160644", "301013"],
+            "governed_symbols": ["301013"],
+            "light_review_symbols": ["160644"],
+            "warnings": [],
+        },
+        report_files=[],
+    )
+
+    rows = {row["component"]: row for row in payload["source_health"]["rows"]}
+    assert rows["portfolio_holdings"]["selected_count"] == 2
+    assert rows["portfolio_holdings"]["governed_count"] == 1
+    assert rows["portfolio_holdings"]["light_review_count"] == 1

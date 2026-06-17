@@ -29,8 +29,12 @@ def test_portfolio_holding_snapshot_extracts_positive_positions_by_value():
 
     assert payload["status"] == "available"
     assert payload["symbols"] == ["600519"]
+    assert payload["governed_symbols"] == ["600519"]
+    assert payload["light_review_symbols"] == []
     assert payload["omitted_symbols"] == ["300750"]
     assert payload["position_count"] == 2
+    assert payload["governed_count"] == 1
+    assert payload["light_review_count"] == 0
     assert payload["warnings"] == ["portfolio_holdings_truncated"]
 
 
@@ -55,6 +59,11 @@ def test_portfolio_holding_snapshot_falls_back_to_env_symbols(monkeypatch):
     assert payload["status"] == "available"
     assert payload["source"] == "env"
     assert payload["symbols"] == ["160644", "301013"]
+    assert payload["governed_symbols"] == ["301013"]
+    assert payload["light_review_symbols"] == ["160644"]
+    assert payload["positions"][0]["analysis_tier"] == "light_review_only"
+    assert payload["positions"][1]["analysis_tier"] == "governed_deep_review"
+    assert payload["notes"] == ["fund_etf_lof_holdings_light_review_only"]
 
 
 def test_portfolio_holding_snapshot_falls_back_to_legacy_markdown(tmp_path, monkeypatch):
@@ -83,4 +92,9 @@ def test_portfolio_holding_snapshot_falls_back_to_legacy_markdown(tmp_path, monk
     assert payload["status"] == "available"
     assert payload["source"] == "legacy_portfolio_md"
     assert payload["symbols"] == ["160644", "301013"]
+    assert payload["governed_symbols"] == ["301013"]
+    assert payload["light_review_symbols"] == ["160644"]
     assert payload["positions"][0]["quantity"] == 3900.0
+    assert payload["positions"][0]["type"] == "LOF/QDII基金"
+    assert payload["positions"][0]["analysis_tier"] == "light_review_only"
+    assert payload["positions"][1]["analysis_tier"] == "governed_deep_review"

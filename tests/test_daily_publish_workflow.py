@@ -30,8 +30,14 @@ def test_daily_workflow_publishes_market_cycle_without_docs_index_conflict():
     assert "scripts/validate_governed_run.py" in workflow
     assert "--fail-on-non-success" in workflow
     assert "portfolio_holding_symbols.txt" in workflow
+    assert "portfolio_governed_symbols.txt" in workflow
+    assert "portfolio_light_review_symbols.txt" in workflow
     assert "portfolio_holding_summary.json" in workflow
     assert "portfolio_holdings" in workflow
+    assert "governed_symbols" in workflow
+    assert "light_review_symbols" in workflow
+    assert "Portfolio governed-eligible" in workflow
+    assert "Portfolio light-review only" in workflow
     assert "PORTFOLIO_HOLDINGS: ${{ vars.PORTFOLIO_HOLDINGS" in workflow
     assert "governed_stock_list.txt" in workflow
     assert "governed_selection_reason.txt" in workflow

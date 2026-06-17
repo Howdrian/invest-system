@@ -546,25 +546,33 @@ jobs:
                       target.append(symbol)
 
           portfolio_symbols = []
+          portfolio_governed_symbols = []
+          portfolio_light_review_symbols = []
           portfolio_omitted = []
           try:
               from src.intel.portfolio_holdings import build_portfolio_holding_snapshot
 
-              portfolio = build_portfolio_holding_snapshot(max_symbols=limit)
+              portfolio = build_portfolio_holding_snapshot(max_symbols=None)
               portfolio_symbols = [normalize(s) for s in portfolio.get("symbols") or [] if normalize(s)]
+              portfolio_governed_symbols = [normalize(s) for s in portfolio.get("governed_symbols") or [] if normalize(s)]
+              portfolio_light_review_symbols = [normalize(s) for s in portfolio.get("light_review_symbols") or [] if normalize(s)]
               portfolio_omitted = [normalize(s) for s in portfolio.get("omitted_symbols") or [] if normalize(s)]
               status_dir = Path(os.environ.get("RUN_STATUS_DIR") or "reports/run_status")
               status_dir.mkdir(parents=True, exist_ok=True)
               (status_dir / "portfolio_holding_symbols.txt").write_text(",".join(portfolio_symbols), encoding="utf-8")
+              (status_dir / "portfolio_governed_symbols.txt").write_text(",".join(portfolio_governed_symbols), encoding="utf-8")
+              (status_dir / "portfolio_light_review_symbols.txt").write_text(",".join(portfolio_light_review_symbols), encoding="utf-8")
               (status_dir / "portfolio_holding_omitted_symbols.txt").write_text(",".join(portfolio_omitted), encoding="utf-8")
               (status_dir / "portfolio_holding_summary.json").write_text(json.dumps(portfolio, ensure_ascii=False, indent=2), encoding="utf-8")
           except Exception as exc:
               status_dir = Path(os.environ.get("RUN_STATUS_DIR") or "reports/run_status")
               status_dir.mkdir(parents=True, exist_ok=True)
               (status_dir / "portfolio_holding_symbols.txt").write_text("", encoding="utf-8")
+              (status_dir / "portfolio_governed_symbols.txt").write_text("", encoding="utf-8")
+              (status_dir / "portfolio_light_review_symbols.txt").write_text("", encoding="utf-8")
               (status_dir / "portfolio_holding_omitted_symbols.txt").write_text("", encoding="utf-8")
               (status_dir / "portfolio_holding_summary.json").write_text(
-                  json.dumps({"schema": "portfolio_holding_snapshot_v1", "status": "degraded", "symbols": [], "warnings": [str(exc)]}, ensure_ascii=False, indent=2),
+                  json.dumps({"schema": "portfolio_holding_snapshot_v1", "status": "degraded", "symbols": [], "governed_symbols": [], "light_review_symbols": [], "warnings": [str(exc)]}, ensure_ascii=False, indent=2),
                   encoding="utf-8",
               )
 
@@ -597,8 +605,8 @@ jobs:
 
           picked = []
           reason_parts = []
-          if portfolio_symbols:
-              append_unique(picked, portfolio_symbols)
+          if portfolio_governed_symbols:
+              append_unique(picked, portfolio_governed_symbols)
               reason_parts.append("portfolio_holdings")
           if candidate_symbols:
               append_unique(picked, candidate_symbols)
@@ -627,6 +635,9 @@ jobs:
           fi
           echo "$GOVERNED_STOCK_LIST" > "$RUN_STATUS_DIR/governed_stock_list.txt"
           echo "🤖 governed_deep_review_symbols=$GOVERNED_STOCK_LIST limit=${AGENT_GOVERNED_DAILY_LIMIT:-3}"
+          echo "💼 portfolio_all_symbols=$(cat "$RUN_STATUS_DIR/portfolio_holding_symbols.txt" 2>/dev/null || true)"
+          echo "💼 portfolio_governed_symbols=$(cat "$RUN_STATUS_DIR/portfolio_governed_symbols.txt" 2>/dev/null || true)"
+          echo "💼 portfolio_light_review_symbols=$(cat "$RUN_STATUS_DIR/portfolio_light_review_symbols.txt" 2>/dev/null || true)"
 
           run_governed_analysis() {
             echo "started" > "$RUN_STATUS_DIR/stock_analysis_status.txt"
@@ -720,6 +731,8 @@ jobs:
           GOVERNED_STOCK_LIST_ACTUAL="$(cat "$RUN_STATUS_DIR/governed_stock_list.txt" 2>/dev/null || echo '')"
           GOVERNED_SELECTION_REASON="$(cat "$RUN_STATUS_DIR/governed_selection_reason.txt" 2>/dev/null || echo missing)"
           PORTFOLIO_HOLDING_SYMBOLS="$(cat "$RUN_STATUS_DIR/portfolio_holding_symbols.txt" 2>/dev/null || echo '')"
+          PORTFOLIO_GOVERNED_SYMBOLS="$(cat "$RUN_STATUS_DIR/portfolio_governed_symbols.txt" 2>/dev/null || echo '')"
+          PORTFOLIO_LIGHT_REVIEW_SYMBOLS="$(cat "$RUN_STATUS_DIR/portfolio_light_review_symbols.txt" 2>/dev/null || echo '')"
           GOVERNED_OMITTED_SYMBOLS="$(cat "$RUN_STATUS_DIR/governed_omitted_symbols.txt" 2>/dev/null || echo '')"
           GOVERNED_RESULT_SUMMARY="$RUN_STATUS_DIR/governed_result_summary.json"
           OBSERVATION_UNIVERSE="$(cat "$RUN_STATUS_DIR/observation_universe.txt" 2>/dev/null || echo "$STOCK_LIST")"
@@ -745,7 +758,9 @@ jobs:
           echo "- Governed stock analysis: \`$STOCK_ANALYSIS_STATUS\`" >> "$DAILY_INDEX"
           echo "- Governed deep-review symbols: \`${GOVERNED_STOCK_LIST_ACTUAL:-none}\`" >> "$DAILY_INDEX"
           echo "- Governed selection reason: \`$GOVERNED_SELECTION_REASON\`" >> "$DAILY_INDEX"
-          echo "- Portfolio holdings included: \`${PORTFOLIO_HOLDING_SYMBOLS:-none}\`" >> "$DAILY_INDEX"
+          echo "- Portfolio holdings: \`${PORTFOLIO_HOLDING_SYMBOLS:-none}\`" >> "$DAILY_INDEX"
+          echo "- Portfolio governed-eligible: \`${PORTFOLIO_GOVERNED_SYMBOLS:-none}\`" >> "$DAILY_INDEX"
+          echo "- Portfolio light-review only: \`${PORTFOLIO_LIGHT_REVIEW_SYMBOLS:-none}\`" >> "$DAILY_INDEX"
           echo "- Governed omitted symbols: \`${GOVERNED_OMITTED_SYMBOLS:-none}\`" >> "$DAILY_INDEX"
           echo "- Governed daily limit: \`${AGENT_GOVERNED_DAILY_LIMIT:-3}\`" >> "$DAILY_INDEX"
           if [ -f "$GOVERNED_RESULT_SUMMARY" ]; then
@@ -791,7 +806,7 @@ jobs:
               rows = {row.get("component"): row for row in health.get("rows") or [] if isinstance(row, dict)}
               portfolio = rows.get("portfolio_holdings") or {}
               if portfolio:
-                  print(f"- Portfolio holdings status: `{portfolio.get('holding_status') or portfolio.get('status')}` / selected=`{portfolio.get('selected_count', 0)}`")
+                  print(f"- Portfolio holdings status: `{portfolio.get('holding_status') or portfolio.get('status')}` / selected=`{portfolio.get('selected_count', 0)}` / governed=`{portfolio.get('governed_count', 0)}` / light=`{portfolio.get('light_review_count', 0)}`")
           if macro_path.exists():
               macro = json.loads(macro_path.read_text(encoding="utf-8"))
               print(f"- Macro review: `{macro.get('status')}` / `{macro.get('confidence')}`")
