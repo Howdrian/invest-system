@@ -633,6 +633,7 @@ class LLMToolAdapter:
         """Convert internal message format to OpenAI-compatible format for litellm."""
         openai_messages: List[Dict[str, Any]] = []
         target_provider = self._trace_provider_for_target(target_model)
+        pending_tool_call_ids: set[str] = set()
         for msg in messages:
             trace_matches_target = _message_trace_matches_target(
                 msg,
@@ -642,11 +643,19 @@ class LLMToolAdapter:
             if not trace_matches_target:
                 continue
             if msg["role"] == "tool":
+                tool_call_id = str(msg.get("tool_call_id", ""))
+                if tool_call_id not in pending_tool_call_ids:
+                    logger.debug(
+                        "Skipping orphan tool response while converting LLM messages: %s",
+                        tool_call_id,
+                    )
+                    continue
                 openai_messages.append({
                     "role": "tool",
-                    "tool_call_id": msg.get("tool_call_id", ""),
+                    "tool_call_id": tool_call_id,
                     "content": msg["content"] if isinstance(msg["content"], str) else json.dumps(msg["content"]),
                 })
+                pending_tool_call_ids.discard(tool_call_id)
             elif msg["role"] == "assistant" and msg.get("tool_calls"):
                 openai_tc = []
                 for tc in msg["tool_calls"]:
@@ -665,6 +674,7 @@ class LLMToolAdapter:
                     if provider_specific_fields:
                         tc_dict["provider_specific_fields"] = provider_specific_fields
                     openai_tc.append(tc_dict)
+                    pending_tool_call_ids.add(str(tc_dict["id"]))
                 content = (
                     msg.get("provider_blocks")
                     if msg.get("provider_blocks")

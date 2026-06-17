@@ -548,6 +548,8 @@ def run_agent_loop(
                         "name": tr["tc"].name,
                         "tool_call_id": tr["tc"].id,
                         "content": tr["result_str"],
+                        "_trace_provider": response.provider,
+                        "_trace_model": m,
                     }
                 )
 

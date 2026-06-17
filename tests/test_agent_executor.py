@@ -292,6 +292,8 @@ class TestAgentExecutor(unittest.TestCase):
         self.assertEqual(assistant_msg["tool_calls"][0]["thought_signature"], "sig-1")
         self.assertEqual(tool_msg["role"], "tool")
         self.assertEqual(tool_msg["tool_call_id"], "call_reason")
+        self.assertEqual(tool_msg["_trace_provider"], "deepseek")
+        self.assertEqual(tool_msg["_trace_model"], "deepseek/deepseek-chat")
 
     def test_chat_persists_single_provider_trace_and_reinjects_without_duplication(self):
         DatabaseManager.reset_instance()

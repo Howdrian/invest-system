@@ -126,6 +126,35 @@ def test_convert_messages_skips_entire_trace_segment_for_mismatched_attempt() ->
     assert fallback[2]["tool_call_id"] == "call_1"
 
 
+def test_convert_messages_drops_untraced_orphan_tool_after_trace_mismatch() -> None:
+    adapter = LLMToolAdapter.__new__(LLMToolAdapter)
+    messages = [
+        {"role": "user", "content": "u1"},
+        {
+            "role": "assistant",
+            "content": "checking",
+            "_trace_provider": "gemini",
+            "_trace_model": "gemini/gemini-3-flash-preview",
+            "tool_calls": [
+                {
+                    "id": "gemini_call__thought__opaque-signature",
+                    "name": "echo",
+                    "arguments": {"message": "hello"},
+                }
+            ],
+        },
+        {
+            "role": "tool",
+            "tool_call_id": "gemini_call__thought__opaque-signature",
+            "content": "tool-result",
+        },
+    ]
+
+    converted = adapter._convert_messages(messages, target_model="gemini/gemini-2.5-flash")
+
+    assert [msg["role"] for msg in converted] == ["user"]
+
+
 def test_convert_messages_matches_slashless_openai_target_without_provider_leakage() -> None:
     adapter = LLMToolAdapter.__new__(LLMToolAdapter)
     messages = [
