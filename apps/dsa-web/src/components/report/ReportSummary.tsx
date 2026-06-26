@@ -5,6 +5,7 @@ import { ReportStrategy } from './ReportStrategy';
 import { ReportNews } from './ReportNews';
 import { ReportDetails } from './ReportDetails';
 import { ReportDiagnostics } from './ReportDiagnostics';
+import { ReportArtifactView } from './ReportArtifactView';
 import { getReportText, normalizeReportLanguage } from '../../utils/reportLanguage';
 
 interface ReportSummaryProps {
@@ -26,7 +27,7 @@ export const ReportSummary: React.FC<ReportSummaryProps> = ({
   const recordId = report.meta.id;
   const diagnosticSummary = 'diagnosticSummary' in data ? data.diagnosticSummary : undefined;
 
-  const { meta, summary, strategy, details } = report;
+  const { meta, summary, strategy, details, artifact } = report;
   const reportLanguage = normalizeReportLanguage(meta.reportLanguage);
   const text = getReportText(reportLanguage);
   const modelUsed = (meta.modelUsed || '').trim();
@@ -36,6 +37,8 @@ export const ReportSummary: React.FC<ReportSummaryProps> = ({
 
   return (
     <div className="space-y-5 pb-8 animate-fade-in">
+      {artifact ? <ReportArtifactView artifact={artifact} /> : null}
+
       {/* 概览区（首屏） */}
       <ReportOverview
         meta={meta}

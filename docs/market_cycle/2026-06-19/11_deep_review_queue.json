@@ -1,0 +1,198 @@
+{
+  "schema": "deep_review_queue_v1",
+  "generated_at": "2026-06-19T08:12:29.803199+00:00",
+  "status": "available",
+  "max_candidates": 6,
+  "auto_governed_candidates": [],
+  "candidates": [
+    {
+      "symbol": "SH600667",
+      "name": "太极实业",
+      "source": "hot_stocks",
+      "priority_score": 6.5,
+      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
+      "evidence": [
+        "hot_stock_rank"
+      ],
+      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
+      "price_risk": "OVERHEATED_WAIT_ENTRY",
+      "next_action": "读公告/研报和技术承接；不追高。",
+      "trade_execution": "disabled",
+      "macro_overlay": "macro_risk_state=neutral"
+    },
+    {
+      "symbol": "SZ300308",
+      "name": "中际旭创",
+      "source": "hot_stocks",
+      "priority_score": 6.5,
+      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
+      "evidence": [
+        "hot_stock_rank"
+      ],
+      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
+      "price_risk": "OVERHEATED_WAIT_ENTRY",
+      "next_action": "读公告/研报和技术承接；不追高。",
+      "trade_execution": "disabled",
+      "macro_overlay": "macro_risk_state=neutral"
+    },
+    {
+      "symbol": "SZ002167",
+      "name": "东方锆业",
+      "source": "hot_stocks",
+      "priority_score": 6.5,
+      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
+      "evidence": [
+        "hot_stock_rank"
+      ],
+      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
+      "price_risk": "OVERHEATED_WAIT_ENTRY",
+      "next_action": "读公告/研报和技术承接；不追高。",
+      "trade_execution": "disabled",
+      "macro_overlay": "macro_risk_state=neutral"
+    },
+    {
+      "symbol": "SH601138",
+      "name": "工业富联",
+      "source": "hot_stocks",
+      "priority_score": 6.5,
+      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
+      "evidence": [
+        "hot_stock_rank"
+      ],
+      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
+      "price_risk": "OVERHEATED_WAIT_ENTRY",
+      "next_action": "读公告/研报和技术承接；不追高。",
+      "trade_execution": "disabled",
+      "macro_overlay": "macro_risk_state=neutral"
+    },
+    {
+      "symbol": "SH600392",
+      "name": "盛和资源",
+      "source": "hot_stocks",
+      "priority_score": 6.5,
+      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
+      "evidence": [
+        "hot_stock_rank"
+      ],
+      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
+      "price_risk": "OVERHEATED_WAIT_ENTRY",
+      "next_action": "读公告/研报和技术承接；不追高。",
+      "trade_execution": "disabled",
+      "macro_overlay": "macro_risk_state=neutral"
+    },
+    {
+      "symbol": "SZ000657",
+      "name": "中钨高新",
+      "source": "hot_stocks",
+      "priority_score": 6.5,
+      "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
+      "evidence": [
+        "hot_stock_rank"
+      ],
+      "verdict": "DEEP_REVIEW_WAIT_ENTRY",
+      "price_risk": "OVERHEATED_WAIT_ENTRY",
+      "next_action": "读公告/研报和技术承接；不追高。",
+      "trade_execution": "disabled",
+      "macro_overlay": "macro_risk_state=neutral"
+    }
+  ],
+  "watch_only": [
+    {
+      "symbol": "600519",
+      "name": "",
+      "source": "watchlist",
+      "priority_score": 4.0,
+      "evidence_quality": "LOW_WATCHLIST_EVIDENCE",
+      "evidence": [
+        "watchlist_member"
+      ],
+      "verdict": "WATCH_ONLY",
+      "price_risk": "NORMAL_RECHECK",
+      "next_action": "继续观察；等待公告/研报/市场热度/技术形态触发。",
+      "trade_execution": "disabled",
+      "macro_overlay": "macro_risk_state=neutral"
+    },
+    {
+      "symbol": "000858",
+      "name": "",
+      "source": "watchlist",
+      "priority_score": 4.0,
+      "evidence_quality": "LOW_WATCHLIST_EVIDENCE",
+      "evidence": [
+        "watchlist_member"
+      ],
+      "verdict": "WATCH_ONLY",
+      "price_risk": "NORMAL_RECHECK",
+      "next_action": "继续观察；等待公告/研报/市场热度/技术形态触发。",
+      "trade_execution": "disabled",
+      "macro_overlay": "macro_risk_state=neutral"
+    },
+    {
+      "symbol": "300750",
+      "name": "",
+      "source": "watchlist",
+      "priority_score": 4.0,
+      "evidence_quality": "LOW_WATCHLIST_EVIDENCE",
+      "evidence": [
+        "watchlist_member"
+      ],
+      "verdict": "WATCH_ONLY",
+      "price_risk": "NORMAL_RECHECK",
+      "next_action": "继续观察；等待公告/研报/市场热度/技术形态触发。",
+      "trade_execution": "disabled",
+      "macro_overlay": "macro_risk_state=neutral"
+    },
+    {
+      "symbol": "002594",
+      "name": "",
+      "source": "watchlist",
+      "priority_score": 4.0,
+      "evidence_quality": "LOW_WATCHLIST_EVIDENCE",
+      "evidence": [
+        "watchlist_member"
+      ],
+      "verdict": "WATCH_ONLY",
+      "price_risk": "NORMAL_RECHECK",
+      "next_action": "继续观察；等待公告/研报/市场热度/技术形态触发。",
+      "trade_execution": "disabled",
+      "macro_overlay": "macro_risk_state=neutral"
+    },
+    {
+      "symbol": "601318",
+      "name": "",
+      "source": "watchlist",
+      "priority_score": 4.0,
+      "evidence_quality": "LOW_WATCHLIST_EVIDENCE",
+      "evidence": [
+        "watchlist_member"
+      ],
+      "verdict": "WATCH_ONLY",
+      "price_risk": "NORMAL_RECHECK",
+      "next_action": "继续观察；等待公告/研报/市场热度/技术形态触发。",
+      "trade_execution": "disabled",
+      "macro_overlay": "macro_risk_state=neutral"
+    },
+    {
+      "symbol": "000001",
+      "name": "",
+      "source": "watchlist",
+      "priority_score": 4.0,
+      "evidence_quality": "LOW_WATCHLIST_EVIDENCE",
+      "evidence": [
+        "watchlist_member"
+      ],
+      "verdict": "WATCH_ONLY",
+      "price_risk": "NORMAL_RECHECK",
+      "next_action": "继续观察；等待公告/研报/市场热度/技术形态触发。",
+      "trade_execution": "disabled",
+      "macro_overlay": "macro_risk_state=neutral"
+    }
+  ],
+  "policy": {
+    "DEEP_REVIEW_NOW": "自动进入 governed 个股分析候选。",
+    "DEEP_REVIEW_WAIT_ENTRY": "值得跟踪，但等待承接/证据确认，不追高。",
+    "WATCH_ONLY": "只展示，不深跑。"
+  },
+  "protected_writeback": false,
+  "trade_execution": "disabled"
+}

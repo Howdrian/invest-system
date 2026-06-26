@@ -51,6 +51,10 @@ vi.mock('./pages/AlertsPage', () => ({
   default: () => <div data-testid="alerts-page">Alerts</div>,
 }));
 
+vi.mock('./pages/ReportsPage', () => ({
+  default: () => <div data-testid="reports-page">Reports</div>,
+}));
+
 vi.mock('./pages/SettingsPage', () => ({
   default: () => <div data-testid="settings-page">Settings</div>,
 }));
@@ -120,6 +124,16 @@ describe('App routing behavior', () => {
     expect(setCurrentRoute).toHaveBeenCalledWith('/chat');
     expect(screen.queryByTestId('login-page')).not.toBeInTheDocument();
     expect(screen.queryByTestId('home-page')).not.toBeInTheDocument();
+  });
+
+
+  it('renders reports route inside the shell', async () => {
+    window.history.pushState({}, '', '/reports');
+
+    render(<App />);
+
+    expect(await screen.findByTestId('reports-page')).toBeInTheDocument();
+    expect(setCurrentRoute).toHaveBeenCalledWith('/reports');
   });
 
   it('redirects authenticated login visits back to the home page', async () => {

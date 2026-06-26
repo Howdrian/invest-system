@@ -41,6 +41,10 @@ _OPERATION_ADVICE_CANONICAL_MAP = {
     "watch": "watch",
     "wait": "watch",
     "wait and see": "watch",
+    "阻断": "blocked",
+    "阻断 / 不操作 / 0%": "blocked",
+    "blocked": "blocked",
+    "no_action": "blocked",
     "减仓": "reduce",
     "reduce": "reduce",
     "trim": "reduce",
@@ -56,6 +60,7 @@ _OPERATION_ADVICE_TRANSLATIONS = {
     "buy": {"zh": "买入", "en": "Buy"},
     "hold": {"zh": "持有", "en": "Hold"},
     "watch": {"zh": "观望", "en": "Watch"},
+    "blocked": {"zh": "阻断 / 不操作 / 0%", "en": "Blocked / No Action / 0%"},
     "reduce": {"zh": "减仓", "en": "Reduce"},
     "sell": {"zh": "卖出", "en": "Sell"},
     "strong_sell": {"zh": "强烈卖出", "en": "Strong Sell"},
@@ -758,6 +763,8 @@ def get_signal_level(advice: Any, score: Any, language: Optional[str]) -> tuple[
         return (_OPERATION_ADVICE_TRANSLATIONS["hold"][normalized_language], "🟡", "hold")
     if canonical == "watch":
         return (_OPERATION_ADVICE_TRANSLATIONS["watch"][normalized_language], "⚪", "watch")
+    if canonical == "blocked":
+        return (_OPERATION_ADVICE_TRANSLATIONS["blocked"][normalized_language], "⛔", "blocked")
     if canonical == "reduce":
         return (_OPERATION_ADVICE_TRANSLATIONS["reduce"][normalized_language], "🟠", "reduce")
     if canonical in {"sell", "strong_sell"}:

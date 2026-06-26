@@ -90,7 +90,7 @@ def test_portfolio_holding_snapshot_falls_back_to_legacy_markdown(tmp_path, monk
     payload = build_portfolio_holding_snapshot(max_symbols=6, portfolio_service=_EmptyPortfolioService())
 
     assert payload["status"] == "available"
-    assert payload["source"] == "legacy_portfolio_md"
+    assert payload["source"] == "explicit_portfolio_file"
     assert payload["symbols"] == ["160644", "301013"]
     assert payload["governed_symbols"] == ["301013"]
     assert payload["light_review_symbols"] == ["160644"]
@@ -98,3 +98,15 @@ def test_portfolio_holding_snapshot_falls_back_to_legacy_markdown(tmp_path, monk
     assert payload["positions"][0]["type"] == "LOF/QDII基金"
     assert payload["positions"][0]["analysis_tier"] == "light_review_only"
     assert payload["positions"][1]["analysis_tier"] == "governed_deep_review"
+
+
+def test_portfolio_holding_snapshot_does_not_read_old_touyan_path_by_default(monkeypatch):
+    monkeypatch.delenv("PORTFOLIO_HOLDINGS", raising=False)
+    monkeypatch.delenv("PORTFOLIO_STOCK_LIST", raising=False)
+    monkeypatch.delenv("PORTFOLIO_HOLDINGS_FILE", raising=False)
+
+    payload = build_portfolio_holding_snapshot(max_symbols=6, portfolio_service=_EmptyPortfolioService())
+
+    assert payload["status"] == "empty"
+    assert payload["source"] == "portfolio_service"
+    assert payload["symbols"] == []

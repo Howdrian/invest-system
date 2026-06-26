@@ -200,11 +200,11 @@ class StockAnalysisPipeline:
         if self._governed_orchestrator is not None:
             return self._governed_orchestrator
 
+        from src.agent.factory import get_tool_registry
         from src.agent.llm_adapter import LLMToolAdapter
         from src.agent.orchestrator import AgentOrchestrator
-        from src.agent.factory import _get_registry
 
-        registry = _get_registry()
+        registry = get_tool_registry()
         llm_adapter = LLMToolAdapter(config=self.config)
         self._governed_orchestrator = AgentOrchestrator(
             tool_registry=registry,
@@ -318,6 +318,9 @@ class StockAnalysisPipeline:
                 "trade_plan": trade_plan,
             },
         }
+        from src.trade_decision_gate import apply_trade_decision_gate
+
+        apply_trade_decision_gate(result)
         return result
 
     def _run_governed_analysis(self, code, stock_name, enhanced_context, news_context,
@@ -335,6 +338,9 @@ class StockAnalysisPipeline:
             stock_code=code,
             stock_name=stock_name,
         )
+        run_date = os.getenv("ANALYSIS_RUN_DATE") or datetime.now().strftime("%Y-%m-%d")
+        ctx.meta["agent_memo_run_date"] = run_date
+        ctx.meta["agent_memo_output_dir"] = str(Path("reports") / "daily" / run_date)
         realtime_payload = self._safe_to_dict(realtime_quote) or enhanced_context.get("realtime", {})
         current_price = (
             realtime_payload.get("price")
@@ -382,6 +388,17 @@ class StockAnalysisPipeline:
         if analysis_context_pack_summary:
             ctx.meta["analysis_context_pack_summary"] = analysis_context_pack_summary
 
+        try:
+            from src.agent_memos import write_runtime_context_pack
+
+            write_runtime_context_pack(
+                ctx,
+                output_dir=ctx.meta["agent_memo_output_dir"],
+                run_date=run_date,
+            )
+        except Exception as exc:
+            logger.warning("[%s] failed to write runtime ContextPack memo: %s", code, exc)
+
         self._emit_progress(66, f"{stock_name}：治理层 RedBlue 红蓝对抗中...")
         orch_result = orchestrator._execute_pipeline(ctx, parse_dashboard=True)
 
@@ -408,6 +425,9 @@ class StockAnalysisPipeline:
             governance = d.get("governance") if isinstance(d, dict) else None
             if isinstance(governance, dict):
                 result._governance = governance
+            from src.trade_decision_gate import apply_trade_decision_gate
+
+            apply_trade_decision_gate(result)
             return result
 
         # Orchestrator may have failed at Decision stage but governance agents completed.
@@ -1412,6 +1432,36 @@ class StockAnalysisPipeline:
                 "report_language": report_language,
                 "fundamental_context": fundamental_context,
             }
+            if self._should_use_governed():
+                run_date = os.getenv("ANALYSIS_RUN_DATE") or datetime.now().strftime("%Y-%m-%d")
+                initial_context["agent_memo_run_date"] = run_date
+                initial_context["agent_memo_output_dir"] = str(Path("reports") / "daily" / run_date)
+                realtime_payload = self._safe_to_dict(realtime_quote) if realtime_quote else None
+                current_price = realtime_payload.get("price") if isinstance(realtime_payload, dict) else None
+                portfolio_context = self._build_governed_portfolio_context(
+                    code=code,
+                    current_price=current_price,
+                )
+                if portfolio_context:
+                    initial_context["portfolio_context"] = portfolio_context
+                macro_context = self._build_governed_macro_context()
+                if macro_context:
+                    initial_context["macro_context"] = macro_context
+                market_heat_context = self._build_governed_market_heat_context()
+                if market_heat_context:
+                    initial_context["market_heat_context"] = market_heat_context
+                macro_review_context = self._build_governed_macro_review_context(
+                    macro_context=macro_context,
+                    market_heat_context=market_heat_context,
+                )
+                if macro_review_context:
+                    initial_context["macro_review"] = macro_review_context
+                event_context = self._build_governed_event_context(
+                    macro_review_context=macro_review_context,
+                    market_heat_context=market_heat_context,
+                )
+                if event_context:
+                    initial_context["event_context"] = event_context
             if self.analysis_skills is not None:
                 initial_context["skills"] = self.analysis_skills
             if market_phase_context is not None:
@@ -1784,6 +1834,9 @@ class StockAnalysisPipeline:
                 if isinstance(result.dashboard, dict) and "governance" not in result.dashboard:
                     result.dashboard["governance"] = governance
             self._backfill_agent_dashboard_fields(result, trend_result, report_language)
+            from src.trade_decision_gate import apply_trade_decision_gate
+
+            apply_trade_decision_gate(result)
         else:
             self._apply_trend_fallback(result, trend_result, report_language)
             if trend_result is not None:

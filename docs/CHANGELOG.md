@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 <!-- 新条目格式：- [类型] 描述（类型取值：新功能/改进/修复/文档/测试/chore）-->
 <!-- 每条独立一行追加到本段末尾，无需分类标题，合并时冲突最小 -->
+- [改进] 统一每日 ReportArtifact 作为 Web Reports 与 GitHub Pages 的报告数据包，静态发布优先读取 `docs/reports/{date}.artifact.json`，并将旧日报/个股入口收口为兼容入口。
+- [改进] 投研 Agent 卷宗新增 EvidencePack v1、source attempts 与 LIMITED_EVIDENCE 语义，信息源不足时产出有限信息报告并清洗 blocked 报告交易动作话术。
 - [改进] `scripts/fetch_tushare_stock_list.py` 可对 A 股中带 `XD`/`XR`/`DR`/`N`/`C` 前缀的名称进行回填修正，供自动补全刷新流程默认使用。
 - [修复] 股票自动补全索引生成缺少 `pypinyin` 时改为直接失败，避免写出缺失拼音字段的降级索引。
 - [修复] 归一腾讯实时行情成交量为股口径，避免量能变化倍数被放大并误导分析报告。
@@ -62,6 +64,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - [修复] GitHub Actions governed 个股分析改为校验当天报告和当天结构化结果，避免旧报告混入今日日报或 LLM 失败仍标记 success。
 - [改进] 宏观 review 接入 HYG/LQD、IWM/SPY、SPY/TLT、XLY/XLP 四组 ETF proxy，减少六因子 regime 的无谓缺项。
 - [改进] 每日 governed 选股接入持仓池，优先读取持仓 DB，并支持 `PORTFOLIO_HOLDINGS` 云端变量与本地 `投研/state/portfolio.md` 兜底；持仓优先进入个股分析，机会候选补位，自选池仅作 fallback。
+- [新功能] 新增 Agent 卷宗生成器与静态 Pages 七板块报告中心，将 source review、宏观地缘、候选池、持仓复核、个股 governed、Evidence Gate、Trade Decision Gate 和数据源补全计划统一发布为 HTML/Markdown/JSON。
+- [改进] Agent 卷宗新增 RAW/DERIVED/MISSING 真实性标注，数据源页改为按板块的人读报告，并修正 BLOCKED_BY_FATAL/评分展示避免误导交易动作。
+- [新功能] governed 运行时新增 EvidenceGateAgent，并在每个真实 Agent stage 完成后落盘 RAW_AGENT memo；日报发布在 governed 成功但 RAW_AGENT 为 0 时失败，防止回填审计伪装成真实 Agent 输出。
+- [新功能] 新增 Pages bundle 验证器，发布后校验必需文件、静态链接、乱码、RAW_AGENT 计数和 fatal gate 展示一致性。
+- [修复] governed fatal/score<6 报告不再计入“观望”，统一展示为“阻断 / 不操作 / 0%”。
+- [修复] governed direct path 改用公开 tool registry，并在最终写入前统一执行 TradeDecisionGate 硬门控，阻断/低分/证据不足均强制不操作与 0% 仓位。
+- [新功能] 新增 ReportArtifact v1 统一报告契约、报告 artifacts API 与 Web `/reports` 报告入口，Web/App 与静态 docs 共用同一报告中间层。
+- [改进] GitHub Actions governed 深评选股改用 `select_governed_symbols` 纯函数，并限制只有 main 分支发布 Pages，feature branch 手动运行仅上传 artifact。
+- [修复] 静态 Pages 报告中心改为发布面，移除旧 Dashboard/工程状态话术，读者区不再暴露 `no_action`、`RAW_AGENT`、`BLOCKED_BY_FATAL` 等 raw 枚举。
+- [改进] source health 升级决策级字段，Polymarket 无匹配场景、宏观覆盖不足和持仓输入缺失均明确降级原因与交易审查影响。
+- [测试] 补齐 ReportArtifact、TradeDecisionGate、governed direct path、Pages 语义校验、Polymarket/macro/source health 与 governed selection 回归测试。
 
 ## [3.18.0] - 2026-05-21
 

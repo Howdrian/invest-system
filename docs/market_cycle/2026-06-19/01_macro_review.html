@@ -1,0 +1,59 @@
+<!doctype html><html lang='zh-CN'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>宏观与地缘融合</title><style>
+:root{--bg:#0b1020;--card:#121a2b;--line:#26344f;--text:#edf2ff;--muted:#9aa8c7;--accent:#7dd3fc;--red:#fb7185;--yellow:#facc15;--green:#86efac}
+*{box-sizing:border-box}body{margin:0;background:linear-gradient(135deg,#08101f,#111827);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.65}
+main{max-width:1120px;margin:0 auto;padding:28px}a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+h1{font-size:32px;margin:.2em 0 .4em}h2{font-size:23px;margin:1.1em 0 .5em;color:#cfe0ff}h3{font-size:18px;margin:1em 0 .35em;color:#dbeafe}
+.hero,.card,.flow-card{border:1px solid var(--line);background:rgba(18,26,43,.94);border-radius:22px;padding:20px;margin:16px 0}.hero{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:16px}
+.muted,small{color:var(--muted)}.kpi{border-left:1px solid var(--line);padding-left:16px}.kpi b{display:block;font-size:24px;color:var(--accent)}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.pill{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:3px 10px;margin:2px 4px 2px 0;font-size:12px;color:#dbeafe;background:#0f172a}
+.flow-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.flow-card{margin:0}.flow-card h3{margin-top:0}.flow-row{border-top:1px solid #22304a;padding:10px 0}.flow-row:first-of-type{border-top:0}.flow-label{display:block;color:#9db2d5;font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:4px}.raw-report{opacity:.92}.raw-report h1:first-child{font-size:24px}
+.warn{color:var(--yellow)}.bad{color:var(--red)}.good{color:var(--green)}
+table{width:100%;border-collapse:collapse;margin:12px 0}th,td{border-bottom:1px solid #23304a;padding:9px;text-align:left;vertical-align:top}th{color:#9db2d5;font-size:12px;text-transform:uppercase}
+blockquote{border-left:4px solid var(--accent);margin:12px 0;padding:8px 14px;background:#0f172a;color:#dbeafe}
+code{background:#0f172a;border:1px solid #1f2a44;border-radius:5px;padding:1px 5px}pre{overflow:auto;background:#0f172a;border:1px solid #1f2a44;border-radius:12px;padding:14px}
+ul,ol{padding-left:24px}.toc a{display:inline-block;margin:4px 8px 4px 0;padding:6px 10px;border:1px solid var(--line);border-radius:9px;background:#0f172a}
+.footer{margin-top:28px;color:var(--muted);font-size:13px}
+@media(max-width:900px){.hero,.grid,.grid3,.flow-grid{grid-template-columns:1fr}.kpi{border-left:0;padding-left:0}}
+</style></head><body><main><p class='muted'>docs/market_cycle/2026-06-19/01_macro_review.md</p>
+<article class="flow-card">
+  <h3>阅读摘要：宏观与地缘融合</h3>
+  <div class="flow-row"><span class="flow-label">信息源</span>官方宏观入口 + 六因子 regime + Polymarket 只读概率</div>
+  <div class="flow-row"><span class="flow-label">关键数据</span>状态=DEGRADED；置信=LOW_TO_MEDIUM；宏观中性，等待价格和证据共振；VIX neutral: 16.94</div>
+  <div class="flow-row"><span class="flow-label">推论</span>宏观不满血：缺增长、通胀、信用/轮动等关键因子，只能给风险温度。</div>
+  <div class="flow-row"><span class="flow-label">分析结论</span>宏观中性观察；不作为买卖触发器。</div>
+  <div class="flow-row"><span class="flow-label">下一步</span>补宏观源，再让 MacroAgent 读取完整 macro review。</div>
+</article>
+<details class='card raw-report'><summary>查看模块正文</summary><h1>Macro Review — 2026-06-19</h1>
+<ul>
+<li>Status: <code>DEGRADED</code></li>
+<li>Confidence: <code>LOW_TO_MEDIUM</code></li>
+<li>Prediction market: <code>available</code></li>
+<li>Boundary: review-only; no trade execution; no scoring gate bypass.</li>
+</ul>
+<h2>主结论</h2>
+<p>宏观中性，等待价格和证据共振；VIX neutral: 16.94</p>
+<h2>宏观四维度 / 风险温度</h2>
+<table><thead><tr><th>Dimension</th><th>Status</th><th>Signal</th><th>Evidence</th></tr></thead><tbody><tr><td><code>growth</code></td><td><code>degraded</code></td><td><code>unknown</code></td><td>GDP/PMI/employment official extensions not yet fully wired in invest-system.</td></tr><tr><td><code>inflation</code></td><td><code>degraded</code></td><td><code>unknown</code></td><td>CPI/PCE/EIA/FRED extension points pending; use original 投研 source as migration reference.</td></tr><tr><td><code>rates_liquidity</code></td><td><code>available_limited</code></td><td><code>neutral_or_unknown</code></td><td>官方宏观源刷新入口已接入；无 key 时只提供降级上下文。</td></tr><tr><td><code>energy_commodities</code></td><td><code>degraded</code></td><td><code>watch</code></td><td>WTI/EIA/FRED not fully wired; Polymarket energy scenarios can only be optional hints.</td></tr><tr><td><code>usd_fx</code></td><td><code>missing</code></td><td><code>unknown</code></td><td>DXY/USD/CNH not wired in v1.</td></tr><tr><td><code>risk_appetite</code></td><td><code>degraded</code></td><td><code>neutral</code></td><td>VIX neutral: 16.94</td></tr><tr><td><code>market_heat</code></td><td><code>available</code></td><td><code>watchlist_or_hotspot</code></td><td>focus_items=26</td></tr></tbody></table>
+<h2>6 因子 Regime</h2>
+<ul>
+<li>Risk state: <code>neutral</code></li>
+<li>Six-factor status: <code>DEGRADED</code></li>
+<li>Reason: VIX neutral: 16.94</li>
+<li>Boundary: 六因子缺项时只作为宏观降级判断，不冒充满血 Regime。</li>
+</ul>
+<h2>地缘四场景 / Polymarket 融合</h2>
+<table><thead><tr><th>Scenario</th><th>Internal</th><th>Market</th><th>Weight</th><th>Fused</th><th>Red Team</th></tr></thead><tbody><tr><td>A 管控下降</td><td>30.0%</td><td>-</td><td>0%</td><td>35.0%</td><td><code>False</code></td></tr><tr><td>B 危机级联</td><td>40.0%</td><td>-</td><td>0%</td><td>35.0%</td><td><code>False</code></td></tr><tr><td>C 大国冲突</td><td>20.0%</td><td>-</td><td>0%</td><td>15.0%</td><td><code>False</code></td></tr><tr><td>D 核武尾部</td><td>10.0%</td><td>-</td><td>0%</td><td>10.0%</td><td><code>False</code></td></tr></tbody></table>
+<h2>对资产/候选池影响</h2>
+<ul>
+<li>维持观察，等待宏观、板块和个股证据共振。</li>
+<li>Polymarket 和宏观只影响候选优先级、风险预算和红队问题，不直接交易。</li>
+</ul>
+<h2>Data gaps</h2>
+<ul>
+<li><code>macro_context_not_refreshed</code></li>
+<li><code>six_factor_missing:credit_conditions</code></li>
+<li><code>six_factor_missing:size_factor</code></li>
+<li><code>six_factor_missing:equity_bond</code></li>
+<li><code>six_factor_missing:sector_rotation</code></li>
+</ul></details><p class='footer'>Generated by invest-system · report-only · no trade execution</p></main></body></html>

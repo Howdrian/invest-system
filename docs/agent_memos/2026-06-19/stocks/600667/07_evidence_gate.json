@@ -1,0 +1,108 @@
+{
+  "schema": "agent_memo_v1",
+  "agent": "EvidenceGate",
+  "scope": "stock",
+  "symbol": "600667",
+  "status": "PASS",
+  "origin": "RAW_AGENT",
+  "origin_label": "真实 Agent 输出",
+  "facts": [
+    "signal=hold",
+    "confidence=0.7",
+    "status=PASS",
+    "missing_evidence=[]",
+    "warnings=[\"macro_review_degraded\"]",
+    "fatal_objection=False",
+    "opinions=macro,technical,intel,risk",
+    "missing_evidence_count=0",
+    "risk_flags=6",
+    "macro_status=DEGRADED"
+  ],
+  "reasoning": [
+    "核心证据可进入红蓝对抗，仍需评分和 TradeDecisionGate 门控。",
+    "EvidenceGate 只判断证据是否足够进入红蓝对抗，不产生交易动作。",
+    "缺少技术/行情核心证据会标记 NEEDS_EVIDENCE；高严重度风险会升级为 BLOCKED。",
+    "降级项：macro_review_degraded"
+  ],
+  "conclusion": "核心证据可进入红蓝对抗，仍需评分和 TradeDecisionGate 门控。",
+  "missing_data": [],
+  "source_refs": [
+    "runtime:agent_opinions",
+    "runtime:risk_flags",
+    "market_cycle/2026-06-19/13_source_health.json"
+  ],
+  "fatal_objection": false,
+  "next_step": "证据可进入红蓝；缺口由后续治理层保守处理。",
+  "readable_summary": "核心证据可进入红蓝对抗，仍需评分和 TradeDecisionGate 门控。",
+  "evidence_blocks": [
+    {
+      "claim": "核心证据可进入红蓝对抗，仍需评分和 TradeDecisionGate 门控。",
+      "data": "signal=hold；confidence=0.7；status=PASS；missing_evidence=[]",
+      "source": "runtime:agent_opinions；runtime:risk_flags；market_cycle/2026-06-19/13_source_health.json",
+      "inference": "核心证据可进入红蓝对抗，仍需评分和 TradeDecisionGate 门控。；EvidenceGate 只判断证据是否足够进入红蓝对抗，不产生交易动作。"
+    }
+  ],
+  "audit_detail": {
+    "schema": "agent_memo_v1",
+    "origin": "RAW_AGENT",
+    "stage_name": "evidence_gate",
+    "status": "PASS",
+    "raw_untrusted": true,
+    "raw_data": {
+      "schema": "evidence_gate_v1",
+      "stock": "600667",
+      "status": "PASS",
+      "facts": [
+        "opinions=macro,technical,intel,risk",
+        "missing_evidence_count=0",
+        "risk_flags=6",
+        "macro_status=DEGRADED"
+      ],
+      "reasoning": [
+        "EvidenceGate 只判断证据是否足够进入红蓝对抗，不产生交易动作。",
+        "缺少技术/行情核心证据会标记 NEEDS_EVIDENCE；高严重度风险会升级为 BLOCKED。",
+        "降级项：macro_review_degraded"
+      ],
+      "conclusion": "核心证据可进入红蓝对抗，仍需评分和 TradeDecisionGate 门控。",
+      "missing_evidence": [],
+      "warnings": [
+        "macro_review_degraded"
+      ],
+      "fatal_objection": false,
+      "high_risk_flags": [],
+      "no_trade_execution": true
+    },
+    "raw_text": "{\n  \"schema\": \"evidence_gate_v1\",\n  \"stock\": \"600667\",\n  \"status\": \"PASS\",\n  \"facts\": [\n    \"opinions=macro,technical,intel,risk\",\n    \"missing_evidence_count=0\",\n    \"risk_flags=6\",\n    \"macro_status=DEGRADED\"\n  ],\n  \"reasoning\": [\n    \"EvidenceGate 只判断证据是否足够进入红蓝对抗，不产生交易动作。\",\n    \"缺少技术/行情核心证据会标记 NEEDS_EVIDENCE；高严重度风险会升级为 BLOCKED。\",\n    \"降级项：macro_review_degraded\"\n  ],\n  \"conclusion\": \"核心证据可进入红蓝对抗，仍需评分和 TradeDecisionGate 门控。\",\n  \"missing_evidence\": [],\n  \"warnings\": [\n    \"macro_review_degraded\"\n  ],\n  \"fatal_objection\": false,\n  \"high_risk_flags\": [],\n  \"no_trade_execution\": true\n}",
+    "tokens_used": 0,
+    "tool_calls_count": 0,
+    "models_used": [
+      "deterministic/evidence_gate"
+    ]
+  },
+  "no_trade_execution": true,
+  "evidence_pack": {
+    "schema": "evidence_pack_v1",
+    "scope": "stock",
+    "symbol": "600667",
+    "source_attempts": [],
+    "evidence_items": [
+      {
+        "claim": "核心证据可进入红蓝对抗，仍需评分和 TradeDecisionGate 门控。",
+        "data": "signal=hold；confidence=0.7；status=PASS；missing_evidence=[]",
+        "source": "runtime:agent_opinions；runtime:risk_flags；market_cycle/2026-06-19/13_source_health.json",
+        "inference": "核心证据可进入红蓝对抗，仍需评分和 TradeDecisionGate 门控。；EvidenceGate 只判断证据是否足够进入红蓝对抗，不产生交易动作。"
+      }
+    ],
+    "missing_evidence": [],
+    "evidence_level": "PARTIAL",
+    "confidence": "medium",
+    "limited_report": false,
+    "can_go_redblue": true,
+    "can_trade_review": false,
+    "no_trade_execution": true
+  },
+  "evidence_level": "PARTIAL",
+  "source_attempts": [],
+  "limited_report": false,
+  "confidence": "medium"
+}

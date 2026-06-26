@@ -1,0 +1,131 @@
+{
+  "schema": "agent_memo_v1",
+  "agent": "ScoringAgent",
+  "scope": "stock",
+  "symbol": "300308",
+  "status": "BLOCKED",
+  "origin": "RAW_AGENT",
+  "origin_label": "有限证据 Agent 输出",
+  "facts": [
+    "signal=hold",
+    "confidence=0.05",
+    "total_score=0.5",
+    "gate_result=BLOCKED",
+    "position_size_range=0%",
+    "cannot_trade_reasons=[\"总分低于6.0分，不符合交易条件。\", \"EvidenceGate已触发致命阻断，存在高严重度风险。\", \"股价严重高估，基本面数据缺失，风险/回报比极差。\", \"技术指标严重超买，乖离率过高，不宜追高。\"]"
+  ],
+  "reasoning": [
+    "Score 0.5/10 [fundamental_strength: 0.0/2, catalyst_clarity: 0.5/2, risk_reward_ratio: 0.0/2, timing: 0.0/2, red_team_inverse: 0.0/2]. Gate: BLOCKED. 0%",
+    "评分 < 6.0 时强制 no_action / 0%。"
+  ],
+  "conclusion": "评分 0.5/10，gate=BLOCKED；阻断交易动作。",
+  "missing_data": [
+    "总分低于6.0分，不符合交易条件。",
+    "EvidenceGate已触发致命阻断，存在高严重度风险。",
+    "股价严重高估，基本面数据缺失，风险/回报比极差。",
+    "技术指标严重超买，乖离率过高，不宜追高。"
+  ],
+  "source_refs": [
+    "runtime:red_blue_result",
+    "runtime:agent_opinions"
+  ],
+  "fatal_objection": true,
+  "next_step": "不执行交易动作；先解决阻断原因后重新审查。",
+  "readable_summary": "阻断：有限证据 Agent 输出。评分 0.5/10，gate=BLOCKED；阻断交易动作。",
+  "evidence_blocks": [
+    {
+      "claim": "评分 0.5/10，gate=BLOCKED；阻断交易动作。",
+      "data": "signal=hold；confidence=0.05；total_score=0.5；gate_result=BLOCKED",
+      "source": "runtime:red_blue_result；runtime:agent_opinions",
+      "inference": "Score 0.5/10 [fundamental_strength: 0.0/2, catalyst_clarity: 0.5/2, risk_reward_ratio: 0.0/2, timing: 0.0/2, red_team_inverse: 0.0/2]. Gate: BLOCKED. 0%；评分 < 6.0 时强制 no_action / 0%。"
+    }
+  ],
+  "audit_detail": {
+    "schema": "agent_memo_v1",
+    "origin": "RAW_AGENT",
+    "stage_name": "scoring",
+    "status": "BLOCKED",
+    "raw_untrusted": true,
+    "raw_data": {
+      "stock": "300308",
+      "scores": {
+        "fundamental_strength": {
+          "score": 0.0,
+          "rationale": "估值极高 (PE 102.05, PB 44.04)，且关键基本面数据（如增长、盈利、现金流等）缺失或获取失败，无法评估公司实际的财务状况和增长潜力。在缺乏基本面支撑的情况下，高估值本身就是重大风险，红队也明确指出缺乏基本面支撑的行业叙事，概念炒作可能透支未来业绩。"
+        },
+        "catalyst_clarity": {
+          "score": 0.5,
+          "rationale": "存在AI、算力、CPO等概念驱动，但具体催化剂（如技术突破、业绩预告）的时间窗口不明确或过于宽泛（如2025年报），且缺乏具体的基本面数据支撑这些概念能够转化为实际业绩增长。红队质疑概念炒作透支未来业绩的风险，且2025年报预增概念可能基于过时信息。"
+        },
+        "risk_reward_ratio": {
+          "score": 0.0,
+          "rationale": "未提供明确的目标价和止损价，无法计算风险/回报比。然而，红队强调股价严重高估且技术指标过热，存在巨大回调风险，暗示风险/回报比极不划算。EvidenceGate也因高估值风险触发了“致命阻断”。",
+          "upside_pct": 0,
+          "downside_pct": 0,
+          "ratio": 0.0
+        },
+        "timing": {
+          "score": 0.0,
+          "rationale": "股价在上一交易日大幅上涨7.19%，且技术指标显示严重超买（RSI超70）和乖离率过高（bias_ma5 8.8%），明确提示“严禁追高”，短期回调风险极高。当前时机属于追涨行为。"
+        },
+        "red_team_inverse": {
+          "score": 0.0,
+          "rationale": "红队提出了多项严重风险，包括股价严重高估（PE 102.05, PB 44.04）、技术指标过热（RSI超买、乖离率过高）以及关键基本面数据缺失导致概念炒作缺乏支撑等，并提供了强有力证据。蓝队未能提供任何反驳。EvidenceGate也因高估值风险触发了“致命阻断”。",
+          "red_team_severity": "critical"
+        }
+      },
+      "total_score": 0.5,
+      "gate_result": "BLOCKED",
+      "position_size_range": "0%",
+      "key_assumptions": [
+        "关键基本面数据缺失，无法有效评估公司价值。",
+        "红队对估值过高和技术指标过热的判断是准确的。",
+        "蓝队未能提供任何有效反驳，表明其论点存在严重缺陷或证据不足。"
+      ],
+      "stop_loss_hint": "鉴于当前股价严重高估且乖离率过高，存在短期回调风险，应避免追高。若已持仓，建议密切关注5日均线和10日均线支撑，一旦有效跌破，应考虑止损以规避进一步风险。",
+      "cannot_trade_reasons": [
+        "总分低于6.0分，不符合交易条件。",
+        "EvidenceGate已触发致命阻断，存在高严重度风险。",
+        "股价严重高估，基本面数据缺失，风险/回报比极差。",
+        "技术指标严重超买，乖离率过高，不宜追高。"
+      ]
+    },
+    "raw_text": "```json\n{\n  \"stock\": \"300308\",\n  \"scores\": {\n    \"fundamental_strength\": {\n      \"score\": 0.0,\n      \"rationale\": \"估值极高 (PE 102.05, PB 44.04)，且关键基本面数据（如增长、盈利、现金流等）缺失或获取失败，无法评估公司实际的财务状况和增长潜力。在缺乏基本面支撑的情况下，高估值本身就是重大风险，红队也明确指出缺乏基本面支撑的行业叙事，概念炒作可能透支未来业绩。\"\n    },\n    \"catalyst_clarity\": {\n      \"score\": 0.5,\n      \"rationale\": \"存在AI、算力、CPO等概念驱动，但具体催化剂（如技术突破、业绩预告）的时间窗口不明确或过于宽泛（如2025年报），且缺乏具体的基本面数据支撑这些概念能够转化为实际业绩增长。红队质疑概念炒作透支未来业绩的风险，且2025年报预增概念可能基于过时信息。\"\n    },\n    \"risk_reward_ratio\": {\n      \"score\": 0.0,\n      \"rationale\": \"未提供明确的目标价和止损价，无法计算风险/回报比。然而，红队强调股价严重高估且技术指标过热，存在巨大回调风险，暗示风险/回报比极不划算。EvidenceGate也因高估值风险触发了“致命阻断”。\",\n      \"upside_pct\": 0,\n      \"downside_pct\": 0,\n      \"ratio\": 0.0\n    },\n    \"timing\": {\n      \"score\": 0.0,\n      \"rationale\": \"股价在上一交易日大幅上涨7.19%，且技术指标显示严重超买（RSI超70）和乖离率过高（bias_ma5 8.8%），明确提示“严禁追高”，短期回调风险极高。当前时机属于追涨行为。\"\n    },\n    \"red_team_inverse\": {\n      \"score\": 0.0,\n      \"rationale\": \"红队提出了多项严重风险，包括股价严重高估（PE 102.05, PB 44.04）、技术指标过热（RSI超买、乖离率过高）以及关键基本面数据缺失导致概念炒作缺乏支撑等，并提供了强有力证据。蓝队未能提供任何反驳。EvidenceGate也因高估值风险触发了“致命阻断”。\",\n      \"red_team_severity\": \"critical\"\n    }\n  },\n  \"total_score\": 0.5,\n  \"gate_result\": \"BLOCKED\",\n  \"position_size_range\": \"0%\",\n  \"key_assumptions\": [\n    \"关键基本面数据缺失，无法有效评估公司价值。\",\n    \"红队对估值过高和技术指标过热的判断是准确的。\",\n    \"蓝队未能提供任何有效反驳，表明其论点存在严重缺陷或证据不足。\"\n  ],\n  \"stop_loss_hint\": \"鉴于当前股价严重高估且乖离率过高，存在短期回调风险，应避免追高。若已持仓，建议密切关注5日均线和10日均线支撑，一旦有效跌破，应考虑止损以规避进一步风险。\",\n  \"cannot_trade_reasons\": [\n    \"总分低于6.0分，不符合交易条件。\",\n    \"EvidenceGate已触发致命阻断，存在高严重度风险。\",\n    \"股价严重高估，基本面数据缺失，风险/回报比极差。\",\n    \"技术指标严重超买，乖离率过高，不宜追高。\"\n  ]\n}\n```",
+    "tokens_used": 19370,
+    "tool_calls_count": 0,
+    "models_used": [
+      "vertex_ai/gemini-2.5-flash"
+    ]
+  },
+  "no_trade_execution": true,
+  "evidence_pack": {
+    "schema": "evidence_pack_v1",
+    "scope": "stock",
+    "symbol": "300308",
+    "source_attempts": [],
+    "evidence_items": [
+      {
+        "claim": "评分 0.5/10，gate=BLOCKED；阻断交易动作。",
+        "data": "signal=hold；confidence=0.05；total_score=0.5；gate_result=BLOCKED",
+        "source": "runtime:red_blue_result；runtime:agent_opinions",
+        "inference": "Score 0.5/10 [fundamental_strength: 0.0/2, catalyst_clarity: 0.5/2, risk_reward_ratio: 0.0/2, timing: 0.0/2, red_team_inverse: 0.0/2]. Gate: BLOCKED. 0%；评分 < 6.0 时强制 no_action / 0%。"
+      }
+    ],
+    "missing_evidence": [
+      "总分低于6.0分，不符合交易条件。",
+      "EvidenceGate已触发致命阻断，存在高严重度风险。",
+      "股价严重高估，基本面数据缺失，风险/回报比极差。",
+      "技术指标严重超买，乖离率过高，不宜追高。"
+    ],
+    "evidence_level": "LIMITED",
+    "confidence": "low",
+    "limited_report": true,
+    "can_go_redblue": false,
+    "can_trade_review": false,
+    "no_trade_execution": true
+  },
+  "evidence_level": "LIMITED",
+  "source_attempts": [],
+  "limited_report": true,
+  "confidence": "low"
+}

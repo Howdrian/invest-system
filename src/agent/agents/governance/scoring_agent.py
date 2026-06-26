@@ -2,7 +2,7 @@
 """
 ScoringAgent — 5-dimension scoring card with hard gate at < 6.0.
 
-Based on invest-brain ``agents/scoring-card.md``.
+Based on the local governed scoring-card protocol.
 
 Dimensions:
 1. Fundamental Strength (0-2)

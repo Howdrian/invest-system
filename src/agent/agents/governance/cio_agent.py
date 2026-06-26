@@ -2,7 +2,7 @@
 """
 CioAgent — Chief Investment Officer synthesis agent.
 
-Based on invest-brain ``agents/chief-investment-officer.md``.
+Based on the local governed CIO review protocol.
 
 Role: aggregate all sub-agent memos and decide whether the analysis
 can proceed to the next stage. CIO may output an investment judgement

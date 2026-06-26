@@ -1,0 +1,65 @@
+# ContextPack — 300308
+
+## 一句话结论
+这是 governed 个股分析的运行时共享证据包；所有后续 Agent 只能在这些证据基础上推理。
+
+## 关键数据
+- data_keys=event_context,fundamental_context,macro_context,macro_review,market_heat_context,portfolio_context,realtime_quote,trend_result
+- has_macro_review=True
+- has_market_heat_context=True
+- has_event_context=True
+- has_portfolio_context=True
+- price=1367.88
+- quote_source=tushare
+
+## 审计详情
+```json
+{
+  "schema": "context_pack_v1",
+  "origin": "真实 Agent",
+  "run_date": "2026-06-19",
+  "symbol": "300308",
+  "name": "中际旭创",
+  "facts": [
+    "data_keys=event_context,fundamental_context,macro_context,macro_review,market_heat_context,portfolio_context,realtime_quote,trend_result",
+    "has_macro_review=True",
+    "has_market_heat_context=True",
+    "has_event_context=True",
+    "has_portfolio_context=True",
+    "price=1367.88",
+    "quote_source=tushare"
+  ],
+  "data_keys": [
+    "event_context",
+    "fundamental_context",
+    "macro_context",
+    "macro_review",
+    "market_heat_context",
+    "portfolio_context",
+    "realtime_quote",
+    "trend_result"
+  ],
+  "source_refs": [
+    "market_cycle/2026-06-19/01_macro_review.json",
+    "market_cycle/2026-06-19/13_source_health.json",
+    "market_cycle/2026-06-19/11_deep_review_queue.json"
+  ],
+  "macro_status": "DEGRADED",
+  "portfolio_context": {
+    "source": "invest-system DB",
+    "status": "available",
+    "as_of": "2026-06-19",
+    "currency": "CNY",
+    "account_count": 0,
+    "total_equity": 0.0,
+    "available_cash": 0.0,
+    "total_market_value": 0.0,
+    "current_price": 1367.88,
+    "has_position": false,
+    "target_market_value": 0.0,
+    "target_positions": [],
+    "top_positions": []
+  },
+  "no_trade_execution": true
+}
+```

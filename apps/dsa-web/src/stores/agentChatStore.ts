@@ -101,10 +101,19 @@ interface AgentChatActions {
   startStream: (payload: ChatStreamRequest, meta?: StreamMeta) => Promise<void>;
 }
 
-const getInitialSessionId = (): string =>
-  typeof localStorage !== 'undefined'
-    ? localStorage.getItem(STORAGE_KEY_SESSION) || generateUUID()
-    : generateUUID();
+const getBrowserStorage = (): Storage | null => {
+  if (typeof localStorage === 'undefined') return null;
+  if (typeof localStorage.getItem !== 'function' || typeof localStorage.setItem !== 'function') return null;
+  return localStorage;
+};
+
+const getStoredSessionId = (): string | null => getBrowserStorage()?.getItem(STORAGE_KEY_SESSION) || null;
+
+const setStoredSessionId = (sessionId: string): void => {
+  getBrowserStorage()?.setItem(STORAGE_KEY_SESSION, sessionId);
+};
+
+const getInitialSessionId = (): string => getStoredSessionId() || generateUUID();
 
 export const useAgentChatStore = create<AgentChatState & AgentChatActions>((set, get) => ({
   messages: [],
@@ -144,7 +153,7 @@ export const useAgentChatStore = create<AgentChatState & AgentChatActions>((set,
       const sessionList = await agentApi.getChatSessions();
       set({ sessions: sessionList });
 
-      const savedId = localStorage.getItem(STORAGE_KEY_SESSION);
+      const savedId = getStoredSessionId();
       if (savedId) {
         const sessionExists = sessionList.some((s) => s.session_id === savedId);
         if (sessionExists) {
@@ -161,10 +170,10 @@ export const useAgentChatStore = create<AgentChatState & AgentChatActions>((set,
         } else {
           const newId = generateUUID();
           set({ sessionId: newId });
-          localStorage.setItem(STORAGE_KEY_SESSION, newId);
+          setStoredSessionId(newId);
         }
       } else {
-        localStorage.setItem(STORAGE_KEY_SESSION, get().sessionId);
+        setStoredSessionId(get().sessionId);
       }
     } catch {
       // Ignore
@@ -186,7 +195,7 @@ export const useAgentChatStore = create<AgentChatState & AgentChatActions>((set,
       chatError: null,
       abortController: null,
     });
-    localStorage.setItem(STORAGE_KEY_SESSION, targetSessionId);
+    setStoredSessionId(targetSessionId);
 
     try {
       const msgs = await agentApi.getChatSessionMessages(targetSessionId);
@@ -217,7 +226,7 @@ export const useAgentChatStore = create<AgentChatState & AgentChatActions>((set,
       chatError: null,
       abortController: null,
     });
-    localStorage.setItem(STORAGE_KEY_SESSION, newId);
+    setStoredSessionId(newId);
   },
 
   startStream: async (payload, meta) => {

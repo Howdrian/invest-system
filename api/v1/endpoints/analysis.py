@@ -63,6 +63,7 @@ from src.core.market_review_runtime import (
     build_market_review_runtime as _runtime_build_market_review_runtime,
 )
 from src.report_language import get_localized_stock_name, normalize_report_language
+from src.report_artifact import build_stock_artifact_from_history_detail
 from src.services.name_to_code_resolver import resolve_name_to_code
 from src.services.stock_code_utils import is_code_like
 from src.services.task_queue import (
@@ -939,6 +940,21 @@ def get_analysis_status(task_id: str) -> TaskStatus:
                 )
 
             # Build report from DB record so completed tasks return real data
+            detail_for_artifact = {
+                "id": record.id,
+                "query_id": task_id,
+                "stock_code": record.code,
+                "stock_name": stock_name,
+                "report_type": getattr(record, 'report_type', None),
+                "created_at": record.created_at.isoformat() if record.created_at else None,
+                "analysis_summary": record.analysis_summary,
+                "operation_advice": record.operation_advice,
+                "trend_prediction": record.trend_prediction,
+                "sentiment_score": record.sentiment_score,
+                "raw_result": raw_result,
+                "context_snapshot": context_snapshot,
+                "news_content": getattr(record, "news_content", None),
+            }
             report_dict = AnalysisReport(
                 meta=ReportMeta(
                     id=record.id,
@@ -965,6 +981,7 @@ def get_analysis_status(task_id: str) -> TaskStatus:
                     take_profit=_stringify_report_strategy_value(getattr(record, 'take_profit', None)),
                 ),
                 details=details,
+                artifact=build_stock_artifact_from_history_detail(detail_for_artifact),
             ).model_dump()
             return TaskStatus(
                 task_id=task_id,
@@ -1147,9 +1164,26 @@ def _build_analysis_report(
             sector_rankings=extracted_boards.get("sector_rankings"),
         )
 
+    artifact_detail = {
+        "id": meta.id,
+        "query_id": meta.query_id,
+        "stock_code": meta.stock_code,
+        "stock_name": meta.stock_name,
+        "report_type": meta.report_type,
+        "created_at": meta.created_at,
+        "analysis_summary": summary.analysis_summary,
+        "operation_advice": summary.operation_advice,
+        "trend_prediction": summary.trend_prediction,
+        "sentiment_score": summary.sentiment_score,
+        "raw_result": details.raw_result if details else None,
+        "context_snapshot": details.context_snapshot if details else None,
+        "news_content": details.news_content if details else None,
+    }
+
     return AnalysisReport(
         meta=meta,
         summary=summary,
         strategy=strategy,
-        details=details
+        details=details,
+        artifact=build_stock_artifact_from_history_detail(artifact_detail),
     )

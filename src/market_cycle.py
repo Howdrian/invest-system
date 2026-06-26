@@ -28,6 +28,7 @@ from src.intel.candidate_selector import (
     render_preliminary_deep_review_md,
     render_screening_funnel_html,
     render_screening_funnel_md,
+    select_governed_symbols,
 )
 from src.macro.official_sources import MacroContextService
 from src.macro.review import (
@@ -45,7 +46,7 @@ from src.prediction_market.polymarket import (
 DEFAULT_OUTPUT_ROOT = "reports/market_cycle"
 CRITICAL_COMPONENTS = {"macro_context"}
 UNAVAILABLE_STATES = {"UNAVAILABLE", "ERROR", "FAILED", "MISSING"}
-DEGRADED_STATES = {"DEGRADED", "DISABLED", "EMPTY", "EMPTY_WATCHLIST", "MISSING_OR_STALE"}
+DEGRADED_STATES = {"DEGRADED", "DISABLED", "EMPTY", "EMPTY_WATCHLIST", "MISSING_OR_STALE", "PARTIAL", "AVAILABLE_NO_MATCHING_MARKET"}
 USABLE_STATES = {"REFRESHED", "AVAILABLE", "USABLE", "OK"}
 
 
@@ -88,6 +89,11 @@ def build_market_cycle_payload(
         prediction_market=prediction,
     )
     deep_review_queue = build_deep_review_queue(screening_funnel, max_candidates=6)
+    governed_selection_preview = select_governed_symbols(
+        portfolio=holdings,
+        deep_queue=deep_review_queue,
+        limits={"portfolio": 6, "candidates": 6, "total": 6},
+    )
     source_health = build_source_health(
         macro,
         heat,
@@ -117,6 +123,7 @@ def build_market_cycle_payload(
         "event_context": event_context,
         "screening_funnel": screening_funnel,
         "deep_review_queue": deep_review_queue,
+        "governed_selection_preview": governed_selection_preview,
         "report_files": [str(p) for p in reports],
         "source_health": source_health,
         "market_strategy": market_strategy,
@@ -143,6 +150,11 @@ def build_source_health(
         criticality="critical",
         warnings=list(macro_context.get("warnings") or []),
         source="src.macro.official_sources",
+        extra={
+            "as_of": macro_context.get("as_of"),
+            "coverage_score": ((macro_context.get("coverage") or {}).get("coverage_score") if isinstance(macro_context.get("coverage"), dict) else None),
+            "evidence_refs": ["macro_context"],
+        },
     ))
     rows.append(_component_row(
         component="market_heat",
@@ -150,6 +162,7 @@ def build_source_health(
         criticality="supporting",
         warnings=list(market_heat.get("warnings") or []),
         source="src.intel.market_heat",
+        extra={"as_of": market_heat.get("as_of"), "evidence_refs": ["market_heat"]},
     ))
     prediction = prediction_market if isinstance(prediction_market, dict) else {}
     rows.append(_component_row(
@@ -158,6 +171,12 @@ def build_source_health(
         criticality="optional",
         warnings=list(prediction.get("warnings") or []),
         source="src.prediction_market.polymarket",
+        extra={
+            "as_of": prediction.get("as_of"),
+            "coverage_score": 0.0 if str(prediction.get("status") or "").lower() == "available_no_matching_market" else None,
+            "decision_impact": "概率校准源无匹配市场；只降权，不阻断交易审查。",
+            "evidence_refs": ["prediction_market"],
+        },
     ))
     holdings = portfolio_holdings if isinstance(portfolio_holdings, dict) else {}
     holdings_status = str(holdings.get("status") or "UNAVAILABLE")
@@ -168,6 +187,7 @@ def build_source_health(
         warnings=list(holdings.get("warnings") or []),
         source="src.intel.portfolio_holdings",
         extra={
+            "as_of": holdings.get("as_of"),
             "holding_status": holdings_status.upper(),
             "holding_source": holdings.get("source"),
             "selected_count": len(holdings.get("symbols") or []) if holdings else 0,
@@ -394,6 +414,26 @@ def _component_row(
     else:
         usability = "degraded" if warnings or status_upper in DEGRADED_STATES else "usable"
     blocking_level = "critical" if criticality == "critical" and usability == "unavailable" else "none"
+    extra = dict(extra or {})
+    as_of = extra.pop("as_of", None)
+    age_seconds = _age_seconds(as_of)
+    freshness_status = "unknown" if age_seconds is None else ("fresh" if age_seconds <= 36 * 60 * 60 else "stale")
+    coverage_score = extra.pop("coverage_score", None)
+    if coverage_score is None:
+        coverage_score = 1.0 if usability == "usable" else 0.0 if usability == "unavailable" else 0.5
+    failure_reason = extra.pop("failure_reason", None) or ("; ".join(str(w) for w in warnings) if warnings else "")
+    decision_impact = extra.pop("decision_impact", None)
+    if not decision_impact:
+        if criticality == "critical" and usability == "unavailable":
+            decision_impact = "关键源不可用：阻断交易审查。"
+        elif criticality == "critical" and usability == "degraded":
+            decision_impact = "关键源降级：只能有限评分，不可进入完整交易审查。"
+        elif usability in {"degraded", "unavailable"}:
+            decision_impact = "辅助/可选源降级：日报继续，结论降权。"
+        else:
+            decision_impact = "可用于本轮分析。"
+    can_score = usability != "unavailable"
+    can_trade_review = not (criticality == "critical" and usability != "usable")
     row = {
         "component": component,
         "status": status_upper,
@@ -402,10 +442,33 @@ def _component_row(
         "blocking_level": blocking_level,
         "warnings": warnings,
         "source": source,
+        "as_of": as_of,
+        "age_seconds": age_seconds,
+        "freshness_status": freshness_status,
+        "coverage_score": coverage_score,
+        "fallback_used": extra.pop("fallback_used", ""),
+        "failure_reason": failure_reason,
+        "decision_impact": decision_impact,
+        "can_score": can_score,
+        "can_trade_review": can_trade_review,
+        "evidence_refs": extra.pop("evidence_refs", [source]),
     }
     if extra:
         row.update(extra)
     return row
+
+
+def _age_seconds(as_of: Any) -> Optional[int]:
+    if not as_of:
+        return None
+    try:
+        text = str(as_of).replace("Z", "+00:00")
+        dt = datetime.fromisoformat(text)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return max(0, int((datetime.now(timezone.utc) - dt.astimezone(timezone.utc)).total_seconds()))
+    except Exception:
+        return None
 
 
 def _global_usability(rows: List[Dict[str, Any]]) -> str:

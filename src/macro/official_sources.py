@@ -20,6 +20,14 @@ from src.macro.source_cache import JsonSourceCache
 
 CACHE_KEY = "macro_context_latest"
 DEFAULT_TTL_SECONDS = 12 * 60 * 60
+REQUIRED_MACRO_FACTORS = (
+    "growth",
+    "inflation",
+    "liquidity_rates",
+    "credit",
+    "risk_appetite",
+    "energy_geo",
+)
 
 
 class MacroContextService:
@@ -79,11 +87,15 @@ class MacroContextService:
         }
 
         regime = self._infer_regime(components)
+        coverage = self._factor_coverage(components)
+        if coverage["available_factors"] < coverage["required_factors"]:
+            warnings.append("macro_factor_coverage_incomplete")
         return {
             "schema": "macro_context_v1",
-            "status": "REFRESHED" if not warnings else "DEGRADED",
+            "status": "REFRESHED" if not warnings and coverage["coverage_score"] >= 1.0 else "PARTIAL" if coverage["available_factors"] > 0 else "DEGRADED",
             "as_of": datetime.now(timezone.utc).isoformat(),
             "regime": regime,
+            "coverage": coverage,
             "components": components,
             "warnings": warnings,
             "source_policy": "official/free first; FMP optional enhancement",
@@ -138,12 +150,46 @@ class MacroContextService:
         return {"risk_state": "neutral", "confidence": "medium", "reason": f"VIX neutral: {vix_value}"}
 
     @staticmethod
+    def _factor_coverage(components: Dict[str, Any]) -> Dict[str, Any]:
+        fmp = components.get("fmp") if isinstance(components.get("fmp"), dict) else {}
+        data = fmp.get("data") if isinstance(fmp.get("data"), list) else []
+        symbols = {str(row.get("symbol") or row.get("name") or "").upper() for row in data if isinstance(row, dict)}
+        available: list[str] = []
+        if {"^GSPC", "^IXIC", "SPY"} & symbols:
+            available.append("risk_appetite")
+        if {"HYG", "LQD"} <= symbols:
+            available.append("credit")
+        if {"TLT"} & symbols:
+            available.append("liquidity_rates")
+        if {"^VIX"} & symbols:
+            available.append("risk_appetite")
+        available = list(dict.fromkeys(available))
+        missing = [factor for factor in REQUIRED_MACRO_FACTORS if factor not in available]
+        required = len(REQUIRED_MACRO_FACTORS)
+        score = round(len(available) / required, 4) if required else 0.0
+        return {
+            "required_factors": required,
+            "available_factors": len(available),
+            "coverage_score": score,
+            "available": available,
+            "missing": missing,
+            "boundary": "coverage_score < 1 means PARTIAL/DEGRADED; do not present as full macro regime.",
+        }
+
+    @staticmethod
     def _degraded(*, reason: str) -> Dict[str, Any]:
         return {
             "schema": "macro_context_v1",
             "status": "DEGRADED",
             "as_of": datetime.now(timezone.utc).isoformat(),
             "regime": {"risk_state": "unknown", "confidence": "low", "reason": reason},
+            "coverage": {
+                "required_factors": len(REQUIRED_MACRO_FACTORS),
+                "available_factors": 0,
+                "coverage_score": 0.0,
+                "available": [],
+                "missing": list(REQUIRED_MACRO_FACTORS),
+            },
             "components": {},
             "warnings": [reason],
             "source_policy": "official/free first; FMP optional enhancement",

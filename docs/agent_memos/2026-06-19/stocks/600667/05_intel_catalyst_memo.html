@@ -1,0 +1,77 @@
+<!doctype html><html lang='zh-CN'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>05 intel catalyst memo</title><style>
+:root{--bg:#0b1020;--card:#121a2b;--line:#26344f;--text:#edf2ff;--muted:#9aa8c7;--accent:#7dd3fc;--red:#fb7185;--yellow:#facc15;--green:#86efac}
+*{box-sizing:border-box}body{margin:0;background:linear-gradient(135deg,#08101f,#111827);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.65}
+main{max-width:1120px;margin:0 auto;padding:28px}a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+h1{font-size:32px;margin:.2em 0 .4em}h2{font-size:23px;margin:1.1em 0 .5em;color:#cfe0ff}h3{font-size:18px;margin:1em 0 .35em;color:#dbeafe}
+.hero,.card,.flow-card{border:1px solid var(--line);background:rgba(18,26,43,.94);border-radius:22px;padding:20px;margin:16px 0}.hero{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:16px}
+.muted,small{color:var(--muted)}.kpi{border-left:1px solid var(--line);padding-left:16px}.kpi b{display:block;font-size:24px;color:var(--accent)}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.pill{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:3px 10px;margin:2px 4px 2px 0;font-size:12px;color:#dbeafe;background:#0f172a}
+.flow-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.flow-card{margin:0}.flow-card h3{margin-top:0}.flow-row{border-top:1px solid #22304a;padding:10px 0}.flow-row:first-of-type{border-top:0}.flow-label{display:block;color:#9db2d5;font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:4px}.raw-report{opacity:.92}.raw-report h1:first-child{font-size:24px}
+.warn{color:var(--yellow)}.bad{color:var(--red)}.good{color:var(--green)}
+table{width:100%;border-collapse:collapse;margin:12px 0}th,td{border-bottom:1px solid #23304a;padding:9px;text-align:left;vertical-align:top}th{color:#9db2d5;font-size:12px;text-transform:uppercase}
+blockquote{border-left:4px solid var(--accent);margin:12px 0;padding:8px 14px;background:#0f172a;color:#dbeafe}
+code{background:#0f172a;border:1px solid #1f2a44;border-radius:5px;padding:1px 5px}pre{overflow:auto;background:#0f172a;border:1px solid #1f2a44;border-radius:12px;padding:14px}
+ul,ol{padding-left:24px}.toc a{display:inline-block;margin:4px 8px 4px 0;padding:6px 10px;border:1px solid var(--line);border-radius:9px;background:#0f172a}
+.footer{margin-top:28px;color:var(--muted);font-size:13px}
+@media(max-width:900px){.hero,.grid,.grid3,.flow-grid{grid-template-columns:1fr}.kpi{border-left:0;padding-left:0}}
+</style></head><body><main><p class='muted'>docs/agent_memos/2026-06-19/stocks/600667/05_intel_catalyst_memo.md</p><h1>IntelCatalystAgent — 600667</h1>
+<ul>
+<li>输出来源：有限证据 Agent 输出</li>
+<li>当前状态：通过</li>
+<li>证据等级：LIMITED</li>
+</ul>
+<h2>一句话结论</h2>
+<p>有限信息结论：太极实业在上一交易日涨幅显著（9.99%），并位列东方财富人气榜首位，显示市场关注度极高且短期势头强劲。然而，综合情报搜索未能发现具体的利好新闻、公告或机构分析来支撑此上涨。同时，技术指标显示乖离率过高且RSI处于超买区域，存在较高的短期回调风险。主力资金流向数据未能获取。</p>
+<h2>我搜了什么</h2>
+<ul>
+<li>CNINFO: 600667 公告/监管原文 -&gt; 降级（未知原因），返回 0 条</li>
+<li>Eastmoney: 600667 行情/估值/热度 -&gt; 降级（未知原因），返回 0 条</li>
+<li>AKShare: 600667 行情 fallback -&gt; 降级（未知原因），返回 0 条</li>
+<li>Tushare: 600667 财务字段 -&gt; 降级（权限不足），返回 0 条</li>
+<li>Tavily: 600667 新闻/研报搜索 -&gt; 降级（未知原因），返回 0 条</li>
+<li>SearXNG: 600667 搜索 fallback -&gt; 降级（未知原因），返回 0 条</li>
+</ul>
+<h2>搜到什么</h2>
+<ul>
+<li>主张：太极实业在上一交易日涨幅显著（9.99%），并位列东方财富人气榜首位，显示市场关注度极高且短期势头强劲。然而，综合情报搜索未能发现具体的利好新闻、公告或机构分析来支撑此上涨。同时，技术指标显示乖离率过高且RSI处于超买区域，存在较高的短期回调风险。主力资金流向数据未能获取。；数据：signal=hold；confidence=0.6；sentiment_label=positive；capital_flow_signal=not_available；来源：market_heat/latest_market_heat.json；runtime:news_context；market_cycle/2026-06-19/11_deep_review_queue.json；推论：太极实业在上一交易日涨幅显著（9.99%），并位列东方财富人气榜首位，显示市场关注度极高且短期势头强劲。然而，综合情报搜索未能发现具体的利好新闻、公告或机构分析来支撑此上涨。同时，技术指标显示乖离率过高且RSI处于超买区域，存在较高的短期回调风险。主力资金流向数据未能获取。</li>
+</ul>
+<h2>搜不到什么</h2>
+<ul>
+<li>无明确缺口</li>
+</ul>
+<h2>有限信息结论</h2>
+<p>太极实业在上一交易日涨幅显著（9.99%），并位列东方财富人气榜首位，显示市场关注度极高且短期势头强劲。然而，综合情报搜索未能发现具体的利好新闻、公告或机构分析来支撑此上涨。同时，技术指标显示乖离率过高且RSI处于超买区域，存在较高的短期回调风险。主力资金流向数据未能获取。</p>
+<h2>我看了什么</h2>
+<ul>
+<li>market_heat/latest_market_heat.json</li>
+<li>runtime:news_context</li>
+<li>market_cycle/2026-06-19/11_deep_review_queue.json</li>
+</ul>
+<h2>事实</h2>
+<ul>
+<li>signal=hold</li>
+<li>confidence=0.6</li>
+<li>sentiment_label=positive</li>
+<li>capital_flow_signal=not_available</li>
+<li>positive_catalysts=[&quot;市场关注度高，位列东方财富人气榜首位&quot;, &quot;股价强势上涨，技术面呈强势多头排列&quot;]</li>
+<li>risk_alerts=[&quot;乖离率过高，存在追高风险&quot;, &quot;RSI超买，短期回调风险高&quot;, &quot;缺乏具体利好消息或公告支撑近期上涨&quot;]</li>
+<li>key_news=[]</li>
+</ul>
+<h2>我的推理</h2>
+<ul>
+<li>太极实业在上一交易日涨幅显著（9.99%），并位列东方财富人气榜首位，显示市场关注度极高且短期势头强劲。然而，综合情报搜索未能发现具体的利好新闻、公告或机构分析来支撑此上涨。同时，技术指标显示乖离率过高且RSI处于超买区域，存在较高的短期回调风险。主力资金流向数据未能获取。</li>
+</ul>
+<h2>我的结论</h2>
+<p>太极实业在上一交易日涨幅显著（9.99%），并位列东方财富人气榜首位，显示市场关注度极高且短期势头强劲。然而，综合情报搜索未能发现具体的利好新闻、公告或机构分析来支撑此上涨。同时，技术指标显示乖离率过高且RSI处于超买区域，存在较高的短期回调风险。主力资金流向数据未能获取。</p>
+<h2>下一步谁补</h2>
+<p>继续补公告/新闻/研报原文，确认催化剂质量。</p>
+<h2>审计详情</h2>
+<ul>
+<li>schema=agent_memo_v1</li>
+<li>origin=真实 Agent</li>
+<li>scope=stock</li>
+<li>status=PASS</li>
+<li>fatal=False</li>
+<li>no_trade_execution=True</li>
+</ul><p class='footer'>Generated by invest-system · report-only · no trade execution</p></main></body></html>

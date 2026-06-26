@@ -56,6 +56,8 @@ env/
 /data/
 logs/
 reports/
+!docs/reports/
+!docs/reports/**
 *.db
 *.sqlite
 *.sqlite3
@@ -85,3 +87,4 @@ static/
 /apps/dsa-desktop/dist/
 /apps/dsa-desktop/node_modules/
 docs/specs/
+.gstack/

@@ -35,6 +35,120 @@ export interface MarketReviewAccepted {
 
 // ============ Report Types ============
 
+export type ReportArtifactType =
+  | 'daily'
+  | 'market_summary'
+  | 'macro_review'
+  | 'source_health'
+  | 'screening_funnel'
+  | 'deep_review_queue'
+  | 'preliminary_review'
+  | 'market_strategy'
+  | 'stock_governed'
+  | 'agent_memo'
+  | 'run_status';
+
+export type ReportArtifactAudience = 'reader' | 'audit' | 'machine' | 'run_status';
+export type ReportArtifactSectionKind =
+  | 'source'
+  | 'facts'
+  | 'analysis'
+  | 'final_conclusion'
+  | 'next_steps'
+  | 'risk'
+  | 'evidence'
+  | 'raw';
+
+export interface ReportArtifactSummary {
+  oneLine: string;
+  keyFacts: string[];
+  analysis: string;
+  finalConclusion: string;
+  nextSteps: string[];
+}
+
+export interface ReportArtifactSection {
+  key: string;
+  title: string;
+  kind: ReportArtifactSectionKind;
+  contentMarkdown?: string;
+  data?: unknown;
+  sourceRefs?: string[];
+  confidence?: 'high' | 'medium' | 'low';
+  blocking?: boolean;
+}
+
+export interface ReportArtifactSourceHealth {
+  status?: string;
+  verdict?: string;
+  canScore?: boolean;
+  canTradeReview?: boolean;
+  coverageScore?: number;
+  freshnessStatus?: string;
+  fallbackUsed?: string;
+  failureReason?: string;
+  decisionImpact?: string;
+  [key: string]: unknown;
+}
+
+export interface ReportArtifactDecision {
+  action: 'buy' | 'sell' | 'hold' | 'watch' | 'no_action';
+  gateStatus: 'passed' | 'blocked' | 'watch';
+  score?: number;
+  targetPct?: number;
+  blockedReasons?: string[];
+}
+
+export interface ReportArtifactAgentOrigins {
+  raw: number;
+  derived: number;
+  missing: number;
+}
+
+export interface ReportArtifactProvenance {
+  origin: string;
+  sourceFiles: string[];
+  generatedBy: string;
+  runId?: string;
+  taskId?: string;
+  recordId?: string;
+  queryId?: string;
+}
+
+export interface ReportArtifactPublish {
+  webPath?: string;
+  docsPath?: string;
+  markdownPath?: string;
+  jsonPath?: string;
+  htmlPath?: string;
+}
+
+export interface ReportArtifactQuality {
+  completeness: 'complete' | 'partial' | 'failed';
+  missingFields: string[];
+  validationErrors: string[];
+  staleAsOf?: string;
+}
+
+export interface ReportArtifactV1 {
+  schemaVersion: 'report_artifact_v1';
+  artifactId: string;
+  runDate: string;
+  generatedAt: string;
+  artifactType: ReportArtifactType;
+  audience: ReportArtifactAudience;
+  title: string;
+  summary: ReportArtifactSummary;
+  sections: ReportArtifactSection[];
+  sourceHealth?: ReportArtifactSourceHealth;
+  decision?: ReportArtifactDecision;
+  agentOrigins?: ReportArtifactAgentOrigins;
+  provenance: ReportArtifactProvenance;
+  publish: ReportArtifactPublish;
+  quality: ReportArtifactQuality;
+}
+
+
 export type ReportLanguage = 'zh' | 'en';
 
 /** Report metadata */
@@ -114,6 +228,7 @@ export interface AnalysisReport {
   summary: ReportSummary;
   strategy?: ReportStrategy;
   details?: ReportDetails;
+  artifact?: ReportArtifactV1;
 }
 
 // ============ Analysis Result Types ============

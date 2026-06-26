@@ -91,35 +91,60 @@ def _safe_float(value: Any) -> Optional[float]:
         return None
 
 
-def _enforce_governed_report_gate(result: "AnalysisResult") -> None:
-    """Keep markdown wording aligned with governed CIO/scoring hard gates."""
+def _extract_governance(result: "AnalysisResult") -> dict:
     dashboard = getattr(result, "dashboard", None)
-    governance = {}
     if isinstance(dashboard, dict) and isinstance(dashboard.get("governance"), dict):
-        governance = dashboard["governance"]
-    elif isinstance(getattr(result, "_governance", None), dict):
-        governance = getattr(result, "_governance")
-    if not governance:
-        return
+        return dashboard["governance"]
+    if isinstance(getattr(result, "_governance", None), dict):
+        return getattr(result, "_governance")
+    return {}
 
+
+def _governance_score(governance: dict) -> Optional[float]:
+    raw_score = governance.get("score")
+    if raw_score is None:
+        raw_score = governance.get("total_score")
+    return _safe_float(raw_score)
+
+
+def _is_governed_blocked(result: "AnalysisResult") -> bool:
+    governance = _extract_governance(result)
+    if not governance:
+        return False
     cio = governance.get("cio") if isinstance(governance.get("cio"), dict) else {}
     trade_plan = governance.get("trade_plan") if isinstance(governance.get("trade_plan"), dict) else {}
     status = str(governance.get("cio_status") or cio.get("status") or "").upper()
     gate = str(governance.get("gate") or governance.get("gate_result") or "").upper()
-    raw_score = governance.get("score")
-    if raw_score is None:
-        raw_score = governance.get("total_score")
-    score = _safe_float(raw_score)
+    score = _governance_score(governance)
     action = str(trade_plan.get("action") or "").strip().lower()
-
-    blocked = (
+    return (
         status == "BLOCKED_BY_FATAL"
         or gate == "BLOCKED"
         or (score is not None and score < 6)
         or action == "no_action"
+        or str(getattr(result, "decision_type", "")).lower() == "blocked"
     )
-    if not blocked:
+
+
+def _decision_counts(results: List["AnalysisResult"]) -> tuple[int, int, int, int]:
+    blocked_count = sum(1 for r in results if _is_governed_blocked(r))
+    buy_count = sum(1 for r in results if getattr(r, 'decision_type', '') == 'buy' and not _is_governed_blocked(r))
+    sell_count = sum(1 for r in results if getattr(r, 'decision_type', '') == 'sell' and not _is_governed_blocked(r))
+    hold_count = sum(1 for r in results if getattr(r, 'decision_type', '') in ('hold', '') and not _is_governed_blocked(r))
+    return buy_count, hold_count, sell_count, blocked_count
+
+
+def _enforce_governed_report_gate(result: "AnalysisResult") -> None:
+    """Keep markdown wording aligned with governed CIO/scoring hard gates."""
+    dashboard = getattr(result, "dashboard", None)
+    governance = _extract_governance(result)
+    if not governance or not _is_governed_blocked(result):
         return
+
+    cio = governance.get("cio") if isinstance(governance.get("cio"), dict) else {}
+    status = str(governance.get("cio_status") or cio.get("status") or "").upper()
+    trade_plan = governance.get("trade_plan") if isinstance(governance.get("trade_plan"), dict) else {}
+    score = _governance_score(governance)
 
     trade_plan = dict(trade_plan)
     trade_plan["action"] = "no_action"
@@ -146,11 +171,10 @@ def _enforce_governed_report_gate(result: "AnalysisResult") -> None:
                 "risk_control": "不执行自动交易；如已持仓，仅做人工风险复核。",
             }
         }
-    setattr(result, "decision_type", "hold")
-    setattr(result, "operation_advice", "观望 — 治理层阻断")
-    # 报告主信号由 sentiment_score 推导。治理层已阻断时，不能继续让极低分被
-    # 渲染成“卖出/清仓”类指令式话术；真实 governed 分数仍保留在 governance 里。
-    setattr(result, "sentiment_score", 50)
+    setattr(result, "decision_type", "blocked")
+    setattr(result, "operation_advice", "阻断 / 不操作 / 0%")
+    if score is not None:
+        setattr(result, "sentiment_score", score)
 
 if TYPE_CHECKING:
     from src.analyzer import AnalysisResult
@@ -800,9 +824,7 @@ class NotificationService(
         )
         
         # 统计信息 - 使用 decision_type 字段准确统计
-        buy_count = sum(1 for r in results if getattr(r, 'decision_type', '') == 'buy')
-        sell_count = sum(1 for r in results if getattr(r, 'decision_type', '') == 'sell')
-        hold_count = sum(1 for r in results if getattr(r, 'decision_type', '') in ('hold', ''))
+        buy_count, hold_count, sell_count, blocked_count = _decision_counts(results)
         avg_score = sum(r.sentiment_score for r in results) / len(results) if results else 0
         
         report_lines.extend([
@@ -813,6 +835,7 @@ class NotificationService(
             f"| 🟢 {labels['buy_label']} | **{buy_count}** {labels['stock_unit_compact']} |",
             f"| 🟡 {labels['watch_label']} | **{hold_count}** {labels['stock_unit_compact']} |",
             f"| 🔴 {labels['sell_label']} | **{sell_count}** {labels['stock_unit_compact']} |",
+            f"| ⛔ 阻断 | **{blocked_count}** {labels['stock_unit_compact']} |",
             f"| 📈 {labels['avg_score_label']} | **{avg_score:.1f}** |",
             "",
             "---",
@@ -999,6 +1022,9 @@ class NotificationService(
 
     def _get_signal_level(self, result: AnalysisResult) -> tuple:
         """Get localized signal level and color based on operation advice."""
+        if _is_governed_blocked(result):
+            language = self._get_report_language(result)
+            return ("Blocked / No Action / 0%", "⛔", "blocked") if language == "en" else ("阻断 / 不操作 / 0%", "⛔", "blocked")
         return get_signal_level(
             result.operation_advice,
             result.sentiment_score,
@@ -1055,15 +1081,13 @@ class NotificationService(
         sorted_results = sorted(results, key=lambda x: x.sentiment_score, reverse=True)
 
         # 统计信息 - 使用 decision_type 字段准确统计
-        buy_count = sum(1 for r in results if getattr(r, 'decision_type', '') == 'buy')
-        sell_count = sum(1 for r in results if getattr(r, 'decision_type', '') == 'sell')
-        hold_count = sum(1 for r in results if getattr(r, 'decision_type', '') in ('hold', ''))
+        buy_count, hold_count, sell_count, blocked_count = _decision_counts(results)
 
         report_lines = [
             f"# 🎯 {report_date} {labels['dashboard_title']}",
             "",
             f"> {labels['analyzed_prefix']} **{len(results)}** {labels['stock_unit']} | "
-            f"🟢{labels['buy_label']}:{buy_count} 🟡{labels['watch_label']}:{hold_count} 🔴{labels['sell_label']}:{sell_count}",
+            f"🟢{labels['buy_label']}:{buy_count} 🟡{labels['watch_label']}:{hold_count} 🔴{labels['sell_label']}:{sell_count} ⛔阻断:{blocked_count}",
             "",
         ]
 
@@ -1359,15 +1383,13 @@ class NotificationService(
         sorted_results = sorted(results, key=lambda x: x.sentiment_score, reverse=True)
         
         # 统计 - 使用 decision_type 字段准确统计
-        buy_count = sum(1 for r in results if getattr(r, 'decision_type', '') == 'buy')
-        sell_count = sum(1 for r in results if getattr(r, 'decision_type', '') == 'sell')
-        hold_count = sum(1 for r in results if getattr(r, 'decision_type', '') in ('hold', ''))
+        buy_count, hold_count, sell_count, blocked_count = _decision_counts(results)
         
         lines = [
             f"## 🎯 {report_date} {labels['dashboard_title']}",
             "",
             f"> {len(results)} {labels['stock_unit']} | "
-            f"🟢{labels['buy_label']}:{buy_count} 🟡{labels['watch_label']}:{hold_count} 🔴{labels['sell_label']}:{sell_count}",
+            f"🟢{labels['buy_label']}:{buy_count} 🟡{labels['watch_label']}:{hold_count} 🔴{labels['sell_label']}:{sell_count} ⛔阻断:{blocked_count}",
             "",
         ]
         
@@ -1509,17 +1531,15 @@ class NotificationService(
         sorted_results = sorted(results, key=lambda x: x.sentiment_score, reverse=True)
 
         # 统计 - 使用 decision_type 字段准确统计
-        buy_count = sum(1 for r in results if getattr(r, 'decision_type', '') == 'buy')
-        sell_count = sum(1 for r in results if getattr(r, 'decision_type', '') == 'sell')
-        hold_count = sum(1 for r in results if getattr(r, 'decision_type', '') in ('hold', ''))
+        buy_count, hold_count, sell_count, blocked_count = _decision_counts(results)
         avg_score = sum(r.sentiment_score for r in results) / len(results) if results else 0
 
         lines = [
             f"## 📅 {report_date} {labels['report_title']}",
             "",
             f"> {labels['analyzed_prefix']} **{len(results)}** {labels['stock_unit_compact']} | "
-            f"🟢{labels['buy_label']}:{buy_count} 🟡{labels['watch_label']}:{hold_count} 🔴{labels['sell_label']}:{sell_count} | "
-            f"{labels['avg_score_label']}:{avg_score:.0f}",
+            f"🟢{labels['buy_label']}:{buy_count} 🟡{labels['watch_label']}:{hold_count} 🔴{labels['sell_label']}:{sell_count} ⛔阻断:{blocked_count} | "
+            f"{labels['avg_score_label']}:{avg_score:.1f}",
             "",
         ]
         
@@ -1603,9 +1623,7 @@ class NotificationService(
         if not results:
             return f"# {report_date} {labels['brief_title']}\n\n{labels['no_results']}"
         sorted_results = sorted(results, key=lambda x: x.sentiment_score, reverse=True)
-        buy_count = sum(1 for r in results if getattr(r, 'decision_type', '') == 'buy')
-        sell_count = sum(1 for r in results if getattr(r, 'decision_type', '') == 'sell')
-        hold_count = sum(1 for r in results if getattr(r, 'decision_type', '') in ('hold', ''))
+        buy_count, hold_count, sell_count, blocked_count = _decision_counts(results)
         lines = [
             f"# {report_date} {labels['brief_title']}",
             "",

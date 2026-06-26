@@ -47,6 +47,7 @@ def test_blocked_governance_sanitizes_position_advice_in_markdown():
     assert "减仓" not in report
     assert "理想买入点" not in report
     assert "0%" in report
-    assert "无操作" in report or "观望" in report
-    assert result.decision_type == "hold"
+    assert "阻断" in report
+    assert "观望" not in report
+    assert result.decision_type == "blocked"
     assert result.dashboard["governance"]["trade_plan"]["action"] == "no_action"

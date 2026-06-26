@@ -9,9 +9,10 @@ from __future__ import annotations
 
 import json
 import sys
+import argparse
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 DEFAULT_REPORTS_DIR = Path("reports")
 DEFAULT_MARKET_CYCLE_DIR = Path("reports/market_cycle")
@@ -35,11 +36,16 @@ def _read_json(path: Path) -> Any:
         return None
 
 
-def _load_today_governed_results(today: str) -> List[Dict[str, Any]]:
+def _load_today_governed_results(
+    today: str,
+    *,
+    reports_dir: Path = DEFAULT_REPORTS_DIR,
+    docs_dir: Path = Path("docs"),
+) -> List[Dict[str, Any]]:
     """Prefer current runtime results and ignore stale governed rows."""
-    payload = _read_json(DEFAULT_REPORTS_DIR / "governed_results.json")
+    payload = _read_json(reports_dir / "governed_results.json")
     if payload is None:
-        payload = _read_json(Path("docs/governed_results.json"))
+        payload = _read_json(docs_dir / "governed_results.json")
     if not isinstance(payload, list):
         return []
     rows: List[Dict[str, Any]] = []
@@ -85,20 +91,38 @@ a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
 </style>"""
 
 
-def main() -> None:
-    today = _today_str()
+def _parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Render GitHub Pages homepage from report artifacts")
+    parser.add_argument("--date", default="", help="Run date YYYY-MM-DD")
+    parser.add_argument("--reports-dir", default=str(DEFAULT_REPORTS_DIR))
+    parser.add_argument("--market-cycle-dir", default=str(DEFAULT_MARKET_CYCLE_DIR))
+    parser.add_argument("--macro-cache", default=str(DEFAULT_MACRO_CACHE))
+    parser.add_argument("--market-heat-dir", default=str(DEFAULT_MARKET_HEAT_DIR))
+    parser.add_argument("--output", default=str(DEFAULT_OUTPUT))
+    parser.add_argument("--stock-list", default="", help="Kept for workflow compatibility")
+    return parser.parse_args(argv)
+
+
+def main(argv: Optional[List[str]] = None) -> int:
+    args = _parse_args(argv)
+    today = args.date or _today_str()
+    reports_dir = Path(args.reports_dir)
+    market_cycle_dir = Path(args.market_cycle_dir)
+    macro_cache = Path(args.macro_cache)
+    output = Path(args.output)
+    docs_dir = output.parent
 
     # Files
-    def _path(market_cycle_dir: Path, name: str) -> Path:
+    def _path(name: str) -> Path:
         p = market_cycle_dir / today / name
-        return p if p.exists() else (Path("docs/market_cycle") / today / name)
+        return p if p.exists() else (docs_dir / "market_cycle" / today / name)
 
-    macro = _read_json(DEFAULT_MACRO_CACHE) or {}
-    macro_r = _read_json(_path(DEFAULT_MARKET_CYCLE_DIR, "01_macro_review.json")) or {}
-    strategy = _read_json(_path(DEFAULT_MARKET_CYCLE_DIR, "14_market_strategy.json")) or {}
-    health = _read_json(_path(DEFAULT_MARKET_CYCLE_DIR, "13_source_health.json")) or {}
-    screening = _read_json(_path(DEFAULT_MARKET_CYCLE_DIR, "09_screening_funnel.json")) or {}
-    governed = _load_today_governed_results(today)
+    macro = _read_json(macro_cache) or {}
+    macro_r = _read_json(_path("01_macro_review.json")) or {}
+    strategy = _read_json(_path("14_market_strategy.json")) or {}
+    health = _read_json(_path("13_source_health.json")) or {}
+    screening = _read_json(_path("09_screening_funnel.json")) or {}
+    governed = _load_today_governed_results(today, reports_dir=reports_dir, docs_dir=docs_dir)
 
     regime = strategy.get("regime", "UNKNOWN")
     headline = (strategy.get("strategy") or {}).get("headline", "")
@@ -186,7 +210,7 @@ def main() -> None:
 <title>投研日报 | invest-system</title>{CSS}</head>
 <body>
 <h1>📊 投研日报</h1>
-<p class="muted">{datetime.now(BEIJING).strftime('%Y-%m-%d %H:%M')} 北京时 · 
+<p class="muted">{datetime.now(BEIJING).strftime('%Y-%m-%d %H:%M')} 北京时 ·
   <a href="https://github.com/Howdrian/invest-system/actions">Actions</a></p>
 
 <div class="card"><h2>🌍 宏观背景</h2>
@@ -203,32 +227,28 @@ def main() -> None:
   {scr_html if scr_html else '<div class="muted">暂无筛选候选。</div>'}
 </div>
 
-<div class="grid2">
-  <div class="card"><h2>📊 完整报告</h2><div class="section-links">
-    <a href="./daily/{today}.md">日报</a>
-    <a href="./market_cycle/{today}/09_screening_funnel.html">筛选漏斗</a>
-    <a href="./market_cycle/{today}/11_deep_review_queue.html">深评队列</a>
-  </div></div>
-  <div class="card"><h2>📈 大盘看板</h2><div class="section-links">
-    <a href="./market_cycle/{today}/00_one_screen_brief.html">一屏总览</a>
-    <a href="./market_cycle/{today}/01_macro_review.html">宏观报告</a>
-    <a href="./market_cycle/{today}/14_market_strategy.html">市场策略</a>
+<div class="card"><h2>📊 今日主入口</h2><div class="section-links">
+    <a href="./reports/{today}.html">报告中心</a>
+    <a href="./daily/{today}.html">日报</a>
+    <a href="./agent_memos/{today}/index.html">Agent卷宗</a>
+    <a href="./market_cycle/{today}/summary.html">市场周期</a>
     <a href="./market_cycle/{today}/13_source_health.html">源健康</a>
-  </div></div>
+</div>
 </div>
 
 <p class="muted" style="margin-top:1.5rem">⚠️ 系统分析意见，非交易指令。最终决策由你做出。</p>
 </body></html>"""
 
-    DEFAULT_OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-    DEFAULT_OUTPUT.write_text(html, encoding="utf-8")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(html, encoding="utf-8")
     print(f"✅ render_homepage: {len(html)} bytes, {gov_count} governed, cards rendered", file=sys.stderr)
+    return 0
 
 
 if __name__ == "__main__":
     import traceback
     try:
-        main()
+        raise SystemExit(main())
     except Exception as e:
         print(f"❌ {e}", file=sys.stderr)
         traceback.print_exc(file=sys.stderr)

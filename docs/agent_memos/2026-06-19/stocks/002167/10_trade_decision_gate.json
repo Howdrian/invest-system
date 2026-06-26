@@ -1,0 +1,207 @@
+{
+  "schema": "agent_memo_v1",
+  "agent": "TradeDecisionGate",
+  "scope": "stock",
+  "symbol": "002167",
+  "status": "BLOCKED",
+  "origin": "RAW_AGENT",
+  "origin_label": "有限证据 Agent 输出",
+  "facts": [
+    "signal=hold",
+    "confidence=0.3",
+    "status=BLOCKED_BY_FATAL",
+    "headline=东方锆业：估值极高，基本面数据缺失，短期技术超买，存在致命风险，不建议操作",
+    "confidence=low",
+    "cannot_proceed_reasons=[\"存在致命风险：估值极高（PE 230.63），且基本面数据严重缺失。\", \"评分系统总分低于6.0分，交易被阻断。\", \"红蓝团队对抗中，红方发现的致命风险（高估值、基本面缺失、技术超买）未能被蓝方有效反驳。\", \"评分门控未通过：score=0.5/10, gate=BLOCKED\", \"存在未解决的 fatal objection\"]",
+    "fatal_objections=[{\"source_agent\": \"evidence_gate\", \"objection\": \"当前市盈率高达230.63，远超100，表明估值极度过高，存在高严重度风险。\"}, {\"source_agent\": \"scoring\", \"objection\": \"总分低于6.0分，交易被阻断。基本面数据严重缺失，无法评估公司内在价值。估值极高，存在严重的泡沫风险，且有2025年报预减的风险提示。股价短期严重超买，技术回调风险高。红蓝辩论中红方发现致命风险，且蓝方未能有效反驳。\"}, {\"source_agent\": \"red_blue\", \"objec...",
+    "action=no_action",
+    "position=0.0%"
+  ],
+  "reasoning": [
+    "[BLOCKED_BY_FATAL] 东方锆业：估值极高，基本面数据缺失，短期技术超买，存在致命风险，不建议操作\nNext: 不执行交易计划；先解决阻断原因后重新审查。",
+    "TradeDecisionGate 只做门控，不执行交易。"
+  ],
+  "conclusion": "TradeDecisionGate=BLOCKED_BY_FATAL；action=no_action；position=0.0% 。",
+  "missing_data": [
+    "日线数据缺失，影响技术分析的全面性。",
+    "筹码分布数据缺失，无法评估主力资金控盘程度。",
+    "新闻上下文缺失，无法了解近期具体利好或利空消息。",
+    "公司增长、盈利、机构持仓、资本流向等核心基本面数据缺失。",
+    "宏观经济环境关键指标（如增长、通胀、流动性）覆盖不完整。"
+  ],
+  "source_refs": [
+    "runtime:scoring_result",
+    "runtime:red_blue_result",
+    "runtime:portfolio_context"
+  ],
+  "fatal_objection": true,
+  "next_step": "不执行交易动作；先解决阻断原因后重新审查。",
+  "readable_summary": "阻断：有限证据 Agent 输出。TradeDecisionGate=BLOCKED_BY_FATAL；action=no_action；position=0.0% 。",
+  "evidence_blocks": [
+    {
+      "claim": "TradeDecisionGate=BLOCKED_BY_FATAL；action=no_action；position=0.0% 。",
+      "data": "signal=hold；confidence=0.3；status=BLOCKED_BY_FATAL；headline=东方锆业：估值极高，基本面数据缺失，短期技术超买，存在致命风险，不建议操作",
+      "source": "runtime:scoring_result；runtime:red_blue_result；runtime:portfolio_context",
+      "inference": "[BLOCKED_BY_FATAL] 东方锆业：估值极高，基本面数据缺失，短期技术超买，存在致命风险，不建议操作\nNext: 不执行交易计划；先解决阻断原因后重新审查。；TradeDecisionGate 只做门控，不执行交易。"
+    }
+  ],
+  "audit_detail": {
+    "schema": "agent_memo_v1",
+    "origin": "RAW_AGENT",
+    "stage_name": "cio",
+    "status": "BLOCKED",
+    "raw_untrusted": true,
+    "raw_data": {
+      "schema": "cio_trade_plan_v1",
+      "stock": "002167",
+      "status": "BLOCKED_BY_FATAL",
+      "headline": "东方锆业：估值极高，基本面数据缺失，短期技术超买，存在致命风险，不建议操作",
+      "direction": "无操作",
+      "confidence": "low",
+      "investment_thesis": "东方锆业当前面临严重的估值泡沫、基本面数据缺失和技术性超买风险。尽管短期内市场关注度高且技术面表现强势，但缺乏实质性业绩支撑，且存在“2025年报预减”的潜在利空。红蓝团队对抗中，红方提出的风险被裁决为致命且无法有效反驳，因此不建议进行任何投资操作。",
+      "core_reasoning": {
+        "bull": [
+          "股价在上一交易日涨停，市场关注度高，位列东方财富人气榜第三名。",
+          "技术面显示为强势多头趋势，均线多头排列，RSI处于强势区域。",
+          "所属行业（非金属矿采选业、有色金属、新材料、固态电池）表现强势，存在行业性驱动和概念炒作潜力。"
+        ],
+        "bear": [
+          "估值极高：市盈率PE高达230.63倍，市净率PB为7.02倍，远超合理水平，存在严重泡沫风险。",
+          "基本面数据严重缺失：公司增长、盈利、机构持仓、资本流向等关键数据均无法获取，无法评估公司内在价值和长期可持续性。",
+          "存在“2025年报预减”的潜在负面信息，与市场对其高成长性概念的预期形成矛盾。",
+          "股价短期严重超买：相对于MA5、MA10、MA20的乖离率分别高达7.49%、12.80%、16.47%，技术性回调风险极高。",
+          "涨停伴随缩量上涨（成交量比0.3），表明上攻动能不足，后续上涨持续性存疑。"
+        ]
+      },
+      "what_would_change": [
+        "若公司基本面数据（如增长、盈利能力）能够被有效获取并证实其高估值有强劲业绩支撑。",
+        "股价经过充分回调，估值回归至合理区间，且技术面超买现象得到缓解。",
+        "出现明确的、可验证的重大利好消息（如新产品突破、重大订单），且伴随放量上涨，改变市场预期。"
+      ],
+      "scoring_snapshot": {
+        "total_score": 0.5,
+        "gate_result": "BLOCKED",
+        "position_size_range": "0%",
+        "dimension_scores": {
+          "fundamental_strength": {
+            "score": 0.0,
+            "rationale": "核心基本面数据（增长、盈利、自由现金流）完全缺失。已有的市盈率高达230.63倍，市净率7.02倍，估值极高，远超合理水平。同时，公司所属板块包含“2025年报预减”信息，与高成长性预期相悖。在缺乏任何实际业绩支撑的情况下，高估值纯粹基于概念炒作，基本面存在严重风险。"
+          },
+          "catalyst_clarity": {
+            "score": 0.5,
+            "rationale": "缺乏明确且时间可预测的催化剂。蓝方提出的催化剂（如市场情绪乐观、行业利好政策、公司新材料进展）均过于模糊且时机不确定，更多是预期而非具体事件。股价近期上涨缺乏详细新闻或基本面数据支撑，表明其驱动力不明确。"
+          },
+          "risk_reward_ratio": {
+            "score": 0.0,
+            "rationale": "当前股价16.13元。估值极高（PE 230.63，PB 7.02），且存在“2025年报预减”的潜在利空。红方明确指出估值过高是致命风险，且股价短期严重超买，存在剧烈技术回调风险。在缺乏基本面支撑的情况下，潜在下行空间巨大，而上行空间更多依赖于不可持续的市场炒作。风险回报比远低于1:1。"
+          },
+          "timing": {
+            "score": 0.0,
+            "rationale": "股票在上一交易日涨停（上涨10.03%），且当前股价相对于各均线（MA5、MA10、MA20）的乖离率极高（分别高达7.49%、12.80%、16.47%），显示股价短期严重超买。同时，涨停是“缩量上涨”，表明上攻动能不足，存在剧烈技术回调风险。此时入场属于追高行为。"
+          },
+          "red_team_inverse": {
+            "score": 0.0,
+            "rationale": "红方在此次辩论中占据绝对优势，其提出的所有风险，包括股价严重超买、缺乏基本面数据支撑以及极高估值下的概念炒作风险，都被裁决为“致命风险”，且蓝方未能有效反驳。裁决明确指出“不建议看多”，表明红方发现了致命且无法反驳的风险。"
+          }
+        }
+      },
+      "can_proceed_to_review": false,
+      "cannot_proceed_reasons": [
+        "存在致命风险：估值极高（PE 230.63），且基本面数据严重缺失。",
+        "评分系统总分低于6.0分，交易被阻断。",
+        "红蓝团队对抗中，红方发现的致命风险（高估值、基本面缺失、技术超买）未能被蓝方有效反驳。",
+        "评分门控未通过：score=0.5/10, gate=BLOCKED",
+        "存在未解决的 fatal objection"
+      ],
+      "top_watch_items": [
+        "密切关注公司基本面数据的更新，特别是盈利和增长报告。",
+        "观察股价回调的深度和成交量变化，判断市场情绪是否回归理性。",
+        "警惕市场对概念股炒作热情的消退，以及可能引发的估值回归风险。"
+      ],
+      "fatal_objections": [
+        {
+          "source_agent": "evidence_gate",
+          "objection": "当前市盈率高达230.63，远超100，表明估值极度过高，存在高严重度风险。"
+        },
+        {
+          "source_agent": "scoring",
+          "objection": "总分低于6.0分，交易被阻断。基本面数据严重缺失，无法评估公司内在价值。估值极高，存在严重的泡沫风险，且有2025年报预减的风险提示。股价短期严重超买，技术回调风险高。红蓝辩论中红方发现致命风险，且蓝方未能有效反驳。"
+        },
+        {
+          "source_agent": "red_blue",
+          "objection": "红方证据链更为完整且风险提示更具说服力，蓝方未能有效反驳关键的估值过高和基本面数据缺失的致命风险，因此红方在此次辩论中占据绝对优势，不建议看多。"
+        },
+        {
+          "source_agent": "red_blue",
+          "objection": "红队终局反驳仍保留 fatal remaining_risk"
+        }
+      ],
+      "missing_evidence": [
+        "日线数据缺失，影响技术分析的全面性。",
+        "筹码分布数据缺失，无法评估主力资金控盘程度。",
+        "新闻上下文缺失，无法了解近期具体利好或利空消息。",
+        "公司增长、盈利、机构持仓、资本流向等核心基本面数据缺失。",
+        "宏观经济环境关键指标（如增长、通胀、流动性）覆盖不完整。"
+      ],
+      "trade_plan": {
+        "action": "no_action",
+        "target_position_pct": 0.0,
+        "quantity": null,
+        "entry_zone": null,
+        "stop_loss": null,
+        "take_profit": null,
+        "time_horizon": null,
+        "thesis": "评分门控或 fatal objection 阻断，不能形成可执行交易计划。",
+        "conditions": [
+          "重新审查前先补齐或解决阻断证据"
+        ],
+        "invalidations": [
+          "当前计划已被治理层阻断"
+        ],
+        "position_size_range": "0%",
+        "manual_execution_only": true
+      },
+      "disclaimer": "以上为系统分析意见，非交易指令；最终决策由用户人工完成。",
+      "next_user_action": "不执行交易计划；先解决阻断原因后重新审查。",
+      "summary": "东方锆业（002167）当前面临极度高估的风险，市盈率高达230.63倍，且关键基本面数据严重缺失，无法支撑其当前股价。尽管技术面短期强势且市场关注度高，但股价已严重超买并伴随缩量上涨，回调风险巨大。红蓝团队对抗裁决红方占据绝对优势，认为存在致命风险，不建议看多。CIO判定为BLOCKED_BY_FATAL，建议不进行任何操作。"
+    },
+    "raw_text": "```json\n{\n  \"schema\": \"cio_trade_plan_v1\",\n  \"stock\": \"002167\",\n  \"status\": \"BLOCKED_BY_FATAL\",\n  \"headline\": \"东方锆业：估值极高，基本面数据缺失，短期技术超买，存在致命风险，不建议操作\",\n  \"direction\": \"无操作\",\n  \"confidence\": \"high\",\n  \"investment_thesis\": \"东方锆业当前面临严重的估值泡沫、基本面数据缺失和技术性超买风险。尽管短期内市场关注度高且技术面表现强势，但缺乏实质性业绩支撑，且存在“2025年报预减”的潜在利空。红蓝团队对抗中，红方提出的风险被裁决为致命且无法有效反驳，因此不建议进行任何投资操作。\",\n  \"core_reasoning\": {\n    \"bull\": [\n      \"股价在上一交易日涨停，市场关注度高，位列东方财富人气榜第三名。\",\n      \"技术面显示为强势多头趋势，均线多头排列，RSI处于强势区域。\",\n      \"所属行业（非金属矿采选业、有色金属、新材料、固态电池）表现强势，存在行业性驱动和概念炒作潜力。\"\n    ],\n    \"bear\": [\n      \"估值极高：市盈率PE高达230.63倍，市净率PB为7.02倍，远超合理水平，存在严重泡沫风险。\",\n      \"基本面数据严重缺失：公司增长、盈利、机构持仓、资本流向等关键数据均无法获取，无法评估公司内在价值和长期可持续性。\",\n      \"存在“2025年报预减”的潜在负面信息，与市场对其高成长性概念的预期形成矛盾。\",\n      \"股价短期严重超买：相对于MA5、MA10、MA20的乖离率分别高达7.49%、12.80%、16.47%，技术性回调风险极高。\",\n      \"涨停伴随缩量上涨（成交量比0.3），表明上攻动能不足，后续上涨持续性存疑。\"\n    ]\n  },\n  \"what_would_change\": [\n    \"若公司基本面数据（如增长、盈利能力）能够被有效获取并证实其高估值有强劲业绩支撑。\",\n    \"股价经过充分回调，估值回归至合理区间，且技术面超买现象得到缓解。\",\n    \"出现明确的、可验证的重大利好消息（如新产品突破、重大订单），且伴随放量上涨，改变市场预期。\"\n  ],\n  \"scoring_snapshot\": {\n    \"total_score\": 0.5,\n    \"gate_result\": \"BLOCKED\",\n    \"position_size_range\": \"0%\",\n    \"dimension_scores\": {\n      \"fundamental_strength\": 0.0,\n      \"catalyst_clarity\": 0.5,\n      \"risk_reward_ratio\": 0.0,\n      \"timing\": 0.0,\n      \"red_team_inverse\": 0.0\n    }\n  },\n  \"can_proceed_to_review\": false,\n  \"cannot_proceed_reasons\": [\n    \"存在致命风险：估值极高（PE 230.63），且基本面数据严重缺失。\",\n    \"评分系统总分低于6.0分，交易被阻断。\",\n    \"红蓝团队对抗中，红方发现的致命风险（高估值、基本面缺失、技术超买）未能被蓝方有效反驳。\"\n  ],\n  \"top_watch_items\": [\n    \"密切关注公司基本面数据的更新，特别是盈利和增长报告。\",\n    \"观察股价回调的深度和成交量变化，判断市场情绪是否回归理性。\",\n    \"警惕市场对概念股炒作热情的消退，以及可能引发的估值回归风险。\"\n  ],\n  \"fatal_objections\": [\n    {\n      \"source_agent\": \"evidence_gate\",\n      \"objection\": \"当前市盈率高达230.63，远超100，表明估值极度过高，存在高严重度风险。\"\n    },\n    {\n      \"source_agent\": \"scoring\",\n      \"objection\": \"总分低于6.0分，交易被阻断。基本面数据严重缺失，无法评估公司内在价值。估值极高，存在严重的泡沫风险，且有2025年报预减的风险提示。股价短期严重超买，技术回调风险高。红蓝辩论中红方发现致命风险，且蓝方未能有效反驳。\"\n    },\n    {\n      \"source_agent\": \"red_blue\",\n      \"objection\": \"红方证据链更为完整且风险提示更具说服力，蓝方未能有效反驳关键的估值过高和基本面数据缺失的致命风险，因此红方在此次辩论中占据绝对优势，不建议看多。\"\n    }\n  ],\n  \"missing_evidence\": [\n    \"日线数据缺失，影响技术分析的全面性。\",\n    \"筹码分布数据缺失，无法评估主力资金控盘程度。\",\n    \"新闻上下文缺失，无法了解近期具体利好或利空消息。\",\n    \"公司增长、盈利、机构持仓、资本流向等核心基本面数据缺失。\",\n    \"宏观经济环境关键指标（如增长、通胀、流动性）覆盖不完整。\"\n  ],\n  \"trade_plan\": {\n    \"action\": \"no_action\",\n    \"target_position_pct\": 0.0,\n    \"quantity\": null,\n    \"entry_zone\": null,\n    \"stop_loss\": null,\n    \"take_profit\": null,\n    \"time_horizon\": \"等待观望，直至致命风险解除\",\n    \"thesis\": \"鉴于多重致命风险的存在，目前不适合进行任何投资操作，应保持观望。\",\n    \"conditions\": [],\n    \"invalidations\": [],\n    \"manual_execution_only\": true\n  },\n  \"disclaimer\": \"以上为系统分析意见，非交易指令；最终决策由用户人工完成。\",\n  \"next_user_action\": \"详细审阅本次分析报告，重点关注致命风险部分，并决定是否将东方锆业移出观察列表或等待未来基本面及估值出现显著改善。\",\n  \"summary\": \"东方锆业（002167）当前面临极度高估的风险，市盈率高达230.63倍，且关键基本面数据严重缺失，无法支撑其当前股价。尽管技术面短期强势且市场关注度高，但股价已严重超买并伴随缩量上涨，回调风险巨大。红蓝团队对抗裁决红方占据绝对优势，认为存在致命风险，不建议看多。CIO判定为BLOCKED_BY_FATAL，建议不进行任何操作。\"\n}\n```",
+    "tokens_used": 25013,
+    "tool_calls_count": 0,
+    "models_used": [
+      "vertex_ai/gemini-2.5-flash"
+    ]
+  },
+  "no_trade_execution": true,
+  "evidence_pack": {
+    "schema": "evidence_pack_v1",
+    "scope": "stock",
+    "symbol": "002167",
+    "source_attempts": [],
+    "evidence_items": [
+      {
+        "claim": "TradeDecisionGate=BLOCKED_BY_FATAL；action=no_action；position=0.0% 。",
+        "data": "signal=hold；confidence=0.3；status=BLOCKED_BY_FATAL；headline=东方锆业：估值极高，基本面数据缺失，短期技术超买，存在致命风险，不建议操作",
+        "source": "runtime:scoring_result；runtime:red_blue_result；runtime:portfolio_context",
+        "inference": "[BLOCKED_BY_FATAL] 东方锆业：估值极高，基本面数据缺失，短期技术超买，存在致命风险，不建议操作\nNext: 不执行交易计划；先解决阻断原因后重新审查。；TradeDecisionGate 只做门控，不执行交易。"
+      }
+    ],
+    "missing_evidence": [
+      "日线数据缺失，影响技术分析的全面性。",
+      "筹码分布数据缺失，无法评估主力资金控盘程度。",
+      "新闻上下文缺失，无法了解近期具体利好或利空消息。",
+      "公司增长、盈利、机构持仓、资本流向等核心基本面数据缺失。",
+      "宏观经济环境关键指标（如增长、通胀、流动性）覆盖不完整。"
+    ],
+    "evidence_level": "LIMITED",
+    "confidence": "low",
+    "limited_report": true,
+    "can_go_redblue": false,
+    "can_trade_review": false,
+    "no_trade_execution": true
+  },
+  "evidence_level": "LIMITED",
+  "source_attempts": [],
+  "limited_report": true,
+  "confidence": "low"
+}

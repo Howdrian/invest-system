@@ -217,6 +217,106 @@ def render_deep_review_queue_html(payload: Dict[str, Any]) -> str:
     return f"<section class='hero'><div><span class='label'>Deep Review Queue</span><h1>{len(payload.get('candidates') or [])}</h1><p>最多 6 只；先筛选再深评。</p></div></section><section class='card'><table><thead><tr><th>Symbol</th><th>Verdict</th><th>Price risk</th><th>Next action</th></tr></thead><tbody>{rows}</tbody></table></section>"
 
 
+def select_governed_symbols(
+    *,
+    portfolio: Optional[Dict[str, Any]],
+    deep_queue: Optional[Dict[str, Any]],
+    limits: Optional[Dict[str, int]] = None,
+) -> Dict[str, Any]:
+    """Select governed deep-review symbols with explicit omission reasons."""
+
+    limits = limits or {}
+    portfolio_limit = max(0, int(limits.get("portfolio", 6)))
+    candidate_limit = max(0, int(limits.get("candidates", 6)))
+    total_limit = max(1, int(limits.get("total", 6)))
+
+    portfolio_payload = portfolio if isinstance(portfolio, dict) else {}
+    queue_payload = deep_queue if isinstance(deep_queue, dict) else {}
+    portfolio_symbols = [
+        _normalize_symbol_for_selection(symbol)
+        for symbol in (portfolio_payload.get("governed_symbols") or [])
+    ]
+    portfolio_symbols = [symbol for symbol in portfolio_symbols if symbol]
+    light_review_symbols = [
+        _normalize_symbol_for_selection(symbol)
+        for symbol in (portfolio_payload.get("light_review_symbols") or [])
+    ]
+    light_review_symbols = [symbol for symbol in light_review_symbols if symbol]
+
+    candidate_symbols: List[str] = []
+    for row in queue_payload.get("auto_governed_candidates") or []:
+        if isinstance(row, dict):
+            candidate_symbols.append(_normalize_symbol_for_selection(row.get("symbol") or row.get("code")))
+    for row in queue_payload.get("candidates") or []:
+        if not isinstance(row, dict):
+            continue
+        verdict = str(row.get("verdict") or "").upper()
+        if verdict in {"DEEP_REVIEW_NOW", "DEEP_REVIEW_WAIT_ENTRY"}:
+            candidate_symbols.append(_normalize_symbol_for_selection(row.get("symbol") or row.get("code")))
+    candidate_symbols = [symbol for symbol in candidate_symbols if symbol]
+
+    selected: List[str] = []
+    selected_by_source = {"portfolio": [], "candidate": []}
+    omitted: List[Dict[str, str]] = []
+    seen: set[str] = set()
+
+    for index, symbol in enumerate(portfolio_symbols):
+        if symbol in seen:
+            continue
+        seen.add(symbol)
+        if index >= portfolio_limit:
+            omitted.append({"symbol": symbol, "reason": "portfolio_limit"})
+            continue
+        if len(selected) >= total_limit:
+            omitted.append({"symbol": symbol, "reason": "total_limit"})
+            continue
+        selected.append(symbol)
+        selected_by_source["portfolio"].append(symbol)
+
+    candidate_taken = 0
+    for symbol in candidate_symbols:
+        if symbol in seen:
+            continue
+        seen.add(symbol)
+        if candidate_taken >= candidate_limit:
+            omitted.append({"symbol": symbol, "reason": "candidate_limit"})
+            continue
+        if len(selected) >= total_limit:
+            omitted.append({"symbol": symbol, "reason": "total_limit"})
+            continue
+        selected.append(symbol)
+        selected_by_source["candidate"].append(symbol)
+        candidate_taken += 1
+
+    return {
+        "schema": "governed_selection_v1",
+        "selected": selected,
+        "selected_by_source": selected_by_source,
+        "omitted": omitted,
+        "light_review_symbols": light_review_symbols,
+        "limits": {
+            "portfolio": portfolio_limit,
+            "candidates": candidate_limit,
+            "total": total_limit,
+        },
+        "policy": "portfolio governed holdings first; candidates next; omissions carry explicit reasons.",
+    }
+
+
+def _normalize_symbol_for_selection(value: Any) -> str:
+    text = str(value or "").strip().replace(" ", "")
+    text = html.unescape(text)
+    upper = text.upper()
+    for prefix in ("SZ", "SH", "BJ", "HK", "US"):
+        if upper.startswith(prefix):
+            text = text[len(prefix):]
+            upper = text.upper()
+            break
+    if "." in text:
+        text = text.split(".", 1)[0]
+    return text.upper() if not text.isdigit() else text
+
+
 def _candidate(
     *,
     symbol: str,

@@ -86,11 +86,12 @@ def build_portfolio_holding_snapshot(
             positions = env_positions
             source = "env"
         else:
-            legacy_path = os.environ.get("PORTFOLIO_HOLDINGS_FILE") or "/Users/hac/AI-Studio/投研/state/portfolio.md"
-            legacy_positions = _extract_legacy_markdown_positions(Path(legacy_path))
-            if legacy_positions:
-                positions = legacy_positions
-                source = "legacy_portfolio_md"
+            explicit_path = os.environ.get("PORTFOLIO_HOLDINGS_FILE")
+            if explicit_path:
+                legacy_positions = _extract_legacy_markdown_positions(Path(explicit_path))
+                if legacy_positions:
+                    positions = legacy_positions
+                    source = "explicit_portfolio_file"
     positions.sort(key=lambda item: _safe_float(item.get("market_value_base")), reverse=True)
 
     seen: set[str] = set()

@@ -107,6 +107,36 @@ def test_prediction_market_optional_failure_only_degrades_daily_report():
     assert payload["market_strategy"]["participation_allowed"] is True
 
 
+def test_source_health_rows_include_decision_grade_fields():
+    from src.market_cycle import build_market_cycle_payload
+
+    payload = build_market_cycle_payload(
+        run_date="2026-06-19",
+        symbols=["301013"],
+        macro_context={
+            "status": "PARTIAL",
+            "as_of": "not-a-date",
+            "coverage": {"available_factors": 3, "required_factors": 6, "coverage_score": 0.5},
+            "warnings": ["macro_factor_coverage_incomplete"],
+        },
+        market_heat={"status": "available", "focus_items": [{"symbol": "301013", "heat_bucket": "watch"}], "warnings": []},
+        prediction_market={"status": "available_no_matching_market", "warnings": ["polymarket_available_no_matching_market"], "scenario_fusion": []},
+        report_files=[],
+    )
+
+    rows = {row["component"]: row for row in payload["source_health"]["rows"]}
+    macro = rows["macro_context"]
+
+    assert macro["freshness_status"] in {"fresh", "unknown"}
+    assert macro["coverage_score"] == 0.5
+    assert macro["can_score"] is True
+    assert macro["can_trade_review"] is False
+    assert macro["decision_impact"]
+    assert macro["evidence_refs"]
+    assert rows["prediction_market"]["status"] == "AVAILABLE_NO_MATCHING_MARKET"
+    assert rows["prediction_market"]["can_trade_review"] is True
+
+
 def test_market_cycle_report_files_are_date_scoped(tmp_path, monkeypatch):
     from src.market_cycle import _find_report_files
 

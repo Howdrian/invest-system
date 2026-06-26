@@ -1,0 +1,173 @@
+{
+  "schema": "agent_memo_v1",
+  "agent": "RedBlueAgent",
+  "scope": "stock",
+  "symbol": "002167",
+  "status": "PASS",
+  "origin": "RAW_AGENT",
+  "origin_label": "真实 Agent 输出",
+  "facts": [
+    "signal=sell",
+    "confidence=0.1",
+    "arbitration={\"blue_strength\": 3, \"red_strength\": 9, \"stronger_side\": \"red\", \"blind_spots\": [\"双方都未能提供或提及公司具体的业务进展、产品竞争力或市场份额数据，无法判断其在新材料、固态电池等领域的实际竞争力。\", \"宏观环境分析中，虽然提到了中性风险状态，但未能深入探讨宏观经济对有色金属、新材料等特定行业的影响，以及东方锆业在此宏观背景下的具体机遇或挑战。\", \"缺乏关于公司资本结构、债务水平、现金流等财务健康状况的全面评估，这对于判断公司长期可持续性至关重要。\"], \"confiden..."
+  ],
+  "reasoning": [
+    "红方证据链更为完整且风险提示更具说服力，蓝方未能有效反驳关键的估值过高和基本面数据缺失的致命风险，因此红方在此次辩论中占据绝对优势，不建议看多。"
+  ],
+  "conclusion": "红方证据链更为完整且风险提示更具说服力，蓝方未能有效反驳关键的估值过高和基本面数据缺失的致命风险，因此红方在此次辩论中占据绝对优势，不建议看多。",
+  "missing_data": [],
+  "source_refs": [
+    "runtime:evidence_gate_result",
+    "runtime:agent_opinions"
+  ],
+  "fatal_objection": false,
+  "next_step": "将红蓝仲裁交给 ScoringAgent 量化。",
+  "readable_summary": "红方证据链更为完整且风险提示更具说服力，蓝方未能有效反驳关键的估值过高和基本面数据缺失的致命风险，因此红方在此次辩论中占据绝对优势，不建议看多。",
+  "evidence_blocks": [
+    {
+      "claim": "红方证据链更为完整且风险提示更具说服力，蓝方未能有效反驳关键的估值过高和基本面数据缺失的致命风险，因此红方在此次辩论中占据绝对优势，不建议看多。",
+      "data": "signal=sell；confidence=0.1；arbitration={\"blue_strength\": 3, \"red_strength\": 9, \"stronger_side\": \"red\", \"blind_spots\": [\"双方都未能提供或提及公司具体的业务进展、产品竞争力或市场份额数据，无法判断其在新材料、固态电池等领域的实际竞争力。\", \"宏观环境分析中，虽然提到了中性风险状态，但未能深入探讨宏观经济对有色金属、新材料等特定行业的影响，以及东方锆业在此宏观背景下的具体机遇或挑战。\", \"缺乏关于公司资本结构、债务水平、现金流等财务健康状况的全面评估，这对于判断公司长期可持续性至关重要。\"], \"confiden...",
+      "source": "runtime:evidence_gate_result；runtime:agent_opinions",
+      "inference": "红方证据链更为完整且风险提示更具说服力，蓝方未能有效反驳关键的估值过高和基本面数据缺失的致命风险，因此红方在此次辩论中占据绝对优势，不建议看多。"
+    }
+  ],
+  "audit_detail": {
+    "schema": "agent_memo_v1",
+    "origin": "RAW_AGENT",
+    "stage_name": "red_blue",
+    "status": "PASS",
+    "raw_untrusted": true,
+    "raw_data": {
+      "blue_team": {
+        "arguments": [
+          {
+            "thesis": "技术面强势多头趋势显著，市场关注度高。",
+            "data": "截至2026-06-18，东方锆业处于“强势多头”状态，均线（MA5、MA10、MA20）呈发散上行多头排列。RSI指标显示“强势买入”（RSI_12为68.04），买入信号评分为62。同时，在东方财富人气榜上排名第三，显示市场高度关注。",
+            "timeframe": "短期至中期（数周至数月）",
+            "catalyst": "市场情绪持续乐观，技术指标进一步向上突破，获得更多市场关注或纳入指数。"
+          },
+          {
+            "thesis": "股价近期表现强劲，受益于行业整体景气。",
+            "data": "上一交易日（2026-06-18）股价上涨10.03%，实现涨停。公司所属行业板块“非金属矿采选业”当日上涨4.62%，“有色金属冶炼和压延加工业”上涨2.23%，显示行业整体景气度较高。",
+            "timeframe": "短期（数日到数周）",
+            "catalyst": "有色金属或小金属行业持续发布利好政策或价格上涨，公司自身公布积极的经营数据。"
+          },
+          {
+            "thesis": "布局高成长性新材料和电池技术领域，具备未来发展潜力。",
+            "data": "公司业务涵盖“新材料”、“固态电池”和“电池技术”等多个高成长性概念板块。",
+            "timeframe": "中长期（数月至数年）",
+            "catalyst": "公司在新材料或固态电池技术方面取得重大研发进展、获得关键订单或政策支持。"
+          }
+        ],
+        "rebuttals": [
+          {
+            "targets_red_attack": 1,
+            "response": "虽然股价乖离率偏高且缩量上涨存在短期回调风险，但整体技术趋势仍为“强势多头”，均线多头排列，RSI也处于强势区域，表明内在上涨动能依然存在，可能通过横盘整理而非深度回调来消化乖离。",
+            "evidence": "trend_status: \"强势多头\", ma_alignment: \"强势多头排列，均线发散上行\", rsi_status: \"强势买入\" (RSI_12: 68.04)。",
+            "resolved": "partial"
+          },
+          {
+            "targets_red_attack": 2,
+            "response": "承认目前缺乏详细的公司基本面数据来支撑股价上涨。然而，股价进入东方财富人气榜前三，且所属行业整体表现强势，这表明市场存在对该行业或公司的积极预期，可能是行业性普涨或市场热点轮动所致。",
+            "evidence": "intel_opinion: \"所属行业（非金属矿采选业、有色金属）表现强势\", market_heat_context: 002167排名第3，相关行业板块涨幅居前。",
+            "resolved": "partial"
+          },
+          {
+            "targets_red_attack": 3,
+            "response": "承认当前市盈率（230.63）和市净率（7.02）估值较高。但考虑到公司涉足“新材料”、“固态电池”等高科技、高成长性概念，市场可能正在对其未来业绩增长进行提前定价。在这些新兴领域，传统估值方法可能无法完全反映其增长潜力。",
+            "evidence": "fundamental_context: belong_boards中包含“新材料”、“固态电池”、“电池技术”。",
+            "resolved": "partial"
+          }
+        ],
+        "overall_strength": 4
+      },
+      "red_team": {
+        "attacks": [
+          {
+            "targets_blue_arg": 1,
+            "fatal_risk": "股价短期严重超买，缩量上涨动能不足，存在剧烈技术回调风险。",
+            "evidence": "截至2026-06-18，股价16.13元，相对于MA5乖离率高达7.49%，MA10乖离率12.80%，MA20乖离率16.47%。同时，当日涨停是“缩量上涨”（volume_ratio: 0.3），“上攻动能不足”。",
+            "probability": "high"
+          },
+          {
+            "targets_blue_arg": 2,
+            "fatal_risk": "缺乏基本面数据支撑，股价上涨缺乏内在驱动力，行业普涨不代表个股可持续性。",
+            "evidence": "intel_opinion明确指出“缺乏详细新闻和基本面数据支撑股价上涨”。fundamental_context中，公司增长、盈利、机构持仓、资本流向等关键基本面数据均显示为“missing”或“failed”。",
+            "probability": "high"
+          },
+          {
+            "targets_blue_arg": 3,
+            "fatal_risk": "估值极高，且缺乏实际增长数据支持，概念炒作风险巨大。",
+            "evidence": "当前市盈率PE高达230.63倍，市净率PB为7.02倍，远高于合理水平。fundamental_context中增长数据缺失，且公司所属板块包含“2025年报预减”。高估值完全建立在未经验证的“概念”之上，而非已实现的业绩或明确的增长预期。",
+            "probability": "critical"
+          }
+        ],
+        "final_attacks": [
+          {
+            "targets_blue_rebuttal": 1,
+            "counterpoint": "蓝队承认了高乖离率和缩量上涨的风险，但辩称内在上涨动能依然存在。然而，技术趋势的“强势”是在短期快速拉升后形成的，缩量上涨本身就说明多头力量的持续性存疑。一旦市场情绪降温，高乖离率将迅速引发获利回吐，而非简单的横盘整理。",
+            "remaining_risk": "fatal",
+            "evidence_gap": "无新增证据缺失，但蓝队对现有证据的解释未能充分化解风险。"
+          },
+          {
+            "targets_blue_rebuttal": 2,
+            "counterpoint": "蓝队承认了基本面数据缺失的问题。虽然公司身处热门行业且股价表现强势，但缺乏公司层面的具体利好消息或业绩支撑，这使得股价上涨更像是资金炒作的结果，而非价值驱动。市场热度来得快去得也快，一旦资金撤离，股价将面临巨大压力。",
+            "remaining_risk": "fatal",
+            "evidence_gap": "关键基本面数据（增长、盈利、机构持仓、资本流向）仍完全缺失，蓝队未能提供任何证据来弥补这一空白。"
+          },
+          {
+            "targets_blue_rebuttal": 3,
+            "counterpoint": "蓝队承认了高估值，但试图用“高成长性概念”来合理化。然而，高估值需要强劲的、可验证的业绩增长来支撑，目前不仅缺乏增长数据，反而有“2025年报预减”的潜在负面信息。单纯依靠概念进行炒作，风险极高，一旦概念热度消退或业绩不及预期，股价将面临估值回归的巨大压力。",
+            "remaining_risk": "fatal",
+            "evidence_gap": "蓝队未能提供任何具体证据来支持“高成长性概念”能转化为实际业绩增长，且未能解释“2025年报预减”与高估值之间的矛盾。"
+          }
+        ],
+        "overall_strength": 9
+      },
+      "arbitration": {
+        "blue_strength": 3,
+        "red_strength": 9,
+        "stronger_side": "red",
+        "blind_spots": [
+          "双方都未能提供或提及公司具体的业务进展、产品竞争力或市场份额数据，无法判断其在新材料、固态电池等领域的实际竞争力。",
+          "宏观环境分析中，虽然提到了中性风险状态，但未能深入探讨宏观经济对有色金属、新材料等特定行业的影响，以及东方锆业在此宏观背景下的具体机遇或挑战。",
+          "缺乏关于公司资本结构、债务水平、现金流等财务健康状况的全面评估，这对于判断公司长期可持续性至关重要。"
+        ],
+        "confidence_in_bull_case": 1,
+        "verdict": "红方证据链更为完整且风险提示更具说服力，蓝方未能有效反驳关键的估值过高和基本面数据缺失的致命风险，因此红方在此次辩论中占据绝对优势，不建议看多。"
+      }
+    },
+    "raw_text": "```json\n{\n  \"blue_team\": {\n    \"arguments\": [\n      {\n        \"thesis\": \"技术面强势多头趋势显著，市场关注度高。\",\n        \"data\": \"截至2026-06-18，东方锆业处于“强势多头”状态，均线（MA5、MA10、MA20）呈发散上行多头排列。RSI指标显示“强势买入”（RSI_12为68.04），买入信号评分为62。同时，在东方财富人气榜上排名第三，显示市场高度关注。\",\n        \"timeframe\": \"短期至中期（数周至数月）\",\n        \"catalyst\": \"市场情绪持续乐观，技术指标进一步向上突破，获得更多市场关注或纳入指数。\"\n      },\n      {\n        \"thesis\": \"股价近期表现强劲，受益于行业整体景气。\",\n        \"data\": \"上一交易日（2026-06-18）股价上涨10.03%，实现涨停。公司所属行业板块“非金属矿采选业”当日上涨4.62%，“有色金属冶炼和压延加工业”上涨2.23%，显示行业整体景气度较高。\",\n        \"timeframe\": \"短期（数日到数周）\",\n        \"catalyst\": \"有色金属或小金属行业持续发布利好政策或价格上涨，公司自身公布积极的经营数据。\"\n      },\n      {\n        \"thesis\": \"布局高成长性新材料和电池技术领域，具备未来发展潜力。\",\n        \"data\": \"公司业务涵盖“新材料”、“固态电池”和“电池技术”等多个高成长性概念板块。\",\n        \"timeframe\": \"中长期（数月至数年）\",\n        \"catalyst\": \"公司在新材料或固态电池技术方面取得重大研发进展、获得关键订单或政策支持。\"\n      }\n    ],\n    \"rebuttals\": [\n      {\n        \"targets_red_attack\": 1,\n        \"response\": \"虽然股价乖离率偏高且缩量上涨存在短期回调风险，但整体技术趋势仍为“强势多头”，均线多头排列，RSI也处于强势区域，表明内在上涨动能依然存在，可能通过横盘整理而非深度回调来消化乖离。\",\n        \"evidence\": \"trend_status: \\\"强势多头\\\", ma_alignment: \\\"强势多头排列，均线发散上行\\\", rsi_status: \\\"强势买入\\\" (RSI_12: 68.04)。\",\n        \"resolved\": \"partial\"\n      },\n      {\n        \"targets_red_attack\": 2,\n        \"response\": \"承认目前缺乏详细的公司基本面数据来支撑股价上涨。然而，股价进入东方财富人气榜前三，且所属行业整体表现强势，这表明市场存在对该行业或公司的积极预期，可能是行业性普涨或市场热点轮动所致。\",\n        \"evidence\": \"intel_opinion: \\\"所属行业（非金属矿采选业、有色金属）表现强势\\\", market_heat_context: 002167排名第3，相关行业板块涨幅居前。\",\n        \"resolved\": \"partial\"\n      },\n      {\n        \"targets_red_attack\": 3,\n        \"response\": \"承认当前市盈率（230.63）和市净率（7.02）估值较高。但考虑到公司涉足“新材料”、“固态电池”等高科技、高成长性概念，市场可能正在对其未来业绩增长进行提前定价。在这些新兴领域，传统估值方法可能无法完全反映其增长潜力。\",\n        \"evidence\": \"fundamental_context: belong_boards中包含“新材料”、“固态电池”、“电池技术”。\",\n        \"resolved\": \"partial\"\n      }\n    ],\n    \"overall_strength\": 4\n  },\n  \"red_team\": {\n    \"attacks\": [\n      {\n        \"targets_blue_arg\": 1,\n        \"fatal_risk\": \"股价短期严重超买，缩量上涨动能不足，存在剧烈技术回调风险。\",\n        \"evidence\": \"截至2026-06-18，股价16.13元，相对于MA5乖离率高达7.49%，MA10乖离率12.80%，MA20乖离率16.47%。同时，当日涨停是“缩量上涨”（volume_ratio: 0.3），“上攻动能不足”。\",\n        \"probability\": \"high\"\n      },\n      {\n        \"targets_blue_arg\": 2,\n        \"fatal_risk\": \"缺乏基本面数据支撑，股价上涨缺乏内在驱动力，行业普涨不代表个股可持续性。\",\n        \"evidence\": \"intel_opinion明确指出“缺乏详细新闻和基本面数据支撑股价上涨”。fundamental_context中，公司增长、盈利、机构持仓、资本流向等关键基本面数据均显示为“missing”或“failed”。\",\n        \"probability\": \"high\"\n      },\n      {\n        \"targets_blue_arg\": 3,\n        \"fatal_risk\": \"估值极高，且缺乏实际增长数据支持，概念炒作风险巨大。\",\n        \"evidence\": \"当前市盈率PE高达230.63倍，市净率PB为7.02倍，远高于合理水平。fundamental_context中增长数据缺失，且公司所属板块包含“2025年报预减”。高估值完全建立在未经验证的“概念”之上，而非已实现的业绩或明确的增长预期。\",\n        \"probability\": \"critical\"\n      }\n    ],\n    \"final_attacks\": [\n      {\n        \"targets_blue_rebuttal\": 1,\n        \"counterpoint\": \"蓝队承认了高乖离率和缩量上涨的风险，但辩称内在上涨动能依然存在。然而，技术趋势的“强势”是在短期快速拉升后形成的，缩量上涨本身就说明多头力量的持续性存疑。一旦市场情绪降温，高乖离率将迅速引发获利回吐，而非简单的横盘整理。\",\n        \"remaining_risk\": \"fatal\",\n        \"evidence_gap\": \"无新增证据缺失，但蓝队对现有证据的解释未能充分化解风险。\"\n      },\n      {\n        \"targets_blue_rebuttal\": 2,\n        \"counterpoint\": \"蓝队承认了基本面数据缺失的问题。虽然公司身处热门行业且股价表现强势，但缺乏公司层面的具体利好消息或业绩支撑，这使得股价上涨更像是资金炒作的结果，而非价值驱动。市场热度来得快去得也快，一旦资金撤离，股价将面临巨大压力。\",\n        \"remaining_risk\": \"fatal\",\n        \"evidence_gap\": \"关键基本面数据（增长、盈利、机构持仓、资本流向）仍完全缺失，蓝队未能提供任何证据来弥补这一空白。\"\n      },\n      {\n        \"targets_blue_rebuttal\": 3,\n        \"counterpoint\": \"蓝队承认了高估值，但试图用“高成长性概念”来合理化。然而，高估值需要强劲的、可验证的业绩增长来支撑，目前不仅缺乏增长数据，反而有“2025年报预减”的潜在负面信息。单纯依靠概念进行炒作，风险极高，一旦概念热度消退或业绩不及预期，股价将面临估值回归的巨大压力。\",\n        \"remaining_risk\": \"fatal\",\n        \"evidence_gap\": \"蓝队未能提供任何具体证据来支持“高成长性概念”能转化为实际业绩增长，且未能解释“2025年报预减”与高估值之间的矛盾。\"\n      }\n    ],\n    \"overall_strength\": 9\n  },\n  \"arbitration\": {\n    \"blue_strength\": 3,\n    \"red_strength\": 9,\n    \"stronger_side\": \"red\",\n    \"blind_spots\": [\n      \"双方都未能提供或提及公司具体的业务进展、产品竞争力或市场份额数据，无法判断其在新材料、固态电池等领域的实际竞争力。\",\n      \"宏观环境分析中，虽然提到了中性风险状态，但未能深入探讨宏观经济对有色金属、新材料等特定行业的影响，以及东方锆业在此宏观背景下的具体机遇或挑战。\",\n      \"缺乏关于公司资本结构、债务水平、现金流等财务健康状况的全面评估，这对于判断公司长期可持续性至关重要。\"\n    ],\n    \"confidence_in_bull_case\": 1,\n    \"verdict\": \"红方证据链更为完整且风险提示更具说服力，蓝方未能有效反驳关键的估值过高和基本面数据缺失的致命风险，因此红方在此次辩论中占据绝对优势，不建议看多。\"\n  }\n}\n```",
+    "tokens_used": 27211,
+    "tool_calls_count": 0,
+    "models_used": [
+      "vertex_ai/gemini-2.5-flash"
+    ]
+  },
+  "no_trade_execution": true,
+  "evidence_pack": {
+    "schema": "evidence_pack_v1",
+    "scope": "stock",
+    "symbol": "002167",
+    "source_attempts": [],
+    "evidence_items": [
+      {
+        "claim": "红方证据链更为完整且风险提示更具说服力，蓝方未能有效反驳关键的估值过高和基本面数据缺失的致命风险，因此红方在此次辩论中占据绝对优势，不建议看多。",
+        "data": "signal=sell；confidence=0.1；arbitration={\"blue_strength\": 3, \"red_strength\": 9, \"stronger_side\": \"red\", \"blind_spots\": [\"双方都未能提供或提及公司具体的业务进展、产品竞争力或市场份额数据，无法判断其在新材料、固态电池等领域的实际竞争力。\", \"宏观环境分析中，虽然提到了中性风险状态，但未能深入探讨宏观经济对有色金属、新材料等特定行业的影响，以及东方锆业在此宏观背景下的具体机遇或挑战。\", \"缺乏关于公司资本结构、债务水平、现金流等财务健康状况的全面评估，这对于判断公司长期可持续性至关重要。\"], \"confiden...",
+        "source": "runtime:evidence_gate_result；runtime:agent_opinions",
+        "inference": "红方证据链更为完整且风险提示更具说服力，蓝方未能有效反驳关键的估值过高和基本面数据缺失的致命风险，因此红方在此次辩论中占据绝对优势，不建议看多。"
+      }
+    ],
+    "missing_evidence": [],
+    "evidence_level": "PARTIAL",
+    "confidence": "medium",
+    "limited_report": false,
+    "can_go_redblue": true,
+    "can_trade_review": false,
+    "no_trade_execution": true
+  },
+  "evidence_level": "PARTIAL",
+  "source_attempts": [],
+  "limited_report": false,
+  "confidence": "medium"
+}

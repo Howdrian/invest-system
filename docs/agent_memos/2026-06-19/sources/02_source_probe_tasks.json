@@ -1,0 +1,75 @@
+[
+  {
+    "task": "macro_probe",
+    "goal": "验证 FMP/FRED/BEA/EIA 能否生成增长、通胀、利率、美元、能源、信用六因子。",
+    "sources": [
+      "FMP",
+      "FRED",
+      "BEA",
+      "EIA",
+      "Treasury",
+      "NY Fed",
+      "BLS"
+    ]
+  },
+  {
+    "task": "a_share_probe",
+    "goal": "验证 Eastmoney/CNINFO/Tushare/AKShare/efinance 的行情、公告、财务字段。",
+    "sources": [
+      "Eastmoney",
+      "CNINFO",
+      "SSE/SZSE",
+      "Gov.cn",
+      "CSRC",
+      "NDRC",
+      "PBOC",
+      "Tushare",
+      "AKShare",
+      "efinance"
+    ]
+  },
+  {
+    "task": "us_stock_probe",
+    "goal": "验证 SEC submissions、company facts、Yahoo/FMP 财务快照。",
+    "sources": [
+      "SEC EDGAR APIs",
+      "SEC Company Facts",
+      "Yahoo",
+      "Nasdaq",
+      "FMP"
+    ]
+  },
+  {
+    "task": "news_report_probe",
+    "goal": "验证 Tavily/Google News/GDELT/IR 的新闻、研报、公告原文链接。",
+    "sources": [
+      "Google News RSS",
+      "GDELT",
+      "Tavily",
+      "Company IR"
+    ]
+  },
+  {
+    "task": "polymarket_probe",
+    "goal": "把地缘四场景映射到可用市场，输出质量分和权重。",
+    "sources": [
+      "Polymarket Gamma/Data/CLOB"
+    ]
+  },
+  {
+    "task": "portfolio_probe",
+    "goal": "验证持仓行情、成本、浮盈亏、公告、板块联动。",
+    "sources": [
+      "invest-system DB",
+      "PORTFOLIO_HOLDINGS",
+      "持仓导出文件"
+    ]
+  },
+  {
+    "task": "source_gap_plan",
+    "goal": "每日列出缺什么源、去哪拿、是否要 key、是否阻断交易审查。",
+    "sources": [
+      "source_status_v1"
+    ]
+  }
+]

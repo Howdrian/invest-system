@@ -39,6 +39,7 @@ from src.report_language import (
     localize_trend_prediction,
     normalize_report_language,
 )
+from src.report_artifact import build_stock_artifact_from_history_detail
 from src.services.history_service import HistoryService, MarkdownReportGenerationError
 from src.utils.data_processing import (
     normalize_model_used,
@@ -314,7 +315,8 @@ def get_history_detail(
             meta=meta,
             summary=summary,
             strategy=strategy,
-            details=details
+            details=details,
+            artifact=build_stock_artifact_from_history_detail(result),
         )
         
     except HTTPException:

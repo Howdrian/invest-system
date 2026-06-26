@@ -1,0 +1,93 @@
+{
+  "schema": "agent_memo_v1",
+  "agent": "TechnicalAgent",
+  "scope": "stock",
+  "symbol": "600667",
+  "status": "PASS",
+  "origin": "RAW_AGENT",
+  "origin_label": "真实 Agent 输出",
+  "facts": [
+    "signal=hold",
+    "confidence=0.5",
+    "trend_score=90",
+    "ma_alignment=bullish",
+    "volume_status=normal",
+    "pattern=大阳线",
+    "key_levels={\"support\": 18.34, \"resistance\": 20.92, \"stop_loss\": 15.56}"
+  ],
+  "reasoning": [
+    "太极实业目前处于强势多头趋势，均线系统呈多头排列并向上发散，MACD指标也为多头状态。然而，股价距离各均线乖离率过高（MA5乖离率14.09%），且RSI（12日RSI为78.24）处于严重超买区域，短期存在较高的回调风险。虽然昨日放量涨停并收出大阳线，但策略强调不追高，建议等待回踩机会而非当前高位介入。"
+  ],
+  "conclusion": "太极实业目前处于强势多头趋势，均线系统呈多头排列并向上发散，MACD指标也为多头状态。然而，股价距离各均线乖离率过高（MA5乖离率14.09%），且RSI（12日RSI为78.24）处于严重超买区域，短期存在较高的回调风险。虽然昨日放量涨停并收出大阳线，但策略强调不追高，建议等待回踩机会而非当前高位介入。",
+  "missing_data": [],
+  "source_refs": [
+    "runtime:realtime_quote",
+    "runtime:daily_history",
+    "runtime:trend_result"
+  ],
+  "fatal_objection": false,
+  "next_step": "用技术关键位验证是否追高或等待承接。",
+  "readable_summary": "太极实业目前处于强势多头趋势，均线系统呈多头排列并向上发散，MACD指标也为多头状态。然而，股价距离各均线乖离率过高（MA5乖离率14.09%），且RSI（12日RSI为78.24）处于严重超买区域，短期存在较高的回调风险。虽然昨日放量涨停并收出大阳线，但策略强调不追高，建议等待回踩机会而非当前高位介入。",
+  "evidence_blocks": [
+    {
+      "claim": "太极实业目前处于强势多头趋势，均线系统呈多头排列并向上发散，MACD指标也为多头状态。然而，股价距离各均线乖离率过高（MA5乖离率14.09%），且RSI（12日RSI为78.24）处于严重超买区域，短期存在较高的回调风险。虽然昨日放量涨停并收出大阳线，但策略强调不追高，建议等待回踩机会而非当前高位介入。",
+      "data": "signal=hold；confidence=0.5；trend_score=90；ma_alignment=bullish",
+      "source": "runtime:realtime_quote；runtime:daily_history；runtime:trend_result",
+      "inference": "太极实业目前处于强势多头趋势，均线系统呈多头排列并向上发散，MACD指标也为多头状态。然而，股价距离各均线乖离率过高（MA5乖离率14.09%），且RSI（12日RSI为78.24）处于严重超买区域，短期存在较高的回调风险。虽然昨日放量涨停并收出大阳线，但策略强调不追高，建议等待回踩机会而非当前高位介入。"
+    }
+  ],
+  "audit_detail": {
+    "schema": "agent_memo_v1",
+    "origin": "RAW_AGENT",
+    "stage_name": "technical",
+    "status": "PASS",
+    "raw_untrusted": true,
+    "raw_data": {
+      "signal": "hold",
+      "confidence": 0.5,
+      "reasoning": "太极实业目前处于强势多头趋势，均线系统呈多头排列并向上发散，MACD指标也为多头状态。然而，股价距离各均线乖离率过高（MA5乖离率14.09%），且RSI（12日RSI为78.24）处于严重超买区域，短期存在较高的回调风险。虽然昨日放量涨停并收出大阳线，但策略强调不追高，建议等待回踩机会而非当前高位介入。",
+      "key_levels": {
+        "support": 18.34,
+        "resistance": 20.92,
+        "stop_loss": 15.56
+      },
+      "trend_score": 90,
+      "ma_alignment": "bullish",
+      "volume_status": "normal",
+      "pattern": "大阳线"
+    },
+    "raw_text": "```json\n{\n  \"signal\": \"hold\",\n  \"confidence\": 0.5,\n  \"reasoning\": \"太极实业目前处于强势多头趋势，均线系统呈多头排列并向上发散，MACD指标也为多头状态。然而，股价距离各均线乖离率过高（MA5乖离率14.09%），且RSI（12日RSI为78.24）处于严重超买区域，短期存在较高的回调风险。虽然昨日放量涨停并收出大阳线，但策略强调不追高，建议等待回踩机会而非当前高位介入。\",\n  \"key_levels\": {\n    \"support\": 18.34,\n    \"resistance\": 20.92,\n    \"stop_loss\": 15.56\n  },\n  \"trend_score\": 90,\n  \"ma_alignment\": \"bullish\",\n  \"volume_status\": \"normal\",\n  \"pattern\": \"大阳线\"\n}\n```",
+    "tokens_used": 31559,
+    "tool_calls_count": 3,
+    "models_used": [
+      "vertex_ai/gemini-2.5-flash",
+      "vertex_ai/gemini-2.5-flash"
+    ]
+  },
+  "no_trade_execution": true,
+  "evidence_pack": {
+    "schema": "evidence_pack_v1",
+    "scope": "stock",
+    "symbol": "600667",
+    "source_attempts": [],
+    "evidence_items": [
+      {
+        "claim": "太极实业目前处于强势多头趋势，均线系统呈多头排列并向上发散，MACD指标也为多头状态。然而，股价距离各均线乖离率过高（MA5乖离率14.09%），且RSI（12日RSI为78.24）处于严重超买区域，短期存在较高的回调风险。虽然昨日放量涨停并收出大阳线，但策略强调不追高，建议等待回踩机会而非当前高位介入。",
+        "data": "signal=hold；confidence=0.5；trend_score=90；ma_alignment=bullish",
+        "source": "runtime:realtime_quote；runtime:daily_history；runtime:trend_result",
+        "inference": "太极实业目前处于强势多头趋势，均线系统呈多头排列并向上发散，MACD指标也为多头状态。然而，股价距离各均线乖离率过高（MA5乖离率14.09%），且RSI（12日RSI为78.24）处于严重超买区域，短期存在较高的回调风险。虽然昨日放量涨停并收出大阳线，但策略强调不追高，建议等待回踩机会而非当前高位介入。"
+      }
+    ],
+    "missing_evidence": [],
+    "evidence_level": "PARTIAL",
+    "confidence": "medium",
+    "limited_report": false,
+    "can_go_redblue": true,
+    "can_trade_review": false,
+    "no_trade_execution": true
+  },
+  "evidence_level": "PARTIAL",
+  "source_attempts": [],
+  "limited_report": false,
+  "confidence": "medium"
+}

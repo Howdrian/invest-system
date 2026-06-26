@@ -1,0 +1,93 @@
+{
+  "schema": "agent_memo_v1",
+  "agent": "TechnicalAgent",
+  "scope": "stock",
+  "symbol": "300308",
+  "status": "PASS",
+  "origin": "RAW_AGENT",
+  "origin_label": "真实 Agent 输出",
+  "facts": [
+    "signal=hold",
+    "confidence=0.6",
+    "trend_score=90",
+    "ma_alignment=bullish",
+    "volume_status=normal",
+    "pattern=大阳线",
+    "key_levels={\"support\": 1257.22, \"resistance\": 1368.5, \"stop_loss\": 1182.67}"
+  ],
+  "reasoning": [
+    "中际旭创处于强势多头趋势，均线多头排列且发散上行，MACD显示零轴上方金叉，发出强烈买入信号。然而，股价当前乖离率过高（偏离MA5达8.8%），且RSI指标严重超买（RSI6=80.7），短期回调风险较高。最新交易日收出大阳线，但鉴于过高的乖离率，不建议追高，宜等待缩量回踩均线支撑。"
+  ],
+  "conclusion": "中际旭创处于强势多头趋势，均线多头排列且发散上行，MACD显示零轴上方金叉，发出强烈买入信号。然而，股价当前乖离率过高（偏离MA5达8.8%），且RSI指标严重超买（RSI6=80.7），短期回调风险较高。最新交易日收出大阳线，但鉴于过高的乖离率，不建议追高，宜等待缩量回踩均线支撑。",
+  "missing_data": [],
+  "source_refs": [
+    "runtime:realtime_quote",
+    "runtime:daily_history",
+    "runtime:trend_result"
+  ],
+  "fatal_objection": false,
+  "next_step": "用技术关键位验证是否追高或等待承接。",
+  "readable_summary": "中际旭创处于强势多头趋势，均线多头排列且发散上行，MACD显示零轴上方金叉，发出强烈买入信号。然而，股价当前乖离率过高（偏离MA5达8.8%），且RSI指标严重超买（RSI6=80.7），短期回调风险较高。最新交易日收出大阳线，但鉴于过高的乖离率，不建议追高，宜等待缩量回踩均线支撑。",
+  "evidence_blocks": [
+    {
+      "claim": "中际旭创处于强势多头趋势，均线多头排列且发散上行，MACD显示零轴上方金叉，发出强烈买入信号。然而，股价当前乖离率过高（偏离MA5达8.8%），且RSI指标严重超买（RSI6=80.7），短期回调风险较高。最新交易日收出大阳线，但鉴于过高的乖离率，不建议追高，宜等待缩量回踩均线支撑。",
+      "data": "signal=hold；confidence=0.6；trend_score=90；ma_alignment=bullish",
+      "source": "runtime:realtime_quote；runtime:daily_history；runtime:trend_result",
+      "inference": "中际旭创处于强势多头趋势，均线多头排列且发散上行，MACD显示零轴上方金叉，发出强烈买入信号。然而，股价当前乖离率过高（偏离MA5达8.8%），且RSI指标严重超买（RSI6=80.7），短期回调风险较高。最新交易日收出大阳线，但鉴于过高的乖离率，不建议追高，宜等待缩量回踩均线支撑。"
+    }
+  ],
+  "audit_detail": {
+    "schema": "agent_memo_v1",
+    "origin": "RAW_AGENT",
+    "stage_name": "technical",
+    "status": "PASS",
+    "raw_untrusted": true,
+    "raw_data": {
+      "signal": "hold",
+      "confidence": 0.6,
+      "reasoning": "中际旭创处于强势多头趋势，均线多头排列且发散上行，MACD显示零轴上方金叉，发出强烈买入信号。然而，股价当前乖离率过高（偏离MA5达8.8%），且RSI指标严重超买（RSI6=80.7），短期回调风险较高。最新交易日收出大阳线，但鉴于过高的乖离率，不建议追高，宜等待缩量回踩均线支撑。",
+      "key_levels": {
+        "support": 1257.22,
+        "resistance": 1368.5,
+        "stop_loss": 1182.67
+      },
+      "trend_score": 90,
+      "ma_alignment": "bullish",
+      "volume_status": "normal",
+      "pattern": "大阳线"
+    },
+    "raw_text": "```json\n{\n  \"signal\": \"hold\",\n  \"confidence\": 0.6,\n  \"reasoning\": \"中际旭创处于强势多头趋势，均线多头排列且发散上行，MACD显示零轴上方金叉，发出强烈买入信号。然而，股价当前乖离率过高（偏离MA5达8.8%），且RSI指标严重超买（RSI6=80.7），短期回调风险较高。最新交易日收出大阳线，但鉴于过高的乖离率，不建议追高，宜等待缩量回踩均线支撑。\",\n  \"key_levels\": {\n    \"support\": 1257.22,\n    \"resistance\": 1368.5,\n    \"stop_loss\": 1182.67\n  },\n  \"trend_score\": 90,\n  \"ma_alignment\": \"bullish\",\n  \"volume_status\": \"normal\",\n  \"pattern\": \"大阳线\"\n}\n```",
+    "tokens_used": 30802,
+    "tool_calls_count": 3,
+    "models_used": [
+      "vertex_ai/gemini-2.5-flash",
+      "vertex_ai/gemini-2.5-flash"
+    ]
+  },
+  "no_trade_execution": true,
+  "evidence_pack": {
+    "schema": "evidence_pack_v1",
+    "scope": "stock",
+    "symbol": "300308",
+    "source_attempts": [],
+    "evidence_items": [
+      {
+        "claim": "中际旭创处于强势多头趋势，均线多头排列且发散上行，MACD显示零轴上方金叉，发出强烈买入信号。然而，股价当前乖离率过高（偏离MA5达8.8%），且RSI指标严重超买（RSI6=80.7），短期回调风险较高。最新交易日收出大阳线，但鉴于过高的乖离率，不建议追高，宜等待缩量回踩均线支撑。",
+        "data": "signal=hold；confidence=0.6；trend_score=90；ma_alignment=bullish",
+        "source": "runtime:realtime_quote；runtime:daily_history；runtime:trend_result",
+        "inference": "中际旭创处于强势多头趋势，均线多头排列且发散上行，MACD显示零轴上方金叉，发出强烈买入信号。然而，股价当前乖离率过高（偏离MA5达8.8%），且RSI指标严重超买（RSI6=80.7），短期回调风险较高。最新交易日收出大阳线，但鉴于过高的乖离率，不建议追高，宜等待缩量回踩均线支撑。"
+      }
+    ],
+    "missing_evidence": [],
+    "evidence_level": "PARTIAL",
+    "confidence": "medium",
+    "limited_report": false,
+    "can_go_redblue": true,
+    "can_trade_review": false,
+    "no_trade_execution": true
+  },
+  "evidence_level": "PARTIAL",
+  "source_attempts": [],
+  "limited_report": false,
+  "confidence": "medium"
+}

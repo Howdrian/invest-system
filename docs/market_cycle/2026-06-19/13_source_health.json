@@ -1,0 +1,200 @@
+{
+  "schema": "source_health_v1",
+  "generated_at": "2026-06-19T08:12:29.803252+00:00",
+  "macro_status": "PARTIAL",
+  "usability_verdict": "degraded",
+  "trade_review_usability": "usable_limited",
+  "rows": [
+    {
+      "component": "macro_context",
+      "status": "PARTIAL",
+      "usability": "degraded",
+      "criticality": "critical",
+      "blocking_level": "none",
+      "warnings": [
+        "fmp_unavailable",
+        "macro_factor_coverage_incomplete"
+      ],
+      "source": "src.macro.official_sources",
+      "as_of": "2026-06-19T08:02:42.355535+00:00",
+      "age_seconds": 587,
+      "freshness_status": "fresh",
+      "coverage_score": 0.1667,
+      "fallback_used": "",
+      "failure_reason": "fmp_unavailable; macro_factor_coverage_incomplete",
+      "decision_impact": "关键源降级：只能有限评分，不可进入完整交易审查。",
+      "can_score": true,
+      "can_trade_review": false,
+      "evidence_refs": [
+        "macro_context"
+      ]
+    },
+    {
+      "component": "market_heat",
+      "status": "AVAILABLE",
+      "usability": "usable",
+      "criticality": "supporting",
+      "blocking_level": "none",
+      "warnings": [],
+      "source": "src.intel.market_heat",
+      "as_of": "2026-06-19T08:03:27.502698+00:00",
+      "age_seconds": 542,
+      "freshness_status": "fresh",
+      "coverage_score": 1.0,
+      "fallback_used": "",
+      "failure_reason": "",
+      "decision_impact": "可用于本轮分析。",
+      "can_score": true,
+      "can_trade_review": true,
+      "evidence_refs": [
+        "market_heat"
+      ]
+    },
+    {
+      "component": "prediction_market",
+      "status": "AVAILABLE",
+      "usability": "usable",
+      "criticality": "optional",
+      "blocking_level": "none",
+      "warnings": [],
+      "source": "src.prediction_market.polymarket",
+      "as_of": "2026-06-19T08:03:34.314606+00:00",
+      "age_seconds": 535,
+      "freshness_status": "fresh",
+      "coverage_score": 1.0,
+      "fallback_used": "",
+      "failure_reason": "",
+      "decision_impact": "概率校准源无匹配市场；只降权，不阻断交易审查。",
+      "can_score": true,
+      "can_trade_review": true,
+      "evidence_refs": [
+        "prediction_market"
+      ]
+    },
+    {
+      "component": "portfolio_holdings",
+      "status": "AVAILABLE",
+      "usability": "usable",
+      "criticality": "supporting",
+      "blocking_level": "none",
+      "warnings": [],
+      "source": "src.intel.portfolio_holdings",
+      "as_of": "2026-06-19",
+      "age_seconds": 29549,
+      "freshness_status": "fresh",
+      "coverage_score": 1.0,
+      "fallback_used": "",
+      "failure_reason": "",
+      "decision_impact": "可用于本轮分析。",
+      "can_score": true,
+      "can_trade_review": true,
+      "evidence_refs": [
+        "src.intel.portfolio_holdings"
+      ],
+      "holding_status": "EMPTY",
+      "holding_source": "portfolio_service",
+      "selected_count": 0,
+      "governed_count": 0,
+      "light_review_count": 0,
+      "omitted_count": 0
+    },
+    {
+      "component": "macro_review",
+      "status": "DEGRADED",
+      "usability": "degraded",
+      "criticality": "critical",
+      "blocking_level": "none",
+      "warnings": [
+        "fmp_unavailable",
+        "macro_factor_coverage_incomplete"
+      ],
+      "source": "src.macro.review",
+      "as_of": null,
+      "age_seconds": null,
+      "freshness_status": "unknown",
+      "coverage_score": 0.5,
+      "fallback_used": "",
+      "failure_reason": "fmp_unavailable; macro_factor_coverage_incomplete",
+      "decision_impact": "关键源降级：只能有限评分，不可进入完整交易审查。",
+      "can_score": true,
+      "can_trade_review": false,
+      "evidence_refs": [
+        "src.macro.review"
+      ]
+    },
+    {
+      "component": "screening_funnel",
+      "status": "AVAILABLE",
+      "usability": "usable",
+      "criticality": "supporting",
+      "blocking_level": "none",
+      "warnings": [],
+      "source": "src.intel.candidate_selector",
+      "as_of": null,
+      "age_seconds": null,
+      "freshness_status": "unknown",
+      "coverage_score": 1.0,
+      "fallback_used": "",
+      "failure_reason": "",
+      "decision_impact": "可用于本轮分析。",
+      "can_score": true,
+      "can_trade_review": true,
+      "evidence_refs": [
+        "src.intel.candidate_selector"
+      ]
+    },
+    {
+      "component": "deep_review_queue",
+      "status": "AVAILABLE",
+      "usability": "usable",
+      "criticality": "critical",
+      "blocking_level": "none",
+      "warnings": [],
+      "source": "src.intel.candidate_selector",
+      "as_of": null,
+      "age_seconds": null,
+      "freshness_status": "unknown",
+      "coverage_score": 1.0,
+      "fallback_used": "",
+      "failure_reason": "",
+      "decision_impact": "可用于本轮分析。",
+      "can_score": true,
+      "can_trade_review": true,
+      "evidence_refs": [
+        "src.intel.candidate_selector"
+      ],
+      "candidate_count": 6
+    },
+    {
+      "component": "governed_reports",
+      "status": "AVAILABLE",
+      "usability": "usable",
+      "criticality": "optional",
+      "blocking_level": "none",
+      "warnings": [],
+      "source": "reports/report_YYYYMMDD.md",
+      "as_of": null,
+      "age_seconds": null,
+      "freshness_status": "unknown",
+      "coverage_score": 1.0,
+      "fallback_used": "",
+      "failure_reason": "",
+      "decision_impact": "可用于本轮分析。",
+      "can_score": true,
+      "can_trade_review": true,
+      "evidence_refs": [
+        "reports/report_YYYYMMDD.md"
+      ],
+      "count": 1,
+      "files": [
+        "report_20260619.md"
+      ]
+    }
+  ],
+  "blocking_summary": {
+    "critical_unavailable_components": [],
+    "optional_unavailable_components": [],
+    "optional_degraded_components": [],
+    "supporting_degraded_components": []
+  }
+}

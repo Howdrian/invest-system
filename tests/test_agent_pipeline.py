@@ -686,6 +686,98 @@ class TestAgentResultConversion(unittest.TestCase):
         self.assertEqual(result._governance["trade_plan"]["action"], "buy")
         self.assertEqual(result.dashboard["governance"]["cio_status"], "READY_FOR_REVIEW")
 
+    def test_convert_governed_dashboard_hard_blocks_raw_sell_when_cio_fatal(self):
+        """Final gate must clamp DecisionAgent output before AnalysisResult is exposed."""
+        pipeline = self._make_pipeline()
+
+        from src.agent.executor import AgentResult
+        from src.enums import ReportType
+
+        governance = {
+            "cio_status": "BLOCKED_BY_FATAL",
+            "score": 7.1,
+            "gate": "PASS",
+            "trade_plan": {
+                "action": "sell",
+                "target_pct": 80,
+            },
+        }
+        dashboard = {
+            "stock_name": "测试股",
+            "sentiment_score": 71,
+            "trend_prediction": "模型原始输出看空",
+            "operation_advice": "立即清仓",
+            "decision_type": "sell",
+            "confidence_level": "高",
+            "analysis_summary": "raw sell should not leak",
+            "governance": governance,
+        }
+
+        result = pipeline._agent_result_to_analysis_result(
+            AgentResult(success=True, dashboard=dashboard, provider="gemini"),
+            "000001",
+            "测试股",
+            ReportType.SIMPLE,
+            "q-blocked",
+        )
+
+        self.assertEqual(result.decision_type, "blocked")
+        self.assertEqual(result.operation_advice, "阻断 / 不操作 / 0%")
+        self.assertLess(result.sentiment_score, 60)
+        self.assertEqual(result.dashboard["governance"]["trade_plan"]["action"], "no_action")
+        self.assertEqual(result.dashboard["governance"]["trade_plan"]["target_pct"], 0)
+        self.assertEqual(result.dashboard["decision_type"], "blocked")
+        self.assertNotIn("清仓", result.operation_advice)
+
+    def test_convert_governed_dashboard_hard_blocks_low_score_raw_buy(self):
+        """score < 6.0 must clamp raw buy/sell to no_action + 0%."""
+        pipeline = self._make_pipeline()
+
+        from src.agent.executor import AgentResult
+        from src.enums import ReportType
+
+        dashboard = {
+            "stock_name": "测试股",
+            "sentiment_score": 82,
+            "trend_prediction": "模型原始输出看多",
+            "operation_advice": "立即买入",
+            "decision_type": "buy",
+            "analysis_summary": "raw buy should not leak",
+            "governance": {
+                "cio_status": "READY_FOR_REVIEW",
+                "score": 5.9,
+                "gate": "PASS",
+                "trade_plan": {"action": "buy", "target_position_pct": 30},
+            },
+        }
+
+        result = pipeline._agent_result_to_analysis_result(
+            AgentResult(success=True, dashboard=dashboard, provider="gemini"),
+            "000001",
+            "测试股",
+            ReportType.SIMPLE,
+            "q-low-score",
+        )
+
+        self.assertEqual(result.decision_type, "blocked")
+        self.assertEqual(result.operation_advice, "阻断 / 不操作 / 0%")
+        self.assertEqual(result.dashboard["governance"]["trade_plan"]["action"], "no_action")
+        self.assertEqual(result.dashboard["governance"]["trade_plan"]["target_position_pct"], 0)
+
+    def test_get_governed_orchestrator_uses_public_tool_registry(self):
+        """Direct governed entry must not import a private missing _get_registry symbol."""
+        pipeline = self._make_pipeline()
+        pipeline.config.agent_arch = "multi"
+        pipeline.config.agent_orchestrator_mode = "governed"
+        pipeline.config.agent_max_steps = 4
+
+        with patch("src.agent.factory.get_tool_registry", return_value=MagicMock()) as registry, \
+             patch("src.agent.llm_adapter.LLMToolAdapter", return_value=MagicMock()):
+            orchestrator = pipeline._get_governed_orchestrator()
+
+        registry.assert_called_once()
+        self.assertEqual(orchestrator.mode, "governed")
+
     def test_convert_failed_dashboard(self):
         """Failed AgentResult should produce a minimal AnalysisResult."""
         pipeline = self._make_pipeline()

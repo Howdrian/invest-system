@@ -685,6 +685,31 @@ class TestPromptUpgrades(unittest.TestCase):
         self.assertIn("prediction_market", risk_msg)
         self.assertNotIn("search_stock_news", risk.tool_names)
 
+    def test_macro_agent_outputs_context_bias_not_stock_trade_signal(self):
+        from src.agent.agents.macro_agent import MacroAgent
+
+        ctx = AgentContext(query="test", stock_code="600519")
+        raw = json.dumps(
+            {
+                "schema": "macro_opinion_v1",
+                "status": "available",
+                "risk_state": "risk_on",
+                "market_regime": "risk-on watch",
+                "confidence": 0.7,
+                "key_macro_drivers": ["VIX low"],
+                "impact_on_stock": "提高风险预算，但不构成个股买入理由。",
+                "positioning_bias": "risk_on",
+                "data_gaps": [],
+            },
+            ensure_ascii=False,
+        )
+
+        opinion = MacroAgent(tool_registry=MagicMock(), llm_adapter=MagicMock()).post_process(ctx, raw)
+
+        self.assertIsNotNone(opinion)
+        self.assertEqual(opinion.signal, "hold")
+        self.assertEqual(ctx.get_data("macro_opinion")["risk_state"], "risk_on")
+
 
 class TestIntelAgentPostProcess(unittest.TestCase):
     """Test IntelAgent JSON parsing and context caching behaviour."""
@@ -755,7 +780,7 @@ class TestOrchestratorModes(unittest.TestCase):
         ctx = AgentContext(query="test", stock_code="600519")
         chain = orch._build_agent_chain(ctx)
         names = [a.agent_name for a in chain]
-        self.assertEqual(names, ["macro", "technical", "intel", "risk", "red_blue", "scoring", "cio", "decision"])
+        self.assertEqual(names, ["macro", "technical", "intel", "risk", "evidence_gate", "red_blue", "scoring", "cio", "decision"])
 
     def test_invalid_mode_falls_back_to_standard(self):
         orch = self._make_orchestrator("nonsense")
@@ -840,6 +865,10 @@ class TestOrchestratorModes(unittest.TestCase):
                 "portfolio_context": {"total_equity": 100000.0},
                 "macro_context": {"status": "DEGRADED"},
                 "market_heat_context": {"status": "available"},
+                "macro_review": {"status": "DEGRADED"},
+                "event_context": {"events": ["policy"]},
+                "agent_memo_run_date": "2026-06-19",
+                "agent_memo_output_dir": "reports/daily/2026-06-19",
             },
         )
 
@@ -848,6 +877,10 @@ class TestOrchestratorModes(unittest.TestCase):
         self.assertEqual(ctx.get_data("portfolio_context")["total_equity"], 100000.0)
         self.assertEqual(ctx.get_data("macro_context")["status"], "DEGRADED")
         self.assertEqual(ctx.get_data("market_heat_context")["status"], "available")
+        self.assertEqual(ctx.get_data("macro_review")["status"], "DEGRADED")
+        self.assertEqual(ctx.get_data("event_context")["events"], ["policy"])
+        self.assertEqual(ctx.meta["agent_memo_run_date"], "2026-06-19")
+        self.assertEqual(ctx.meta["agent_memo_output_dir"], "reports/daily/2026-06-19")
 
     def test_build_context_extracts_code_from_query(self):
         orch = self._make_orchestrator()

@@ -1,0 +1,93 @@
+{
+  "schema": "agent_memo_v1",
+  "agent": "TechnicalAgent",
+  "scope": "stock",
+  "symbol": "002167",
+  "status": "PASS",
+  "origin": "RAW_AGENT",
+  "origin_label": "真实 Agent 输出",
+  "facts": [
+    "signal=hold",
+    "confidence=0.5",
+    "trend_score=90",
+    "ma_alignment=bullish",
+    "volume_status=light",
+    "pattern=none",
+    "key_levels={\"support\": 15.01, \"resistance\": null, \"stop_loss\": 13.85}"
+  ],
+  "reasoning": [
+    "The stock is in a strong bullish trend with moving averages (MA5 > MA10 > MA20) in perfect alignment and diverging upwards, supported by strong RSI momentum. However, the current price (16.13) is significantly extended from its MA5 (15.01), with a bias of 7.49%, which suggests an elevated risk for new entries and advises against chasing the rally. Furthermore, the recent 10% price surge occurred on light volume (volume ratio 0.3), indicating a potential lack of sustained buying conviction and suggesting a pullback might be imminent. It is advisable to wait for a pullback to key support levels before considering new positions."
+  ],
+  "conclusion": "The stock is in a strong bullish trend with moving averages (MA5 > MA10 > MA20) in perfect alignment and diverging upwards, supported by strong RSI momentum. However, the current price (16.13) is significantly extended from its MA5 (15.01), with a bias of 7.49%, which suggests an elevated risk for new entries and advises against chasing the rally. Furthermore, the recent 10% price surge occurred on light volume (volume ratio 0.3), indicating a potential lack of sustained buying conviction and suggesting a pullback might be imminent. It is advisable to wait for a pullback to key support levels before considering new positions.",
+  "missing_data": [],
+  "source_refs": [
+    "runtime:realtime_quote",
+    "runtime:daily_history",
+    "runtime:trend_result"
+  ],
+  "fatal_objection": false,
+  "next_step": "用技术关键位验证是否追高或等待承接。",
+  "readable_summary": "The stock is in a strong bullish trend with moving averages (MA5 > MA10 > MA20) in perfect alignment and diverging upwards, supported by strong RSI momentum. However, the current price (16.13) is significantly extended from its MA5 (15.01), with a bias of 7.49%, which suggests an elevated risk for new entries and advises against chasing the rally. Furthermore, the recent 10% price surge occurred on light volume (volume ratio 0.3), indicating a potential lack of sustained buying conviction and suggesting a pullback might be imminent. It is advisable to wait for a pullback to key support levels before considering new positions.",
+  "evidence_blocks": [
+    {
+      "claim": "The stock is in a strong bullish trend with moving averages (MA5 > MA10 > MA20) in perfect alignment and diverging upwards, supported by strong RSI momentum. However, the current price (16.13) is significantly extended from its MA5 (15.01), with a bias of 7.49%, which suggests an elevated risk for new entries and advises against chasing the rally. Furthermore, the recent 10% price surge occurred on light volume (volume ratio 0.3), indicating a potential lack of sustained buying conviction and suggesting a pullback might be imminent. It is advisable to wait for a pullback to key support levels before considering new positions.",
+      "data": "signal=hold；confidence=0.5；trend_score=90；ma_alignment=bullish",
+      "source": "runtime:realtime_quote；runtime:daily_history；runtime:trend_result",
+      "inference": "The stock is in a strong bullish trend with moving averages (MA5 > MA10 > MA20) in perfect alignment and diverging upwards, supported by strong RSI momentum. However, the current price (16.13) is significantly extended from its MA5 (15.01), with a bias of 7.49%, which suggests an elevated risk for new entries and advises against chasing the rally. Furthermore, the recent 10% price surge occurred on light volume (volume ratio 0.3), indicating a potential lack of sustained buying conviction and suggesting a pullback might be imminent. It is advisable to wait for a pullback to key support levels before considering new positions."
+    }
+  ],
+  "audit_detail": {
+    "schema": "agent_memo_v1",
+    "origin": "RAW_AGENT",
+    "stage_name": "technical",
+    "status": "PASS",
+    "raw_untrusted": true,
+    "raw_data": {
+      "signal": "hold",
+      "confidence": 0.5,
+      "reasoning": "The stock is in a strong bullish trend with moving averages (MA5 > MA10 > MA20) in perfect alignment and diverging upwards, supported by strong RSI momentum. However, the current price (16.13) is significantly extended from its MA5 (15.01), with a bias of 7.49%, which suggests an elevated risk for new entries and advises against chasing the rally. Furthermore, the recent 10% price surge occurred on light volume (volume ratio 0.3), indicating a potential lack of sustained buying conviction and suggesting a pullback might be imminent. It is advisable to wait for a pullback to key support levels before considering new positions.",
+      "key_levels": {
+        "support": 15.01,
+        "resistance": null,
+        "stop_loss": 13.85
+      },
+      "trend_score": 90,
+      "ma_alignment": "bullish",
+      "volume_status": "light",
+      "pattern": "none"
+    },
+    "raw_text": "```json\n{\n  \"signal\": \"hold\",\n  \"confidence\": 0.5,\n  \"reasoning\": \"The stock is in a strong bullish trend with moving averages (MA5 > MA10 > MA20) in perfect alignment and diverging upwards, supported by strong RSI momentum. However, the current price (16.13) is significantly extended from its MA5 (15.01), with a bias of 7.49%, which suggests an elevated risk for new entries and advises against chasing the rally. Furthermore, the recent 10% price surge occurred on light volume (volume ratio 0.3), indicating a potential lack of sustained buying conviction and suggesting a pullback might be imminent. It is advisable to wait for a pullback to key support levels before considering new positions.\",\n  \"key_levels\": {\n    \"support\": 15.01,\n    \"resistance\": null,\n    \"stop_loss\": 13.85\n  },\n  \"trend_score\": 90,\n  \"ma_alignment\": \"bullish\",\n  \"volume_status\": \"light\",\n  \"pattern\": \"none\"\n}\n```",
+    "tokens_used": 31312,
+    "tool_calls_count": 2,
+    "models_used": [
+      "vertex_ai/gemini-2.5-flash",
+      "vertex_ai/gemini-2.5-flash"
+    ]
+  },
+  "no_trade_execution": true,
+  "evidence_pack": {
+    "schema": "evidence_pack_v1",
+    "scope": "stock",
+    "symbol": "002167",
+    "source_attempts": [],
+    "evidence_items": [
+      {
+        "claim": "The stock is in a strong bullish trend with moving averages (MA5 > MA10 > MA20) in perfect alignment and diverging upwards, supported by strong RSI momentum. However, the current price (16.13) is significantly extended from its MA5 (15.01), with a bias of 7.49%, which suggests an elevated risk for new entries and advises against chasing the rally. Furthermore, the recent 10% price surge occurred on light volume (volume ratio 0.3), indicating a potential lack of sustained buying conviction and suggesting a pullback might be imminent. It is advisable to wait for a pullback to key support levels before considering new positions.",
+        "data": "signal=hold；confidence=0.5；trend_score=90；ma_alignment=bullish",
+        "source": "runtime:realtime_quote；runtime:daily_history；runtime:trend_result",
+        "inference": "The stock is in a strong bullish trend with moving averages (MA5 > MA10 > MA20) in perfect alignment and diverging upwards, supported by strong RSI momentum. However, the current price (16.13) is significantly extended from its MA5 (15.01), with a bias of 7.49%, which suggests an elevated risk for new entries and advises against chasing the rally. Furthermore, the recent 10% price surge occurred on light volume (volume ratio 0.3), indicating a potential lack of sustained buying conviction and suggesting a pullback might be imminent. It is advisable to wait for a pullback to key support levels before considering new positions."
+      }
+    ],
+    "missing_evidence": [],
+    "evidence_level": "PARTIAL",
+    "confidence": "medium",
+    "limited_report": false,
+    "can_go_redblue": true,
+    "can_trade_review": false,
+    "no_trade_execution": true
+  },
+  "evidence_level": "PARTIAL",
+  "source_attempts": [],
+  "limited_report": false,
+  "confidence": "medium"
+}

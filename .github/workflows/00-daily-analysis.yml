@@ -503,7 +503,7 @@ jobs:
             echo "⚠️ market-cycle 生成失败；后续个股分析仍会尝试运行"
           fi
 
-          # 自选池是观察宇宙；每日 governed 深评只取候选池前 N 只，避免 26 只全量深跑导致 workflow 超时。
+          # 自选池是观察宇宙；每日 governed 深评由统一纯函数选择：持仓优先 + 深评队列，其余写明 omission reason。
           GOVERNED_STOCK_LIST="$(
             TODAY_ENV="$TODAY" \
             ORIGINAL_STOCK_LIST="$STOCK_LIST" \
@@ -512,8 +512,10 @@ jobs:
             python - <<'PY'
           import json
           import os
-          import re
           from pathlib import Path
+
+          from src.intel.candidate_selector import select_governed_symbols
+          from src.intel.portfolio_holdings import build_portfolio_holding_snapshot
 
           today = os.environ["TODAY_ENV"]
           original = [s.strip() for s in os.environ.get("ORIGINAL_STOCK_LIST", "").split(",") if s.strip()]
@@ -522,112 +524,58 @@ jobs:
           except ValueError:
               limit = 3
           limit = max(1, min(limit, 6))
-
-          def normalize(symbol):
-              value = str(symbol or "").strip()
-              if not value:
-                  return ""
-              value = value.replace(" ", "")
-              value = re.sub(r"^(SH|SZ|BJ)(?=\d{6}$)", "", value, flags=re.IGNORECASE)
-              value = re.sub(r"\.(SH|SZ|BJ)$", "", value, flags=re.IGNORECASE)
-              return value.upper() if not value.isdigit() else value
-
-          def symbol_of(item):
-              if isinstance(item, str):
-                  return item
-              if isinstance(item, dict):
-                  return item.get("symbol") or item.get("code") or item.get("ticker") or item.get("stock_code") or ""
-              return ""
-
-          def append_unique(target, source):
-              for raw in source:
-                  symbol = normalize(raw)
-                  if symbol and symbol not in target:
-                      target.append(symbol)
-
-          portfolio_symbols = []
-          portfolio_governed_symbols = []
-          portfolio_light_review_symbols = []
-          portfolio_omitted = []
-          try:
-              from src.intel.portfolio_holdings import build_portfolio_holding_snapshot
-
-              portfolio = build_portfolio_holding_snapshot(max_symbols=None)
-              portfolio_symbols = [normalize(s) for s in portfolio.get("symbols") or [] if normalize(s)]
-              portfolio_governed_symbols = [normalize(s) for s in portfolio.get("governed_symbols") or [] if normalize(s)]
-              portfolio_light_review_symbols = [normalize(s) for s in portfolio.get("light_review_symbols") or [] if normalize(s)]
-              portfolio_omitted = [normalize(s) for s in portfolio.get("omitted_symbols") or [] if normalize(s)]
-              status_dir = Path(os.environ.get("RUN_STATUS_DIR") or "reports/run_status")
-              status_dir.mkdir(parents=True, exist_ok=True)
-              (status_dir / "portfolio_holding_symbols.txt").write_text(",".join(portfolio_symbols), encoding="utf-8")
-              (status_dir / "portfolio_governed_symbols.txt").write_text(",".join(portfolio_governed_symbols), encoding="utf-8")
-              (status_dir / "portfolio_light_review_symbols.txt").write_text(",".join(portfolio_light_review_symbols), encoding="utf-8")
-              (status_dir / "portfolio_holding_omitted_symbols.txt").write_text(",".join(portfolio_omitted), encoding="utf-8")
-              (status_dir / "portfolio_holding_summary.json").write_text(json.dumps(portfolio, ensure_ascii=False, indent=2), encoding="utf-8")
-          except Exception as exc:
-              status_dir = Path(os.environ.get("RUN_STATUS_DIR") or "reports/run_status")
-              status_dir.mkdir(parents=True, exist_ok=True)
-              (status_dir / "portfolio_holding_symbols.txt").write_text("", encoding="utf-8")
-              (status_dir / "portfolio_governed_symbols.txt").write_text("", encoding="utf-8")
-              (status_dir / "portfolio_light_review_symbols.txt").write_text("", encoding="utf-8")
-              (status_dir / "portfolio_holding_omitted_symbols.txt").write_text("", encoding="utf-8")
-              (status_dir / "portfolio_holding_summary.json").write_text(
-                  json.dumps({"schema": "portfolio_holding_snapshot_v1", "status": "degraded", "symbols": [], "governed_symbols": [], "light_review_symbols": [], "warnings": [str(exc)]}, ensure_ascii=False, indent=2),
-                  encoding="utf-8",
-              )
-
-          candidate_symbols = []
-          candidate_reasons = []
-          queue_path = Path("reports/market_cycle") / today / "11_deep_review_queue.json"
-          if queue_path.exists():
-              queue = json.loads(queue_path.read_text(encoding="utf-8"))
-              entries = queue.get("auto_governed_candidates") or []
-              if isinstance(entries, dict):
-                  entries = entries.values()
-              for item in entries:
-                  symbol = normalize(symbol_of(item))
-                  if symbol and symbol not in candidate_symbols:
-                      candidate_symbols.append(symbol)
-              if candidate_symbols:
-                  candidate_reasons.append("auto_governed_candidates")
-
-              entries = queue.get("candidates") or []
-              if isinstance(entries, dict):
-                  entries = entries.values()
-              for item in entries:
-                  if not isinstance(item, dict) or item.get("verdict") != "DEEP_REVIEW_NOW":
-                      continue
-                  symbol = normalize(symbol_of(item))
-                  if symbol and symbol not in candidate_symbols:
-                      candidate_symbols.append(symbol)
-              if candidate_symbols and "auto_governed_candidates" not in candidate_reasons:
-                  candidate_reasons.append("deep_review_now")
-
-          picked = []
-          reason_parts = []
-          if portfolio_governed_symbols:
-              append_unique(picked, portfolio_governed_symbols)
-              reason_parts.append("portfolio_holdings")
-          if candidate_symbols:
-              append_unique(picked, candidate_symbols)
-              reason_parts.extend(candidate_reasons or ["deep_review_now"])
-          if not picked:
-              picked = [normalize(s) for s in original if normalize(s)]
-              reason_parts.append("fallback_stock_list")
-          selection_reason = "+".join(dict.fromkeys(reason_parts)) or "empty_selection"
-
           status_dir = Path(os.environ.get("RUN_STATUS_DIR") or "reports/run_status")
           status_dir.mkdir(parents=True, exist_ok=True)
-          (status_dir / "governed_selection_reason.txt").write_text(selection_reason, encoding="utf-8")
-          if len(picked) > limit:
-              omitted = picked[limit:]
-              existing = (status_dir / "portfolio_holding_omitted_symbols.txt").read_text(encoding="utf-8") if (status_dir / "portfolio_holding_omitted_symbols.txt").exists() else ""
-              merged_omitted = [s for s in (existing.split(",") if existing else []) if s] + omitted
-              (status_dir / "governed_omitted_symbols.txt").write_text(",".join(dict.fromkeys(merged_omitted)), encoding="utf-8")
-          else:
-              (status_dir / "governed_omitted_symbols.txt").write_text("", encoding="utf-8")
 
-          print(",".join(picked[:limit]))
+          try:
+              portfolio = build_portfolio_holding_snapshot(max_symbols=None)
+          except Exception as exc:
+              portfolio = {
+                  "schema": "portfolio_holding_snapshot_v1",
+                  "status": "degraded",
+                  "symbols": [],
+                  "governed_symbols": [],
+                  "light_review_symbols": [],
+                  "omitted_symbols": [],
+                  "warnings": [str(exc)],
+              }
+
+          deep_queue_path = Path("reports/market_cycle") / today / "11_deep_review_queue.json"
+          try:
+              deep_queue = json.loads(deep_queue_path.read_text(encoding="utf-8")) if deep_queue_path.exists() else {}
+          except Exception as exc:
+              deep_queue = {"status": "degraded", "warnings": [str(exc)]}
+
+          selection = select_governed_symbols(
+              portfolio=portfolio,
+              deep_queue=deep_queue,
+              limits={"portfolio": limit, "candidates": limit, "total": limit},
+          )
+          selected = selection.get("selected") or []
+          if not selected:
+              selected = original[:limit]
+              selection["selected"] = selected
+              selection["fallback_used"] = "stock_list_first_n"
+
+          reason_parts = []
+          if selection.get("selected_by_source", {}).get("portfolio"):
+              reason_parts.append("portfolio_holdings")
+          if selection.get("selected_by_source", {}).get("candidate"):
+              reason_parts.append("deep_review_queue")
+          if selection.get("fallback_used"):
+              reason_parts.append(selection["fallback_used"])
+
+          status_dir.joinpath("portfolio_holding_symbols.txt").write_text(",".join(portfolio.get("symbols") or []), encoding="utf-8")
+          status_dir.joinpath("portfolio_governed_symbols.txt").write_text(",".join(portfolio.get("governed_symbols") or []), encoding="utf-8")
+          status_dir.joinpath("portfolio_light_review_symbols.txt").write_text(",".join(selection.get("light_review_symbols") or []), encoding="utf-8")
+          status_dir.joinpath("portfolio_holding_omitted_symbols.txt").write_text(",".join(portfolio.get("omitted_symbols") or []), encoding="utf-8")
+          status_dir.joinpath("portfolio_holding_summary.json").write_text(json.dumps(portfolio, ensure_ascii=False, indent=2), encoding="utf-8")
+          status_dir.joinpath("governed_selection.json").write_text(json.dumps(selection, ensure_ascii=False, indent=2), encoding="utf-8")
+          status_dir.joinpath("governed_selection_reason.txt").write_text("+".join(reason_parts) or "empty_selection", encoding="utf-8")
+          omitted_symbols = [item.get("symbol", "") for item in selection.get("omitted") or [] if item.get("symbol")]
+          status_dir.joinpath("governed_omitted_symbols.txt").write_text(",".join(dict.fromkeys(omitted_symbols)), encoding="utf-8")
+
+          print(",".join(selected))
           PY
           )"
           if [ -z "$GOVERNED_STOCK_LIST" ]; then
@@ -713,7 +661,7 @@ jobs:
           fi
 
       - name: 提交报告到仓库
-        if: always()
+        if: ${{ always() && github.ref == 'refs/heads/main' }}
         env:
           STOCK_LIST: ${{ vars.STOCK_LIST || secrets.STOCK_LIST || '600519,000858,300750,002594,601318,000001,600036,000333,300059,600276,601899,002415,000725,600900,601857,AAPL,MSFT,NVDA,GOOGL,AMZN,META,TSLA,BABA,SPY,QQQ,IWM' }}
           PORTFOLIO_HOLDINGS: ${{ vars.PORTFOLIO_HOLDINGS || secrets.PORTFOLIO_HOLDINGS || '' }}
@@ -736,14 +684,14 @@ jobs:
           GOVERNED_OMITTED_SYMBOLS="$(cat "$RUN_STATUS_DIR/governed_omitted_symbols.txt" 2>/dev/null || echo '')"
           GOVERNED_RESULT_SUMMARY="$RUN_STATUS_DIR/governed_result_summary.json"
           OBSERVATION_UNIVERSE="$(cat "$RUN_STATUS_DIR/observation_universe.txt" 2>/dev/null || echo "$STOCK_LIST")"
-          TARGET_BRANCH="${GITHUB_REF_NAME:-main}"
+          TARGET_BRANCH="main"
           TODAY_COMPACT="${TODAY//-/}"
 
           # 先同步远端分支，避免多个 Actions 或人工提交让最终 push 被 non-fast-forward 拒绝。
           git fetch origin "$TARGET_BRANCH"
           git checkout -B "$TARGET_BRANCH" "origin/$TARGET_BRANCH"
 
-          mkdir -p docs/daily "$MARKET_CYCLE_DOCS" docs/market_heat
+          mkdir -p docs/daily "$MARKET_CYCLE_DOCS" docs/market_heat docs/reports docs/agent_memos
           DAILY_INDEX="docs/daily/index.md"
           # 生成每日投研入口；不要写 lowercase docs index，避免和既有 docs/INDEX.md 文档中心在 macOS 上大小写冲突
           echo "# 投研日报 — $TODAY" > "$DAILY_INDEX"
@@ -754,6 +702,9 @@ jobs:
           echo "\`$OBSERVATION_UNIVERSE\`" >> "$DAILY_INDEX"
           echo "" >> "$DAILY_INDEX"
           echo "## 运行状态" >> "$DAILY_INDEX"
+          echo "- HTML 报告中心: [reports/$TODAY.html](../reports/$TODAY.html)" >> "$DAILY_INDEX"
+          echo "- ReportArtifact JSON: [reports/$TODAY.artifact.json](../reports/$TODAY.artifact.json)" >> "$DAILY_INDEX"
+          echo "- Agent 卷宗: [agent_memos/$TODAY/index.html](../agent_memos/$TODAY/index.html)" >> "$DAILY_INDEX"
           echo "- Market cycle: \`$MARKET_CYCLE_STATUS\`" >> "$DAILY_INDEX"
           echo "- Governed stock analysis: \`$STOCK_ANALYSIS_STATUS\`" >> "$DAILY_INDEX"
           echo "- Governed deep-review symbols: \`${GOVERNED_STOCK_LIST_ACTUAL:-none}\`" >> "$DAILY_INDEX"
@@ -785,8 +736,8 @@ jobs:
             cp -r "$MARKET_CYCLE_REPORTS"/* "$MARKET_CYCLE_DOCS"/
             echo "- [一屏总览](../market_cycle/$TODAY/00_one_screen_brief.html)" >> "$DAILY_INDEX"
             echo "- [宏观与地缘融合](../market_cycle/$TODAY/01_macro_review.html)" >> "$DAILY_INDEX"
-            echo "- [筛选漏斗](../market_cycle/$TODAY/09_screening_funnel.md)" >> "$DAILY_INDEX"
-            echo "- [深评候选队列](../market_cycle/$TODAY/11_deep_review_queue.md)" >> "$DAILY_INDEX"
+            echo "- [筛选漏斗](../market_cycle/$TODAY/09_screening_funnel.html)" >> "$DAILY_INDEX"
+            echo "- [深评候选队列](../market_cycle/$TODAY/11_deep_review_queue.html)" >> "$DAILY_INDEX"
             echo "- [市场策略总控](../market_cycle/$TODAY/14_market_strategy.html)" >> "$DAILY_INDEX"
             echo "- [数据源健康](../market_cycle/$TODAY/13_source_health.html)" >> "$DAILY_INDEX"
             TODAY_ENV="$TODAY" python - <<'PY' >> "$DAILY_INDEX"
@@ -830,7 +781,8 @@ jobs:
           echo "|---|---|" >> "$DAILY_INDEX"
           TODAY_REPORT="reports/report_${TODAY_COMPACT}.md"
           if [ -f "$TODAY_REPORT" ]; then
-            echo "| [report_${TODAY_COMPACT}.md](../report_${TODAY_COMPACT}.md) | 今日 governed 个股报告 |" >> "$DAILY_INDEX"
+            echo "| [report_${TODAY_COMPACT}.html](../report_${TODAY_COMPACT}.html) | 今日 governed 个股 HTML 报告 |" >> "$DAILY_INDEX"
+            echo "| [report_${TODAY_COMPACT}.md](../report_${TODAY_COMPACT}.md) | 今日 governed 个股 Markdown 原文 |" >> "$DAILY_INDEX"
           else
             echo "| 今日报告缺失 | \`reports/report_${TODAY_COMPACT}.md\` 未生成；看上方运行状态和 Actions 日志 |" >> "$DAILY_INDEX"
           fi
@@ -849,8 +801,85 @@ jobs:
             rm -f docs/governed_results.json
           fi
           cp "$MARKET_HEAT_OUTPUT_DIR"/* docs/market_heat/ 2>/dev/null || true
+          echo "🧠 生成 Agent 卷宗..."
+          python src/agent_memos.py --date "$TODAY" --reports-dir reports --output-dir "reports/daily/$TODAY"
+          rm -rf "docs/agent_memos/$TODAY"
+          mkdir -p "docs/agent_memos/$TODAY"
+          cp -r "reports/daily/$TODAY"/* "docs/agent_memos/$TODAY"/
+          rm -rf "docs/daily/$TODAY"
+          echo "- Agent memo count: \`$(find "docs/agent_memos/$TODAY" -type f | wc -l | tr -d ' ')\`" >> "$DAILY_INDEX"
+          TODAY_ENV="$TODAY" python - <<'PY' | tee -a "$DAILY_INDEX"
+          import json
+          import os
+          from pathlib import Path
+          today = os.environ["TODAY_ENV"]
+          base = Path("docs/agent_memos") / today
+          counts = {"RAW_AGENT": 0, "DERIVED_FROM_ARTIFACT": 0, "MISSING": 0}
+          limited_count = 0
+          source_attempt_count = 0
+          degraded_sources = []
+          for path in base.rglob("*.json"):
+              try:
+                  payload = json.loads(path.read_text(encoding="utf-8"))
+              except Exception:
+                  continue
+              if isinstance(payload, dict) and payload.get("schema") == "agent_memo_v1":
+                  origin = payload.get("origin") or "DERIVED_FROM_ARTIFACT"
+                  counts[origin] = counts.get(origin, 0) + 1
+                  if payload.get("limited_report") or payload.get("evidence_level") in {"LIMITED", "FAILED"}:
+                      limited_count += 1
+                  attempts = payload.get("source_attempts") or []
+                  if isinstance(attempts, list):
+                      source_attempt_count += len(attempts)
+                      for item in attempts:
+                          if isinstance(item, dict) and str(item.get("status") or "").upper() in {"FAILED", "DEGRADED", "AVAILABLE_NO_MATCHING_MARKET"}:
+                              degraded_sources.append(str(item.get("source") or item.get("tool") or "unknown"))
+          gap_path = base / "sources" / "01_source_gap_plan.json"
+          try:
+              gap_count = len(json.loads(gap_path.read_text(encoding="utf-8"))) if gap_path.exists() else 0
+          except Exception:
+              gap_count = 0
+          governed_path = Path("docs/market_cycle") / today / "11_deep_review_queue.json"
+          try:
+              queue = json.loads(governed_path.read_text(encoding="utf-8")) if governed_path.exists() else {}
+              governed_candidate_count = len(queue.get("auto_governed_candidates") or [])
+          except Exception:
+              governed_candidate_count = 0
+          summary_path = Path("reports/run_status/governed_result_summary.json")
+          completed_symbols = []
+          try:
+              if summary_path.exists():
+                  summary = json.loads(summary_path.read_text(encoding="utf-8"))
+                  completed_symbols = summary.get("completed_symbols") or []
+          except Exception:
+              completed_symbols = []
+          print(f"- Source gap count: `{gap_count}`")
+          print(f"- RAW_AGENT count: `{counts.get('RAW_AGENT', 0)}`")
+          print(f"- DERIVED_FROM_ARTIFACT count: `{counts.get('DERIVED_FROM_ARTIFACT', 0)}`")
+          print(f"- MISSING agent count: `{counts.get('MISSING', 0)}`")
+          print(f"- LIMITED_EVIDENCE count: `{limited_count}`")
+          print(f"- Source attempt count: `{source_attempt_count}`")
+          failed_list = ", ".join(sorted(set(degraded_sources))[:20]) or "none"
+          print(f"- Failed/degraded source list: `{failed_list}`")
+          print(f"- Governed candidate count: `{governed_candidate_count}`")
+          if completed_symbols and counts.get("RAW_AGENT", 0) <= 0:
+              print("::error::Governed completed but RAW_AGENT memo count is 0")
+              raise SystemExit(7)
+          PY
+          cp "$DAILY_INDEX" "docs/daily/$TODAY.md"
+          echo "🧾 生成 ReportArtifact 与 HTML 报告中心..."
+          python src/render_report_html.py --date "$TODAY" --docs-dir docs
+          test -f "docs/reports/$TODAY.html"
+          test -f "docs/reports/$TODAY.artifact.json"
+          test -f "docs/daily/$TODAY.html"
+          test -f "docs/agent_memos/$TODAY/index.html"
+          test -f "docs/market_cycle/$TODAY/summary.html"
+          test -f "docs/report_${TODAY_COMPACT}.html" || true
+          echo "🔎 验证 Pages 报告包..."
+          python scripts/validate_pages_bundle.py --date "$TODAY" --docs-dir docs --output "reports/run_status/pages_bundle_validation.json" --fail-on-error
           echo "🎨 生成增强首页..."
           python src/render_homepage.py \
+            --date "$TODAY" \
             --reports-dir reports \
             --market-cycle-dir "reports/market_cycle" \
             --macro-cache data/macro_cache/macro_context_latest.json \

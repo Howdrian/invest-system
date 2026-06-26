@@ -81,11 +81,9 @@ Return only JSON:
 
 
 def _risk_state_to_signal(value) -> str:
-    normalized = str(value or "").lower()
-    if normalized == "risk_on":
-        return "buy"
-    if normalized == "risk_off":
-        return "sell"
+    # Macro is a context/budget layer, not a stock-level trade signal.
+    # risk_on/risk_off may adjust risk budget and Red Team questions, but must
+    # not emit buy/sell that later agents could mistake for a stock action.
     return "hold"
 
 

@@ -31,6 +31,18 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "$REPO_ROOT"
 
+if [[ -n "${PYTHON:-}" ]]; then
+    PYTHON_BIN="$PYTHON"
+elif [[ -x ".venv/bin/python" ]]; then
+    PYTHON_BIN=".venv/bin/python"
+else
+    PYTHON_BIN="python3"
+fi
+
+python3() {
+    command "$PYTHON_BIN" "$@"
+}
+
 # 颜色定义
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -65,8 +77,8 @@ header() {
 
 # 检查Python环境
 check_python() {
-    if ! command -v python3 &> /dev/null; then
-        error "Python3 未安装"
+    if ! python3 --version >/dev/null 2>&1; then
+        error "Python 不可用: $PYTHON_BIN"
         exit 1
     fi
     info "Python版本: $(python3 --version)"

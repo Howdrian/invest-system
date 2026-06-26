@@ -2,7 +2,7 @@
 """
 RedBlueAgent — mandatory red-blue debate before any trading decision.
 
-Based on invest-brain ``agents/red-team-protocol.md``.
+Based on the local governed red-team protocol.
 
 Flow:
 1. Blue team: construct 3 bull arguments (data + timeframe + catalyst)

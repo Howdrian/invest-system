@@ -6,12 +6,14 @@ def test_daily_workflow_publishes_market_cycle_without_docs_index_conflict():
 
     assert "python -m src.market_cycle" in workflow
     assert "python -m src.prediction_market.polymarket" in workflow
+    assert 'python src/render_homepage.py \\' in workflow
+    assert '--date "$TODAY"' in workflow
     assert "reports/market_cycle/$TODAY" in workflow
     assert "docs/market_cycle/$TODAY" in workflow
     assert "docs/daily/$TODAY.md" in workflow
     assert "01_macro_review.html" in workflow
-    assert "09_screening_funnel.md" in workflow
-    assert "11_deep_review_queue.md" in workflow
+    assert "09_screening_funnel.html" in workflow
+    assert "11_deep_review_queue.html" in workflow
     assert "docs/index.html" in workflow
     assert "投研日报 — $TODAY" in workflow
     assert "docs/index.md" not in workflow
@@ -20,6 +22,16 @@ def test_daily_workflow_publishes_market_cycle_without_docs_index_conflict():
     assert "Deep review candidates" in workflow
     assert "Macro context" in workflow
     assert "governed_parallel" in workflow
+    assert "Source gap count" in workflow
+    assert "RAW_AGENT count" in workflow
+    assert "DERIVED_FROM_ARTIFACT count" in workflow
+    assert "MISSING agent count" in workflow
+    assert "Governed completed but RAW_AGENT memo count is 0" in workflow
+
+    assert "LIMITED_EVIDENCE count" in workflow
+    assert "Source attempt count" in workflow
+    assert "Failed/degraded source list" in workflow
+    assert "Governed candidate count" in workflow
     assert "MARKET_HEAT_OUTPUT_DIR: ${{ vars.MARKET_HEAT_OUTPUT_DIR" in workflow
     assert "AGENT_GOVERNED_PARALLEL_MAX_WORKERS: ${{ vars.AGENT_GOVERNED_PARALLEL_MAX_WORKERS" in workflow
     assert "AGENT_GOVERNED_DAILY_LIMIT: ${{ vars.AGENT_GOVERNED_DAILY_LIMIT" in workflow
@@ -28,6 +40,9 @@ def test_daily_workflow_publishes_market_cycle_without_docs_index_conflict():
     assert "stock_analysis_status.txt" in workflow
     assert "governed_result_summary.json" in workflow
     assert "scripts/validate_governed_run.py" in workflow
+    assert "scripts/validate_pages_bundle.py" in workflow
+    assert "pages_bundle_validation.json" in workflow
+    assert "--fail-on-error" in workflow
     assert "--fail-on-non-success" in workflow
     assert "portfolio_holding_symbols.txt" in workflow
     assert "portfolio_governed_symbols.txt" in workflow
@@ -41,12 +56,15 @@ def test_daily_workflow_publishes_market_cycle_without_docs_index_conflict():
     assert "PORTFOLIO_HOLDINGS: ${{ vars.PORTFOLIO_HOLDINGS" in workflow
     assert "governed_stock_list.txt" in workflow
     assert "governed_selection_reason.txt" in workflow
-    assert "DEEP_REVIEW_NOW" in workflow
+    assert "select_governed_symbols" in workflow
+    assert "governed_selection.json" in workflow
     assert "build_portfolio_holding_snapshot" in workflow
     assert "--stocks \"$GOVERNED_STOCK_LIST\"" in workflow
     assert "python main.py --stocks \"$GOVERNED_STOCK_LIST\" --no-market-review --force-run" in workflow
     assert "reports/report_${TODAY_COMPACT}.md" in workflow
     assert "reports/*.md reports/*.html reports/*.json" not in workflow
+    assert "github.ref == 'refs/heads/main'" in workflow
+    assert 'TARGET_BRANCH="main"' in workflow
 
     assert workflow.index("python -m src.market_cycle") < workflow.index("python main.py --stocks")
 

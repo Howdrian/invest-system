@@ -279,7 +279,10 @@ def _data_gaps(macro: Dict[str, Any], pm: Dict[str, Any]) -> List[str]:
     regime = _build_regime(macro)
     for item in regime.get("missing_factors") or []:
         gaps.append(f"six_factor_missing:{item}")
-    if not pm or str(pm.get("status") or "").lower() != "available":
+    pm_status = str(pm.get("status") or "").lower()
+    if pm_status == "available_no_matching_market" or pm.get("scenario_coverage_status") == "available_no_matching_market":
+        gaps.append("prediction_market_available_no_matching_market")
+    if not pm or pm_status != "available":
         gaps.append("prediction_market_optional_missing_or_degraded")
     return gaps
 

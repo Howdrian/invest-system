@@ -1,0 +1,115 @@
+{
+  "schema": "agent_memo_v1",
+  "agent": "EvidenceGate",
+  "scope": "stock",
+  "symbol": "300308",
+  "status": "BLOCKED",
+  "origin": "RAW_AGENT",
+  "origin_label": "有限证据 Agent 输出",
+  "facts": [
+    "signal=sell",
+    "confidence=0.35",
+    "status=BLOCKED",
+    "missing_evidence=[]",
+    "warnings=[\"macro_review_degraded\"]",
+    "fatal_objection=True",
+    "opinions=macro,technical,intel,risk",
+    "missing_evidence_count=0",
+    "risk_flags=7",
+    "macro_status=DEGRADED"
+  ],
+  "reasoning": [
+    "存在高严重度风险，进入阻断状态。",
+    "EvidenceGate 只判断证据是否足够进入红蓝对抗，不产生交易动作。",
+    "缺少技术/行情核心证据会标记 NEEDS_EVIDENCE；高严重度风险会升级为 BLOCKED。",
+    "降级项：macro_review_degraded"
+  ],
+  "conclusion": "存在高严重度风险，进入阻断状态。",
+  "missing_data": [],
+  "source_refs": [
+    "runtime:agent_opinions",
+    "runtime:risk_flags",
+    "market_cycle/2026-06-19/13_source_health.json"
+  ],
+  "fatal_objection": true,
+  "next_step": "不执行交易动作；先解决阻断原因后重新审查。",
+  "readable_summary": "阻断：有限证据 Agent 输出。存在高严重度风险，进入阻断状态。",
+  "evidence_blocks": [
+    {
+      "claim": "存在高严重度风险，进入阻断状态。",
+      "data": "signal=sell；confidence=0.35；status=BLOCKED；missing_evidence=[]",
+      "source": "runtime:agent_opinions；runtime:risk_flags；market_cycle/2026-06-19/13_source_health.json",
+      "inference": "存在高严重度风险，进入阻断状态。；EvidenceGate 只判断证据是否足够进入红蓝对抗，不产生交易动作。"
+    }
+  ],
+  "audit_detail": {
+    "schema": "agent_memo_v1",
+    "origin": "RAW_AGENT",
+    "stage_name": "evidence_gate",
+    "status": "BLOCKED",
+    "raw_untrusted": true,
+    "raw_data": {
+      "schema": "evidence_gate_v1",
+      "stock": "300308",
+      "status": "BLOCKED",
+      "facts": [
+        "opinions=macro,technical,intel,risk",
+        "missing_evidence_count=0",
+        "risk_flags=7",
+        "macro_status=DEGRADED"
+      ],
+      "reasoning": [
+        "EvidenceGate 只判断证据是否足够进入红蓝对抗，不产生交易动作。",
+        "缺少技术/行情核心证据会标记 NEEDS_EVIDENCE；高严重度风险会升级为 BLOCKED。",
+        "降级项：macro_review_degraded"
+      ],
+      "conclusion": "存在高严重度风险，进入阻断状态。",
+      "missing_evidence": [],
+      "warnings": [
+        "macro_review_degraded"
+      ],
+      "fatal_objection": true,
+      "high_risk_flags": [
+        {
+          "category": "valuation",
+          "description": "Current PE ratio (102.05) is significantly above 100, and PB ratio (44.04) is significantly above 10, indicating extreme overvaluation. This suggests a high price risk.",
+          "severity": "high",
+          "timestamp": 1781856517.8729632
+        }
+      ],
+      "no_trade_execution": true
+    },
+    "raw_text": "{\n  \"schema\": \"evidence_gate_v1\",\n  \"stock\": \"300308\",\n  \"status\": \"BLOCKED\",\n  \"facts\": [\n    \"opinions=macro,technical,intel,risk\",\n    \"missing_evidence_count=0\",\n    \"risk_flags=7\",\n    \"macro_status=DEGRADED\"\n  ],\n  \"reasoning\": [\n    \"EvidenceGate 只判断证据是否足够进入红蓝对抗，不产生交易动作。\",\n    \"缺少技术/行情核心证据会标记 NEEDS_EVIDENCE；高严重度风险会升级为 BLOCKED。\",\n    \"降级项：macro_review_degraded\"\n  ],\n  \"conclusion\": \"存在高严重度风险，进入阻断状态。\",\n  \"missing_evidence\": [],\n  \"warnings\": [\n    \"macro_review_degraded\"\n  ],\n  \"fatal_objection\": true,\n  \"high_risk_flags\": [\n    {\n      \"category\": \"valuation\",\n      \"description\": \"Current PE ratio (102.05) is significantly above 100, and PB ratio (44.04) is significantly above 10, indicating extreme overvaluation. This suggests a high price risk.\",\n      \"severity\": \"high\",\n      \"timestamp\": 1781856517.8729632\n    }\n  ],\n  \"no_trade_execution\": true\n}",
+    "tokens_used": 0,
+    "tool_calls_count": 0,
+    "models_used": [
+      "deterministic/evidence_gate"
+    ]
+  },
+  "no_trade_execution": true,
+  "evidence_pack": {
+    "schema": "evidence_pack_v1",
+    "scope": "stock",
+    "symbol": "300308",
+    "source_attempts": [],
+    "evidence_items": [
+      {
+        "claim": "存在高严重度风险，进入阻断状态。",
+        "data": "signal=sell；confidence=0.35；status=BLOCKED；missing_evidence=[]",
+        "source": "runtime:agent_opinions；runtime:risk_flags；market_cycle/2026-06-19/13_source_health.json",
+        "inference": "存在高严重度风险，进入阻断状态。；EvidenceGate 只判断证据是否足够进入红蓝对抗，不产生交易动作。"
+      }
+    ],
+    "missing_evidence": [],
+    "evidence_level": "LIMITED",
+    "confidence": "low",
+    "limited_report": true,
+    "can_go_redblue": false,
+    "can_trade_review": false,
+    "no_trade_execution": true
+  },
+  "evidence_level": "LIMITED",
+  "source_attempts": [],
+  "limited_report": true,
+  "confidence": "low"
+}

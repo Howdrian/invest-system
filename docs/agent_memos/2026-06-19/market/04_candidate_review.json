@@ -1,0 +1,187 @@
+{
+  "schema": "agent_memo_v1",
+  "agent": "CandidateReviewAgent",
+  "scope": "market",
+  "symbol": "",
+  "status": "PASS",
+  "origin": "RAW_AGENT",
+  "origin_label": "有限证据 Agent 输出",
+  "facts": [
+    "candidate_count=6",
+    "auto_governed_count=0",
+    "top_candidates=太极实业:DEEP_REVIEW_WAIT_ENTRY；中际旭创:DEEP_REVIEW_WAIT_ENTRY；东方锆业:DEEP_REVIEW_WAIT_ENTRY；工业富联:DEEP_REVIEW_WAIT_ENTRY；盛和资源:DEEP_REVIEW_WAIT_ENTRY；中钨高新:DEEP_REVIEW_WAIT_ENTRY"
+  ],
+  "reasoning": [
+    "候选池用于筛选，不等于交易池；热榜证据必须经公告/研报/基本面/技术承接复核。"
+  ],
+  "conclusion": "本轮候选多数处于观察或等待承接。",
+  "missing_data": [
+    "no_auto_governed_candidates"
+  ],
+  "source_refs": [
+    "market_cycle/2026-06-19/11_deep_review_queue.json"
+  ],
+  "fatal_objection": false,
+  "next_step": "只让 DEEP_REVIEW_NOW 或持仓异常进入个股 governed 深评。",
+  "readable_summary": "有限信息结论：本轮候选多数处于观察或等待承接。",
+  "evidence_blocks": [
+    {
+      "claim": "candidate_count=6",
+      "data": "candidate_count=6；auto_governed_count=0；top_candidates=太极实业:DEEP_REVIEW_WAIT_ENTRY；中际旭创:DEEP_REVIEW_WAIT_ENTRY；东方锆业:DEEP_REVIEW_WAIT_ENTRY；工业富联:DEEP_REVIEW_WAIT_ENTRY；盛和资源:DEEP_REVIEW_WAIT_ENTRY；中钨高新:DEEP_REVIEW_WAIT_ENTRY",
+      "source": "market_cycle/2026-06-19/11_deep_review_queue.json",
+      "inference": "候选池用于筛选，不等于交易池；热榜证据必须经公告/研报/基本面/技术承接复核。"
+    }
+  ],
+  "audit_detail": {
+    "schema": "agent_memo_v1",
+    "origin": "RAW_AGENT",
+    "status": "PASS",
+    "source_refs": [
+      "market_cycle/2026-06-19/11_deep_review_queue.json"
+    ],
+    "fatal_objection": false
+  },
+  "no_trade_execution": true,
+  "evidence_pack": {
+    "schema": "evidence_pack_v1",
+    "scope": "market",
+    "symbol": "",
+    "source_attempts": [
+      {
+        "schema": "source_attempt_v1",
+        "source": "screening_funnel",
+        "tool": "deep_review_queue",
+        "domain": "candidate",
+        "query": "candidate evidence cross-check",
+        "status": "DEGRADED",
+        "failure_reason": "unknown",
+        "results_count": 6,
+        "impact_scope": [
+          "candidate",
+          "governed_selection"
+        ]
+      }
+    ],
+    "evidence_items": [
+      {
+        "symbol": "SH600667",
+        "name": "太极实业",
+        "source": "hot_stocks",
+        "priority_score": 6.5,
+        "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
+        "evidence": [
+          "hot_stock_rank"
+        ],
+        "verdict": "DEEP_REVIEW_WAIT_ENTRY",
+        "price_risk": "OVERHEATED_WAIT_ENTRY",
+        "next_action": "读公告/研报和技术承接；不追高。",
+        "trade_execution": "disabled",
+        "macro_overlay": "macro_risk_state=neutral"
+      },
+      {
+        "symbol": "SZ300308",
+        "name": "中际旭创",
+        "source": "hot_stocks",
+        "priority_score": 6.5,
+        "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
+        "evidence": [
+          "hot_stock_rank"
+        ],
+        "verdict": "DEEP_REVIEW_WAIT_ENTRY",
+        "price_risk": "OVERHEATED_WAIT_ENTRY",
+        "next_action": "读公告/研报和技术承接；不追高。",
+        "trade_execution": "disabled",
+        "macro_overlay": "macro_risk_state=neutral"
+      },
+      {
+        "symbol": "SZ002167",
+        "name": "东方锆业",
+        "source": "hot_stocks",
+        "priority_score": 6.5,
+        "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
+        "evidence": [
+          "hot_stock_rank"
+        ],
+        "verdict": "DEEP_REVIEW_WAIT_ENTRY",
+        "price_risk": "OVERHEATED_WAIT_ENTRY",
+        "next_action": "读公告/研报和技术承接；不追高。",
+        "trade_execution": "disabled",
+        "macro_overlay": "macro_risk_state=neutral"
+      },
+      {
+        "symbol": "SH601138",
+        "name": "工业富联",
+        "source": "hot_stocks",
+        "priority_score": 6.5,
+        "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
+        "evidence": [
+          "hot_stock_rank"
+        ],
+        "verdict": "DEEP_REVIEW_WAIT_ENTRY",
+        "price_risk": "OVERHEATED_WAIT_ENTRY",
+        "next_action": "读公告/研报和技术承接；不追高。",
+        "trade_execution": "disabled",
+        "macro_overlay": "macro_risk_state=neutral"
+      },
+      {
+        "symbol": "SH600392",
+        "name": "盛和资源",
+        "source": "hot_stocks",
+        "priority_score": 6.5,
+        "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
+        "evidence": [
+          "hot_stock_rank"
+        ],
+        "verdict": "DEEP_REVIEW_WAIT_ENTRY",
+        "price_risk": "OVERHEATED_WAIT_ENTRY",
+        "next_action": "读公告/研报和技术承接；不追高。",
+        "trade_execution": "disabled",
+        "macro_overlay": "macro_risk_state=neutral"
+      },
+      {
+        "symbol": "SZ000657",
+        "name": "中钨高新",
+        "source": "hot_stocks",
+        "priority_score": 6.5,
+        "evidence_quality": "MEDIUM_MIXED_EVIDENCE",
+        "evidence": [
+          "hot_stock_rank"
+        ],
+        "verdict": "DEEP_REVIEW_WAIT_ENTRY",
+        "price_risk": "OVERHEATED_WAIT_ENTRY",
+        "next_action": "读公告/研报和技术承接；不追高。",
+        "trade_execution": "disabled",
+        "macro_overlay": "macro_risk_state=neutral"
+      }
+    ],
+    "missing_evidence": [
+      "no_auto_governed_candidates",
+      "non_hot_rank_evidence_required"
+    ],
+    "evidence_level": "LIMITED",
+    "confidence": "low",
+    "limited_report": true,
+    "can_go_redblue": false,
+    "can_trade_review": false,
+    "no_trade_execution": true
+  },
+  "evidence_level": "LIMITED",
+  "source_attempts": [
+    {
+      "schema": "source_attempt_v1",
+      "source": "screening_funnel",
+      "tool": "deep_review_queue",
+      "domain": "candidate",
+      "query": "candidate evidence cross-check",
+      "status": "DEGRADED",
+      "failure_reason": "unknown",
+      "results_count": 6,
+      "impact_scope": [
+        "candidate",
+        "governed_selection"
+      ]
+    }
+  ],
+  "limited_report": true,
+  "confidence": "low"
+}

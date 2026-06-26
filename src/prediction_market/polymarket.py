@@ -57,8 +57,18 @@ def build_prediction_market_snapshot(
 
     signals = _normalize_events(raw_events, keyword_list)
     high_quality = [s for s in signals if s.get("quality_bucket") == "high"]
-    status = "available" if signals else "degraded"
     scenario_fusion = _build_scenario_fusion(signals)
+    matched_scenarios = [
+        item.get("scenario_id")
+        for item in scenario_fusion
+        if isinstance(item, dict) and item.get("status") != "missing_market"
+    ]
+    scenario_match_count = len(matched_scenarios)
+    if signals and scenario_match_count == 0:
+        status = "available_no_matching_market"
+        warnings.append("polymarket_available_no_matching_market")
+    else:
+        status = "available" if signals else "degraded"
     if any(item.get("red_team_trigger") for item in scenario_fusion):
         warnings.append("prediction_market_probability_gap_red_team_trigger")
 
@@ -71,6 +81,9 @@ def build_prediction_market_snapshot(
         "signals": signals[:40],
         "high_quality_count": len(high_quality),
         "scenario_fusion": scenario_fusion,
+        "scenario_match_count": scenario_match_count,
+        "matched_scenarios": matched_scenarios,
+        "scenario_coverage_status": "available_no_matching_market" if signals and scenario_match_count == 0 else ("matched" if scenario_match_count else "missing"),
         "usage_policy": {
             "high_quality_weight": QUALITY_HIGH_WEIGHT,
             "medium_quality_weight": QUALITY_MEDIUM_WEIGHT,

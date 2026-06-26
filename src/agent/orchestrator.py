@@ -271,6 +271,29 @@ class AgentOrchestrator:
             run_kwargs["timeout_seconds"] = timeout_seconds
         return agent.run(ctx, **run_kwargs)
 
+    def _record_runtime_agent_memo(self, ctx: AgentContext, result: StageResult) -> None:
+        """Persist a RAW_AGENT memo for governed-mode stages when configured."""
+        if self.mode != "governed":
+            return
+        output_dir = ctx.meta.get("agent_memo_output_dir")
+        if not output_dir:
+            return
+        try:
+            from src.agent_memos import write_runtime_stage_memo
+
+            write_runtime_stage_memo(
+                ctx,
+                result,
+                output_dir=output_dir,
+                run_date=ctx.meta.get("agent_memo_run_date") or "",
+            )
+        except Exception as exc:
+            logger.warning(
+                "[Orchestrator] failed to write RAW_AGENT memo for stage '%s': %s",
+                result.stage_name,
+                exc,
+            )
+
     def _should_run_governed_parallel_batch(self, agents: List[Any], index: int) -> bool:
         """Return True when governed analysis stages can run concurrently."""
         if self.mode != "governed":
@@ -401,6 +424,7 @@ class AgentOrchestrator:
             stats.record_stage(result)
             all_tool_calls.extend(tc for tc in (result.meta.get("tool_calls_log") or []))
             models_used.extend(result.meta.get("models_used", []))
+            self._record_runtime_agent_memo(stage_contexts[i], result)
 
             if progress_callback:
                 progress_callback({
@@ -475,6 +499,7 @@ class AgentOrchestrator:
 
         ctx = self._build_context(task, context)
         ctx.meta["response_mode"] = "dashboard"
+        self._write_runtime_context_pack_if_configured(ctx)
         orch_result = self._execute_pipeline(ctx, parse_dashboard=True)
 
         return AgentResult(
@@ -508,6 +533,7 @@ class AgentOrchestrator:
         ctx = self._build_context(message, context)
         ctx.session_id = session_id
         ctx.meta["response_mode"] = "chat"
+        self._write_runtime_context_pack_if_configured(ctx)
 
         conversation_manager.get_or_create(session_id)
         config = self.config or getattr(self.llm_adapter, "_config", None) or get_config()
@@ -692,6 +718,7 @@ class AgentOrchestrator:
                 timeout_seconds=remaining_timeout_s,
             )
             stats.record_stage(result)
+            self._record_runtime_agent_memo(ctx, result)
             all_tool_calls.extend(
                 tc for tc in (result.meta.get("tool_calls_log") or [])
             )
@@ -835,7 +862,7 @@ class AgentOrchestrator:
             # stage so the router can see the finished technical opinion.
             return [technical, intel, risk, decision]
         elif self.mode == "governed":
-            # Governed mode adds invest-brain governance layer:
+            # Governed mode adds the local governance layer:
             # Macro → Technical/Intel/Risk → RedBlue → Scoring → CIO → Decision.
             # Technical/Intel/Risk may run concurrently after Macro has injected
             # global regime context.
@@ -877,13 +904,14 @@ class AgentOrchestrator:
             return []
 
     def _build_governance_agents(self) -> list:
-        """Build invest-brain governance agents for the governed pipeline mode.
+        """Build local governance agents for the governed pipeline mode.
 
-        Order: RedBlueAgent → ScoringAgent → CioAgent
+        Order: EvidenceGateAgent → RedBlueAgent → ScoringAgent → CioAgent
 
         These agents are pure synthesis (no tools) and work from the context
         accumulated by Technical, Intel, and Risk agents.
         """
+        from src.agent.agents.governance.evidence_gate_agent import EvidenceGateAgent
         from src.agent.agents.governance.red_blue_agent import RedBlueAgent
         from src.agent.agents.governance.scoring_agent import ScoringAgent
         from src.agent.agents.governance.cio_agent import CioAgent
@@ -895,11 +923,12 @@ class AgentOrchestrator:
             technical_skill_policy=self.technical_skill_policy,
         )
 
+        evidence_gate = self._prepare_agent(EvidenceGateAgent(**common_kwargs))
         red_blue = self._prepare_agent(RedBlueAgent(**common_kwargs))
         scoring = self._prepare_agent(ScoringAgent(**common_kwargs))
         cio = self._prepare_agent(CioAgent(**common_kwargs))
 
-        return [red_blue, scoring, cio]
+        return [evidence_gate, red_blue, scoring, cio]
 
     def _build_skill_agents(self, ctx: AgentContext) -> list:
         """Compatibility wrapper for legacy imports."""
@@ -965,11 +994,16 @@ class AgentOrchestrator:
             analysis_context_pack_summary = context.get("analysis_context_pack_summary")
             if isinstance(analysis_context_pack_summary, str) and analysis_context_pack_summary:
                 ctx.meta["analysis_context_pack_summary"] = analysis_context_pack_summary
+            if context.get("agent_memo_run_date"):
+                ctx.meta["agent_memo_run_date"] = context["agent_memo_run_date"]
+            if context.get("agent_memo_output_dir"):
+                ctx.meta["agent_memo_output_dir"] = context["agent_memo_output_dir"]
 
             # Pre-populate data fields that the caller already has
             for data_key in ("realtime_quote", "daily_history", "chip_distribution",
                              "trend_result", "news_context", "fundamental_context",
-                             "portfolio_context", "macro_context", "market_heat_context"):
+                             "portfolio_context", "macro_context", "market_heat_context",
+                             "macro_review", "event_context"):
                 if context.get(data_key):
                     ctx.set_data(data_key, context[data_key])
 
@@ -981,6 +1015,25 @@ class AgentOrchestrator:
             ctx.meta["report_language"] = "zh"
 
         return ctx
+
+    def _write_runtime_context_pack_if_configured(self, ctx: AgentContext) -> None:
+        output_dir = ctx.meta.get("agent_memo_output_dir")
+        if self.mode != "governed" or not output_dir or not ctx.stock_code:
+            return
+        try:
+            from src.agent_memos import write_runtime_context_pack
+
+            write_runtime_context_pack(
+                ctx,
+                output_dir=output_dir,
+                run_date=ctx.meta.get("agent_memo_run_date") or "",
+            )
+        except Exception as exc:
+            logger.warning(
+                "[Orchestrator] failed to write runtime ContextPack for '%s': %s",
+                ctx.stock_code,
+                exc,
+            )
 
     @staticmethod
     def _fallback_summary(ctx: AgentContext) -> str:

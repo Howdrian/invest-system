@@ -1,0 +1,315 @@
+{
+  "schemaVersion": "report_artifact_v1",
+  "artifactId": "daily:2026-06-19",
+  "runDate": "2026-06-19",
+  "generatedAt": "2026-06-26T16:59:34Z",
+  "artifactType": "daily",
+  "audience": "reader",
+  "title": "2026-06-19 投研日报",
+  "summary": {
+    "oneLine": "今日 governed 标的全部被门控阻断；最终动作是不操作。 数据源降级，只可观察，不可作为满血交易依据。",
+    "keyFacts": [
+      "运行日期：2026-06-19",
+      "宏观状态：DEGRADED",
+      "市场状态：NEUTRAL_WATCH",
+      "交易审查可用性：usable_limited",
+      "深评候选：6；自动 governed：0",
+      "governed 完成：3；阻断：3",
+      "Agent 来源：真实 36；回填 2；缺失 0"
+    ],
+    "analysis": "宏观中性；维持观察，等待价格和证据共振。",
+    "finalConclusion": "中际旭创(300308)：阻断 / 不操作 / 0%；评分 0.5/10；目标仓位 0%；中际旭创：估值极高，基本面数据缺失，技术指标严重超买，存在致命风险，交易被阻断。；太极实业(600667)：阻断 / 不操作 / 0%；评分 2/10；目标仓位 0%；太极实业短期风险过高，估值偏离严重，不建议操作；东方锆业(002167)：阻断 / 不操作 / 0%；评分 0.5/10；目标仓位 0%；东方锆业：估值极高，基本面数据缺失，短期技术超买，存在致命风险，不建议操作",
+    "nextSteps": [
+      "先读源健康，确认数据缺口。",
+      "候选只做观察，不直接交易。",
+      "如需交易，另跑 evidence pack、红蓝对抗和评分门控。"
+    ]
+  },
+  "sections": [
+    {
+      "key": "source",
+      "title": "数据源",
+      "kind": "source",
+      "contentMarkdown": "- macro_context：PARTIAL；提示：fmp_unavailable；macro_factor_coverage_incomplete\n- market_heat：AVAILABLE\n- prediction_market：AVAILABLE\n- portfolio_holdings：AVAILABLE\n- macro_review：DEGRADED；提示：fmp_unavailable；macro_factor_coverage_incomplete\n- screening_funnel：AVAILABLE\n- deep_review_queue：AVAILABLE\n- governed_reports：AVAILABLE",
+      "sourceRefs": [
+        "daily/2026-06-19.md",
+        "governed_results.json",
+        "report_20260619.md",
+        "market_cycle/2026-06-19/01_macro_review.json",
+        "market_cycle/2026-06-19/11_deep_review_queue.json",
+        "market_cycle/2026-06-19/13_source_health.json",
+        "market_cycle/2026-06-19/14_market_strategy.json"
+      ],
+      "confidence": "medium"
+    },
+    {
+      "key": "facts",
+      "title": "关键数据",
+      "kind": "facts",
+      "contentMarkdown": "- 运行日期：2026-06-19\n- 宏观状态：DEGRADED\n- 市场状态：NEUTRAL_WATCH\n- 交易审查可用性：usable_limited\n- 深评候选：6；自动 governed：0\n- governed 完成：3；阻断：3\n- Agent 来源：真实 36；回填 2；缺失 0",
+      "confidence": "medium"
+    },
+    {
+      "key": "analysis",
+      "title": "推论",
+      "kind": "analysis",
+      "contentMarkdown": "宏观中性；维持观察，等待价格和证据共振。\n宏观和源健康只决定风险温度与阅读置信度，不能单独触发交易。\n候选池用于发现机会；只有证据链、红蓝对抗、评分卡和 CIO 门控通过后才可进入交易前复核。\n- 太极实业(SH600667)：DEEP_REVIEW_WAIT_ENTRY；价格风险：OVERHEATED_WAIT_ENTRY\n- 中际旭创(SZ300308)：DEEP_REVIEW_WAIT_ENTRY；价格风险：OVERHEATED_WAIT_ENTRY\n- 东方锆业(SZ002167)：DEEP_REVIEW_WAIT_ENTRY；价格风险：OVERHEATED_WAIT_ENTRY\n- 工业富联(SH601138)：DEEP_REVIEW_WAIT_ENTRY；价格风险：OVERHEATED_WAIT_ENTRY\n- 盛和资源(SH600392)：DEEP_REVIEW_WAIT_ENTRY；价格风险：OVERHEATED_WAIT_ENTRY\n- 中钨高新(SZ000657)：DEEP_REVIEW_WAIT_ENTRY；价格风险：OVERHEATED_WAIT_ENTRY",
+      "confidence": "low"
+    },
+    {
+      "key": "final_conclusion",
+      "title": "总结论",
+      "kind": "final_conclusion",
+      "contentMarkdown": "- 中际旭创(300308)：阻断 / 不操作 / 0%；评分 0.5/10；目标仓位 0%；中际旭创：估值极高，基本面数据缺失，技术指标严重超买，存在致命风险，交易被阻断。\n- 太极实业(600667)：阻断 / 不操作 / 0%；评分 2/10；目标仓位 0%；太极实业短期风险过高，估值偏离严重，不建议操作\n- 东方锆业(002167)：阻断 / 不操作 / 0%；评分 0.5/10；目标仓位 0%；东方锆业：估值极高，基本面数据缺失，短期技术超买，存在致命风险，不建议操作",
+      "confidence": "medium",
+      "blocking": true
+    },
+    {
+      "key": "next_steps",
+      "title": "下一步",
+      "kind": "next_steps",
+      "contentMarkdown": "- 先读总报告，再看源健康和 Agent 卷宗。\n- 宏观源降级时，只做观察和候选筛选。\n- blocked / 低分标的不交易；补公告、业绩、估值和催化剂后再审。",
+      "confidence": "medium"
+    }
+  ],
+  "sourceHealth": {
+    "status": "degraded",
+    "verdict": "usable_limited",
+    "canScore": true,
+    "canTradeReview": false,
+    "coverageScore": 0.75,
+    "freshnessStatus": "未提供",
+    "fallbackUsed": "未提供",
+    "failureReason": "未提供",
+    "decisionImpact": "数据源降级，可观察，不可作为满血交易依据",
+    "rows": [
+      {
+        "component": "macro_context",
+        "status": "PARTIAL",
+        "usability": "degraded",
+        "criticality": "critical",
+        "blocking_level": "none",
+        "warnings": [
+          "fmp_unavailable",
+          "macro_factor_coverage_incomplete"
+        ],
+        "source": "src.macro.official_sources",
+        "as_of": "2026-06-19T08:02:42.355535+00:00",
+        "age_seconds": 587,
+        "freshness_status": "fresh",
+        "coverage_score": 0.1667,
+        "fallback_used": "",
+        "failure_reason": "fmp_unavailable; macro_factor_coverage_incomplete",
+        "decision_impact": "关键源降级：只能有限评分，不可进入完整交易审查。",
+        "can_score": true,
+        "can_trade_review": false,
+        "evidence_refs": [
+          "macro_context"
+        ]
+      },
+      {
+        "component": "market_heat",
+        "status": "AVAILABLE",
+        "usability": "usable",
+        "criticality": "supporting",
+        "blocking_level": "none",
+        "warnings": [],
+        "source": "src.intel.market_heat",
+        "as_of": "2026-06-19T08:03:27.502698+00:00",
+        "age_seconds": 542,
+        "freshness_status": "fresh",
+        "coverage_score": 1.0,
+        "fallback_used": "",
+        "failure_reason": "",
+        "decision_impact": "可用于本轮分析。",
+        "can_score": true,
+        "can_trade_review": true,
+        "evidence_refs": [
+          "market_heat"
+        ]
+      },
+      {
+        "component": "prediction_market",
+        "status": "AVAILABLE",
+        "usability": "usable",
+        "criticality": "optional",
+        "blocking_level": "none",
+        "warnings": [],
+        "source": "src.prediction_market.polymarket",
+        "as_of": "2026-06-19T08:03:34.314606+00:00",
+        "age_seconds": 535,
+        "freshness_status": "fresh",
+        "coverage_score": 1.0,
+        "fallback_used": "",
+        "failure_reason": "",
+        "decision_impact": "概率校准源无匹配市场；只降权，不阻断交易审查。",
+        "can_score": true,
+        "can_trade_review": true,
+        "evidence_refs": [
+          "prediction_market"
+        ]
+      },
+      {
+        "component": "portfolio_holdings",
+        "status": "AVAILABLE",
+        "usability": "usable",
+        "criticality": "supporting",
+        "blocking_level": "none",
+        "warnings": [],
+        "source": "src.intel.portfolio_holdings",
+        "as_of": "2026-06-19",
+        "age_seconds": 29549,
+        "freshness_status": "fresh",
+        "coverage_score": 1.0,
+        "fallback_used": "",
+        "failure_reason": "",
+        "decision_impact": "可用于本轮分析。",
+        "can_score": true,
+        "can_trade_review": true,
+        "evidence_refs": [
+          "src.intel.portfolio_holdings"
+        ],
+        "holding_status": "EMPTY",
+        "holding_source": "portfolio_service",
+        "selected_count": 0,
+        "governed_count": 0,
+        "light_review_count": 0,
+        "omitted_count": 0
+      },
+      {
+        "component": "macro_review",
+        "status": "DEGRADED",
+        "usability": "degraded",
+        "criticality": "critical",
+        "blocking_level": "none",
+        "warnings": [
+          "fmp_unavailable",
+          "macro_factor_coverage_incomplete"
+        ],
+        "source": "src.macro.review",
+        "as_of": null,
+        "age_seconds": null,
+        "freshness_status": "unknown",
+        "coverage_score": 0.5,
+        "fallback_used": "",
+        "failure_reason": "fmp_unavailable; macro_factor_coverage_incomplete",
+        "decision_impact": "关键源降级：只能有限评分，不可进入完整交易审查。",
+        "can_score": true,
+        "can_trade_review": false,
+        "evidence_refs": [
+          "src.macro.review"
+        ]
+      },
+      {
+        "component": "screening_funnel",
+        "status": "AVAILABLE",
+        "usability": "usable",
+        "criticality": "supporting",
+        "blocking_level": "none",
+        "warnings": [],
+        "source": "src.intel.candidate_selector",
+        "as_of": null,
+        "age_seconds": null,
+        "freshness_status": "unknown",
+        "coverage_score": 1.0,
+        "fallback_used": "",
+        "failure_reason": "",
+        "decision_impact": "可用于本轮分析。",
+        "can_score": true,
+        "can_trade_review": true,
+        "evidence_refs": [
+          "src.intel.candidate_selector"
+        ]
+      },
+      {
+        "component": "deep_review_queue",
+        "status": "AVAILABLE",
+        "usability": "usable",
+        "criticality": "critical",
+        "blocking_level": "none",
+        "warnings": [],
+        "source": "src.intel.candidate_selector",
+        "as_of": null,
+        "age_seconds": null,
+        "freshness_status": "unknown",
+        "coverage_score": 1.0,
+        "fallback_used": "",
+        "failure_reason": "",
+        "decision_impact": "可用于本轮分析。",
+        "can_score": true,
+        "can_trade_review": true,
+        "evidence_refs": [
+          "src.intel.candidate_selector"
+        ],
+        "candidate_count": 6
+      },
+      {
+        "component": "governed_reports",
+        "status": "AVAILABLE",
+        "usability": "usable",
+        "criticality": "optional",
+        "blocking_level": "none",
+        "warnings": [],
+        "source": "reports/report_YYYYMMDD.md",
+        "as_of": null,
+        "age_seconds": null,
+        "freshness_status": "unknown",
+        "coverage_score": 1.0,
+        "fallback_used": "",
+        "failure_reason": "",
+        "decision_impact": "可用于本轮分析。",
+        "can_score": true,
+        "can_trade_review": true,
+        "evidence_refs": [
+          "reports/report_YYYYMMDD.md"
+        ],
+        "count": 1,
+        "files": [
+          "report_20260619.md"
+        ]
+      }
+    ]
+  },
+  "decision": {
+    "action": "no_action",
+    "gateStatus": "blocked",
+    "score": 0.5,
+    "targetPct": 0,
+    "blockedReasons": [
+      "300308:BLOCKED_BY_FATAL",
+      "600667:BLOCKED_BY_FATAL",
+      "002167:BLOCKED_BY_FATAL"
+    ]
+  },
+  "agentOrigins": {
+    "raw": 36,
+    "derived": 2,
+    "missing": 0
+  },
+  "provenance": {
+    "origin": "invest-system.static",
+    "sourceFiles": [
+      "daily/2026-06-19.md",
+      "governed_results.json",
+      "report_20260619.md",
+      "market_cycle/2026-06-19/01_macro_review.json",
+      "market_cycle/2026-06-19/11_deep_review_queue.json",
+      "market_cycle/2026-06-19/13_source_health.json",
+      "market_cycle/2026-06-19/14_market_strategy.json"
+    ],
+    "generatedBy": "src.report_artifact.build_daily_report_artifact",
+    "runId": "2026-06-19"
+  },
+  "publish": {
+    "docsPath": "docs/reports/2026-06-19.html",
+    "jsonPath": "docs/reports/2026-06-19.artifact.json",
+    "htmlPath": "reports/2026-06-19.html",
+    "markdownPath": "daily/2026-06-19.md",
+    "webPath": "/reports/2026-06-19"
+  },
+  "quality": {
+    "completeness": "partial",
+    "missingFields": [],
+    "validationErrors": []
+  }
+}

@@ -76,3 +76,18 @@ def test_probability_gap_triggers_red_team_flag():
     taiwan = [x for x in payload["scenario_fusion"] if x["scenario_id"] == "geopolitics_semis"][0]
     assert taiwan["red_team_trigger"] is True
     assert "prediction_market_probability_gap_red_team_trigger" in payload["warnings"]
+
+
+def test_available_polymarket_without_scenario_match_is_not_full_available():
+    from src.prediction_market.polymarket import build_prediction_market_snapshot
+
+    payload = build_prediction_market_snapshot(
+        keywords=["sports"],
+        events=[_event("Will the Tigers win the championship?", 0.58)],
+    )
+
+    assert payload["signals"]
+    assert payload["scenario_match_count"] == 0
+    assert payload["scenario_coverage_status"] == "available_no_matching_market"
+    assert payload["status"] == "available_no_matching_market"
+    assert "polymarket_available_no_matching_market" in payload["warnings"]

@@ -149,6 +149,56 @@ def _build_tool_cache_key(tool_name: str, arguments: Dict[str, Any]) -> Optional
     return f"{tool_name}:{payload}"
 
 
+
+
+def _summarize_tool_result(result_str: str) -> Dict[str, Any]:
+    """Extract source-attempt metadata from a serialized tool result."""
+    summary: Dict[str, Any] = {
+        "result_success": True,
+        "result_error": "",
+        "provider": "",
+        "query": "",
+        "results_count": 0,
+    }
+    try:
+        payload = json.loads(result_str)
+    except Exception:
+        return summary
+    if not isinstance(payload, dict):
+        return summary
+
+    error = payload.get("error") or payload.get("error_message") or ""
+    explicit_success = payload.get("success")
+    if explicit_success is False or error:
+        summary["result_success"] = False
+    summary["result_error"] = str(error or "")
+    summary["provider"] = str(payload.get("provider") or "")
+    summary["query"] = str(payload.get("query") or "")
+
+    if isinstance(payload.get("results_count"), int):
+        summary["results_count"] = max(0, int(payload.get("results_count") or 0))
+    elif isinstance(payload.get("results"), list):
+        summary["results_count"] = len(payload.get("results") or [])
+    elif isinstance(payload.get("dimensions"), dict):
+        total = 0
+        for dim in payload.get("dimensions", {}).values():
+            if isinstance(dim, dict):
+                if isinstance(dim.get("results_count"), int):
+                    total += max(0, int(dim.get("results_count") or 0))
+                elif isinstance(dim.get("results"), list):
+                    total += len(dim.get("results") or [])
+        summary["results_count"] = total
+
+    if not summary["provider"] and isinstance(payload.get("dimensions"), dict):
+        providers = []
+        for dim in payload.get("dimensions", {}).values():
+            if isinstance(dim, dict) and dim.get("provider"):
+                providers.append(str(dim.get("provider")))
+        if providers:
+            summary["provider"] = ",".join(dict.fromkeys(providers))
+    return summary
+
+
 def _is_non_retriable_tool_result(result: Any) -> bool:
     """Return True when a tool result explicitly tells the agent not to retry."""
     return (
@@ -688,6 +738,7 @@ def _execute_tools(
             "step": step, "tool": tc.name, "arguments": tc.arguments,
             "success": success, "duration": dur, "result_length": len(result_str),
             "cached": cached,
+            **_summarize_tool_result(result_str),
         }
         if tool_wait_timeout_seconds and tool_wait_timeout_seconds > 0 and not success:
             try:
@@ -719,6 +770,7 @@ def _execute_tools(
                     "step": step, "tool": tc_item.name, "arguments": tc_item.arguments,
                     "success": success, "duration": dur, "result_length": len(result_str),
                     "cached": cached,
+                    **_summarize_tool_result(result_str),
                 })
                 results.append({"tc": tc_item, "result_str": result_str})
         except FuturesTimeoutError:
@@ -753,6 +805,7 @@ def _execute_tools(
                         "result_length": len(result_str),
                         "cached": False,
                         "timeout": True,
+                        **_summarize_tool_result(result_str),
                     })
                     results.append({"tc": tc_item, "result_str": result_str})
         finally:

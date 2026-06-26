@@ -1,0 +1,118 @@
+{
+  "schema": "agent_memo_v1",
+  "agent": "MacroAgent",
+  "scope": "stock",
+  "symbol": "300308",
+  "status": "WARN",
+  "origin": "RAW_AGENT",
+  "origin_label": "真实 Agent 输出",
+  "facts": [
+    "signal=hold",
+    "confidence=0.4",
+    "status=degraded",
+    "risk_state=neutral",
+    "market_regime=中性观望",
+    "confidence=0.4",
+    "key_macro_drivers=[\"VIX指数中性 (16.94)，市场风险偏好不明朗。\", \"地缘政治风险：危机级联和管控下降情景概率相当 (各35%)，存在不确定性。\", \"美国市场指数（S&P 500, NASDAQ）表现积极，但宏观因素覆盖不全。\", \"市场热度显示科技相关板块（如计算机、通信和其他电子设备制造业）和个股（中际旭创排名第二）活跃。\"]",
+    "data_gaps=[\"宏观经济增长（GDP/PMI/就业）数据缺失。\", \"通货膨胀（CPI/PCE）数据缺失。\", \"流动性/利率（如LQD, TLT）数据缺失。\", \"信用状况（如HYG）数据缺失。\", \"能源与大宗商品数据（WTI/EIA/FRED）缺失。\", \"美元汇率（DXY/USD/CNH）数据缺失。\", \"六因子模型中，信用状况、市值因子、股债关系、行业轮动等关键因子数据缺失，导致宏观判断降级。\"]"
+  ],
+  "reasoning": [
+    "当前宏观环境整体中性且数据覆盖不全，难以提供明确的方向性指引。然而，标的（中际旭创）及其所属的通信、CPO、算力等科技板块表现活跃，在市场热度榜单中位居前列。这表明个股和相关板块存在结构性机会，但需警惕整体宏观背景的模糊性以及VIX指数中性所代表的市场观望情绪。"
+  ],
+  "conclusion": "当前宏观环境整体中性且数据覆盖不全，难以提供明确的方向性指引。然而，标的（中际旭创）及其所属的通信、CPO、算力等科技板块表现活跃，在市场热度榜单中位居前列。这表明个股和相关板块存在结构性机会，但需警惕整体宏观背景的模糊性以及VIX指数中性所代表的市场观望情绪。",
+  "missing_data": [
+    "宏观经济增长（GDP/PMI/就业）数据缺失。",
+    "通货膨胀（CPI/PCE）数据缺失。",
+    "流动性/利率（如LQD, TLT）数据缺失。",
+    "信用状况（如HYG）数据缺失。",
+    "能源与大宗商品数据（WTI/EIA/FRED）缺失。",
+    "美元汇率（DXY/USD/CNH）数据缺失。",
+    "六因子模型中，信用状况、市值因子、股债关系、行业轮动等关键因子数据缺失，导致宏观判断降级。"
+  ],
+  "source_refs": [
+    "market_cycle/2026-06-19/01_macro_review.json",
+    "data/macro_cache/macro_context_latest.json"
+  ],
+  "fatal_objection": false,
+  "next_step": "把宏观约束交给技术/情报/风险 Agent 使用。",
+  "readable_summary": "当前宏观环境整体中性且数据覆盖不全，难以提供明确的方向性指引。然而，标的（中际旭创）及其所属的通信、CPO、算力等科技板块表现活跃，在市场热度榜单中位居前列。这表明个股和相关板块存在结构性机会，但需警惕整体宏观背景的模糊性以及VIX指数中性所代表的市场观望情绪。",
+  "evidence_blocks": [
+    {
+      "claim": "当前宏观环境整体中性且数据覆盖不全，难以提供明确的方向性指引。然而，标的（中际旭创）及其所属的通信、CPO、算力等科技板块表现活跃，在市场热度榜单中位居前列。这表明个股和相关板块存在结构性机会，但需警惕整体宏观背景的模糊性以及VIX指数中性所代表的市场观望情绪。",
+      "data": "signal=hold；confidence=0.4；status=degraded；risk_state=neutral",
+      "source": "market_cycle/2026-06-19/01_macro_review.json；data/macro_cache/macro_context_latest.json",
+      "inference": "当前宏观环境整体中性且数据覆盖不全，难以提供明确的方向性指引。然而，标的（中际旭创）及其所属的通信、CPO、算力等科技板块表现活跃，在市场热度榜单中位居前列。这表明个股和相关板块存在结构性机会，但需警惕整体宏观背景的模糊性以及VIX指数中性所代表的市场观望情绪。"
+    }
+  ],
+  "audit_detail": {
+    "schema": "agent_memo_v1",
+    "origin": "RAW_AGENT",
+    "stage_name": "macro",
+    "status": "WARN",
+    "raw_untrusted": true,
+    "raw_data": {
+      "schema": "macro_opinion_v1",
+      "status": "degraded",
+      "risk_state": "neutral",
+      "market_regime": "中性观望",
+      "confidence": 0.4,
+      "key_macro_drivers": [
+        "VIX指数中性 (16.94)，市场风险偏好不明朗。",
+        "地缘政治风险：危机级联和管控下降情景概率相当 (各35%)，存在不确定性。",
+        "美国市场指数（S&P 500, NASDAQ）表现积极，但宏观因素覆盖不全。",
+        "市场热度显示科技相关板块（如计算机、通信和其他电子设备制造业）和个股（中际旭创排名第二）活跃。"
+      ],
+      "impact_on_stock": "当前宏观环境整体中性且数据覆盖不全，难以提供明确的方向性指引。然而，标的（中际旭创）及其所属的通信、CPO、算力等科技板块表现活跃，在市场热度榜单中位居前列。这表明个股和相关板块存在结构性机会，但需警惕整体宏观背景的模糊性以及VIX指数中性所代表的市场观望情绪。",
+      "positioning_bias": "neutral",
+      "data_gaps": [
+        "宏观经济增长（GDP/PMI/就业）数据缺失。",
+        "通货膨胀（CPI/PCE）数据缺失。",
+        "流动性/利率（如LQD, TLT）数据缺失。",
+        "信用状况（如HYG）数据缺失。",
+        "能源与大宗商品数据（WTI/EIA/FRED）缺失。",
+        "美元汇率（DXY/USD/CNH）数据缺失。",
+        "六因子模型中，信用状况、市值因子、股债关系、行业轮动等关键因子数据缺失，导致宏观判断降级。"
+      ]
+    },
+    "raw_text": "```json\n{\n  \"schema\": \"macro_opinion_v1\",\n  \"status\": \"degraded\",\n  \"risk_state\": \"neutral\",\n  \"market_regime\": \"中性观望\",\n  \"confidence\": 0.4,\n  \"key_macro_drivers\": [\n    \"VIX指数中性 (16.94)，市场风险偏好不明朗。\",\n    \"地缘政治风险：危机级联和管控下降情景概率相当 (各35%)，存在不确定性。\",\n    \"美国市场指数（S&P 500, NASDAQ）表现积极，但宏观因素覆盖不全。\",\n    \"市场热度显示科技相关板块（如计算机、通信和其他电子设备制造业）和个股（中际旭创排名第二）活跃。\"\n  ],\n  \"impact_on_stock\": \"当前宏观环境整体中性且数据覆盖不全，难以提供明确的方向性指引。然而，标的（中际旭创）及其所属的通信、CPO、算力等科技板块表现活跃，在市场热度榜单中位居前列。这表明个股和相关板块存在结构性机会，但需警惕整体宏观背景的模糊性以及VIX指数中性所代表的市场观望情绪。\",\n  \"positioning_bias\": \"neutral\",\n  \"data_gaps\": [\n    \"宏观经济增长（GDP/PMI/就业）数据缺失。\",\n    \"通货膨胀（CPI/PCE）数据缺失。\",\n    \"流动性/利率（如LQD, TLT）数据缺失。\",\n    \"信用状况（如HYG）数据缺失。\",\n    \"能源与大宗商品数据（WTI/EIA/FRED）缺失。\",\n    \"美元汇率（DXY/USD/CNH）数据缺失。\",\n    \"六因子模型中，信用状况、市值因子、股债关系、行业轮动等关键因子数据缺失，导致宏观判断降级。\"\n  ]\n}\n```",
+    "tokens_used": 13912,
+    "tool_calls_count": 0,
+    "models_used": [
+      "vertex_ai/gemini-2.5-flash"
+    ]
+  },
+  "no_trade_execution": true,
+  "evidence_pack": {
+    "schema": "evidence_pack_v1",
+    "scope": "stock",
+    "symbol": "300308",
+    "source_attempts": [],
+    "evidence_items": [
+      {
+        "claim": "当前宏观环境整体中性且数据覆盖不全，难以提供明确的方向性指引。然而，标的（中际旭创）及其所属的通信、CPO、算力等科技板块表现活跃，在市场热度榜单中位居前列。这表明个股和相关板块存在结构性机会，但需警惕整体宏观背景的模糊性以及VIX指数中性所代表的市场观望情绪。",
+        "data": "signal=hold；confidence=0.4；status=degraded；risk_state=neutral",
+        "source": "market_cycle/2026-06-19/01_macro_review.json；data/macro_cache/macro_context_latest.json",
+        "inference": "当前宏观环境整体中性且数据覆盖不全，难以提供明确的方向性指引。然而，标的（中际旭创）及其所属的通信、CPO、算力等科技板块表现活跃，在市场热度榜单中位居前列。这表明个股和相关板块存在结构性机会，但需警惕整体宏观背景的模糊性以及VIX指数中性所代表的市场观望情绪。"
+      }
+    ],
+    "missing_evidence": [
+      "宏观经济增长（GDP/PMI/就业）数据缺失。",
+      "通货膨胀（CPI/PCE）数据缺失。",
+      "流动性/利率（如LQD, TLT）数据缺失。",
+      "信用状况（如HYG）数据缺失。",
+      "能源与大宗商品数据（WTI/EIA/FRED）缺失。",
+      "美元汇率（DXY/USD/CNH）数据缺失。",
+      "六因子模型中，信用状况、市值因子、股债关系、行业轮动等关键因子数据缺失，导致宏观判断降级。"
+    ],
+    "evidence_level": "PARTIAL",
+    "confidence": "medium",
+    "limited_report": false,
+    "can_go_redblue": true,
+    "can_trade_review": false,
+    "no_trade_execution": true
+  },
+  "evidence_level": "PARTIAL",
+  "source_attempts": [],
+  "limited_report": false,
+  "confidence": "medium"
+}
