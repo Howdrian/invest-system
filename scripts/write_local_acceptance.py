@@ -46,6 +46,7 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _render(kind: str, docs: Path, run_date: str, command_status: str) -> str:
+    repo_root = Path(__file__).resolve().parents[1]
     artifact = _read_json(docs / "reports" / f"{run_date}.artifact.json") or {}
     health = _read_json(docs / "run_status" / run_date / "source_health_v2.json") or {}
     llm = _read_json(docs / "run_status" / run_date / "llm_agent_summary.json") or {}
@@ -115,7 +116,7 @@ def _render(kind: str, docs: Path, run_date: str, command_status: str) -> str:
         "Generate local report:",
         "",
         "```bash",
-        "cd /Users/hac/AI-Studio/投研/invest-system-upstream-integration",
+        f"cd {repo_root}",
         f"scripts/run_research_daily_local.sh --date {run_date} --runtime llm --symbols \"600519,000001,AAPL,HK00700\"",
         "```",
         "",
@@ -123,16 +124,16 @@ def _render(kind: str, docs: Path, run_date: str, command_status: str) -> str:
         "",
         "Open static report:",
         "",
-        f"`/Users/hac/AI-Studio/投研/invest-system-upstream-integration/docs/reports/{run_date}.html`",
+        f"`{repo_root / 'docs' / 'reports' / f'{run_date}.html'}`",
         "",
         "Open diagnostics:",
         "",
-        f"`/Users/hac/AI-Studio/投研/invest-system-upstream-integration/docs/reports/{run_date}.diagnostics.html`",
+        f"`{repo_root / 'docs' / 'reports' / f'{run_date}.diagnostics.html'}`",
         "",
         "Open Web panel:",
         "",
         "```bash",
-        "cd /Users/hac/AI-Studio/投研/invest-system-upstream-integration",
+        f"cd {repo_root}",
         ".venv311/bin/python server.py",
         "```",
         "",

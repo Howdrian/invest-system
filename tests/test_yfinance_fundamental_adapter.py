@@ -47,6 +47,10 @@ class TestYfinanceSymbolConversion(unittest.TestCase):
         self.assertEqual(_convert_to_yf_symbol("0700.HK"), "0700.HK")
         self.assertEqual(_convert_to_yf_symbol("600519.SS"), "600519.SS")
 
+    def test_cn_codes_gain_exchange_suffix(self) -> None:
+        self.assertEqual(_convert_to_yf_symbol("600519"), "600519.SS")
+        self.assertEqual(_convert_to_yf_symbol("000001"), "000001.SZ")
+
     def test_empty(self) -> None:
         self.assertEqual(_convert_to_yf_symbol(""), "")
 

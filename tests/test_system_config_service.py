@@ -25,7 +25,23 @@ from src.services.system_config_service import ConfigConflictError, ConfigImport
 
 
 class SystemConfigServiceTestCase(unittest.TestCase):
+    _RUNTIME_LLM_ENV_KEYS = (
+        "LITELLM_MODEL",
+        "LITELLM_FALLBACK_MODELS",
+        "LITELLM_CONFIG",
+        "AGENT_LITELLM_MODEL",
+        "VISION_MODEL",
+        "LLM_CHANNELS",
+    )
+
     def setUp(self) -> None:
+        self._saved_runtime_llm_env = {
+            key: os.environ.get(key)
+            for key in self._RUNTIME_LLM_ENV_KEYS
+        }
+        for key in self._RUNTIME_LLM_ENV_KEYS:
+            os.environ.pop(key, None)
+
         self.temp_dir = tempfile.TemporaryDirectory()
         self.env_path = Path(self.temp_dir.name) / ".env"
         self.env_path.write_text(
@@ -49,6 +65,12 @@ class SystemConfigServiceTestCase(unittest.TestCase):
     def tearDown(self) -> None:
         Config.reset_instance()
         os.environ.pop("ENV_FILE", None)
+        for key in self._RUNTIME_LLM_ENV_KEYS:
+            old_value = self._saved_runtime_llm_env.get(key)
+            if old_value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = old_value
         self.temp_dir.cleanup()
 
     def _rewrite_env(self, *lines: str) -> None:

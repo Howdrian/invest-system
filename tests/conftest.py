@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
+import os
 import time
 import threading
 from collections.abc import Awaitable, Callable
@@ -18,6 +19,8 @@ import fastapi.testclient
 import httpx
 import starlette.testclient
 from anyio._backends import _asyncio
+
+os.environ.setdefault("LITELLM_MODE", "PROD")
 
 T = TypeVar("T")
 

@@ -17,6 +17,7 @@ from data_provider.fundamental_adapter import (
     AkshareFundamentalAdapter,
     _build_dividend_payload,
     _extract_latest_row,
+    _parse_financial_abstract_wide,
     _parse_dividend_plan_to_per_share,
 )
 
@@ -127,6 +128,23 @@ class TestFundamentalAdapter(unittest.TestCase):
         self.assertEqual(len(events), 2)  # duplicate + future day filtered
         self.assertEqual(dividend_payload.get("ttm_event_count"), 1)
         self.assertAlmostEqual(dividend_payload.get("ttm_cash_dividend_per_share"), 0.3, places=6)
+
+    def test_financial_abstract_wide_computes_same_period_growth(self) -> None:
+        df = pd.DataFrame(
+            {
+                "选项": ["常用指标", "常用指标", "现金流"],
+                "指标": ["营业总收入", "归母净利润", "经营活动产生的现金流量净额"],
+                "20260331": [35277000000, 14523000000, 8721000000],
+                "20250331": [33709000000, 14096000000, 7810000000],
+            }
+        )
+
+        parsed = _parse_financial_abstract_wide(df)
+
+        self.assertAlmostEqual(parsed["growth"]["revenue_yoy"], 4.6516, places=4)
+        self.assertAlmostEqual(parsed["growth"]["net_profit_yoy"], 3.0292, places=4)
+        self.assertEqual(parsed["financial_report"]["report_date"], "2026-03-31")
+        self.assertEqual(parsed["financial_report"]["comparison_period"], "2025-03-31")
 
     def test_build_dividend_payload_returns_empty_when_code_not_matched(self) -> None:
         now = datetime.now().strftime("%Y-%m-%d")

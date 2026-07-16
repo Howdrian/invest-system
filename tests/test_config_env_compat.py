@@ -7,12 +7,25 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from src.config import Config, setup_env
+from src.config import Config, _has_vertex_runtime_configuration, setup_env
 
 
 class ConfigEnvCompatibilityTestCase(unittest.TestCase):
     def tearDown(self):
         Config.reset_instance()
+
+    def test_vertex_runtime_configuration_accepts_project_plus_adc(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            adc = Path(tmp) / ".config" / "gcloud" / "application_default_credentials.json"
+            adc.parent.mkdir(parents=True)
+            adc.write_text("{}", encoding="utf-8")
+            with patch("src.config.Path.home", return_value=Path(tmp)), patch.dict(
+                os.environ,
+                {"GOOGLE_CLOUD_PROJECT": "test-project"},
+                clear=True,
+            ):
+                self.assertTrue(_has_vertex_runtime_configuration("vertex_ai/gemini-3.5-flash"))
+                self.assertFalse(_has_vertex_runtime_configuration("gemini/gemini-3.5-flash"))
 
     @patch("src.config.setup_env")
     @patch.object(Config, "_parse_litellm_yaml", return_value=[])
@@ -156,6 +169,41 @@ class ConfigEnvCompatibilityTestCase(unittest.TestCase):
             config.realtime_source_priority,
             "tencent,akshare_sina,efinance,akshare_em",
         )
+
+    @patch("src.config.setup_env")
+    @patch.object(Config, "_parse_litellm_yaml", return_value=[])
+    def test_tavily_single_key_alias_loads_as_api_keys(
+        self, _mock_parse_litellm_yaml, _mock_setup_env
+    ):
+        with patch.dict(
+            os.environ,
+            {
+                "STOCK_LIST": "600519",
+                "TAVILY_API_KEY": "tvly-one",
+            },
+            clear=True,
+        ):
+            config = Config._load_from_env()
+
+        self.assertEqual(config.tavily_api_keys, ["tvly-one"])
+
+    @patch("src.config.setup_env")
+    @patch.object(Config, "_parse_litellm_yaml", return_value=[])
+    def test_tavily_multi_key_takes_precedence_over_single_alias(
+        self, _mock_parse_litellm_yaml, _mock_setup_env
+    ):
+        with patch.dict(
+            os.environ,
+            {
+                "STOCK_LIST": "600519",
+                "TAVILY_API_KEY": "tvly-one",
+                "TAVILY_API_KEYS": "tvly-a, tvly-b",
+            },
+            clear=True,
+        ):
+            config = Config._load_from_env()
+
+        self.assertEqual(config.tavily_api_keys, ["tvly-a", "tvly-b"])
 
     @patch("src.config.setup_env")
     @patch.object(Config, "_parse_litellm_yaml", return_value=[])

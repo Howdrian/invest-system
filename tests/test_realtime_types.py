@@ -47,11 +47,17 @@ class CircuitBreakerConcurrencyTestCase(unittest.TestCase):
     def test_half_open_allows_only_one_concurrent_probe(self):
         breaker = CircuitBreaker(
             failure_threshold=1,
-            cooldown_seconds=0.01,
+            cooldown_seconds=1.0,
             half_open_max_calls=1,
         )
         breaker.record_failure("akshare_em", "boom")
-        time.sleep(0.02)
+        # Expire the OPEN cooldown deterministically without making the
+        # HALF_OPEN probe lease itself only 10ms long. Under a loaded full
+        # suite, the second barrier-released thread could otherwise arrive
+        # after 10ms and correctly trigger the self-heal branch, making this
+        # concurrency assertion timing-dependent.
+        with breaker._lock:
+            breaker._states["akshare_em"]["last_failure_time"] -= 2.0
 
         barrier = threading.Barrier(2)
         allowed = []

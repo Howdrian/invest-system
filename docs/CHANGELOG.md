@@ -193,6 +193,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - 补充 macOS 未签名、未公证 DMG 被 Gatekeeper 拦截时的架构选择、安全排查与官方安装包临时放行步骤。
 
 ## [3.26.1] - 2026-07-12
+- [新功能] 以 `upstream/main` 为基底新增 Reports 产品线，接入 `/reports`、`/api/v1/reports/*`、静态 Pages 与日期/部门/Diagnostics 下钻，同时保留原 Web、API、筛选、组合、告警和调度入口。
+- [新功能] 新增真 Daily Universe、Subject Evidence Collector、Provider/Evidence Ledger 与 SourceHealth，把原系统 `DataFetcherManager`、官方源、搜索源和原分析结果按事实等级接入日报。
+- [新功能] 新增 11 个 LLM 研究部门（含 GeoPolicy、RedTeam、CIO）、部门 Context Pack、受控并发、成功续跑与一次只读 CIO 补数。
+- [改进] 部门 Prompt 统一岗位边界、证据引用、反证、缺口和下一步契约；Agent 只读本部门数据，下游只接收依赖摘要与对应 Evidence。
+- [改进] ReaderV3 成为唯一产品文案源，默认展示 CIO 判断、核心理由、正反裁决、部门摘要和可展开证据；工程字段只进入 Diagnostics。
+- [改进] 新增 Atomic Claim Semantic Gate 与独立 ResearchReliability，按主体、指标、时间、来源和因果边界拦截或条件化不受支持结论，SourceHealth 不再冒充结论确定性。
+- [改进] RedTeam/CIO 使用共同事实、基准情景、最强竞争情景、裁决和失效触发器，避免把红队误写成机械唱反调。
+- [改进] 部门模型路由支持 Gemini/Vertex smoke、并发、超时、token 记录和显式成功续跑；本地验证使用 `vertex_ai/gemini-3.5-flash`。
+- [修复] FRED 补齐 DGS2、T10Y2Y、T10Y3M、SAHMREALTIME 等方法所需序列；地缘部门优先使用带发布时间的 Tavily、GDELT、ReliefWeb 和官方政策/制裁线索。
+- [修复] Daily workflow 与本地日报共用单一编排入口，补齐 Universe、LLM、官方源和搜索源环境，去除派生 memo 预填、重复渲染和关键步骤假绿；仅 11/11 LLM、0 fallback、语义审计和 Pages validator 通过后允许发布 artifact。
+- [修复] Provider 与 Diagnostics 错误统一脱敏，飞书 App Bot SDK 改为按需加载，pytest 隔离本地真实 LLM 环境。
+- [修复] 补齐 JP/KR 告警市场类型、A 股 YFinance 基本面代码转换、Web 首页摘要兼容和全量测试中的确定性隔离。
+- [chore] 每日报告、run status、agent memos、market cycle、验收输出和本地归档统一忽略；回归测试在临时目录构造最小 artifact/ledger，不保留会过期的完整日报 fixture。
+- [chore] 退役未接入真实日报的平行 ResearchRun/Gate/Artifact 和无引用原分析 wrapper，`research_core` 只保留 Evidence/AtomicClaim、语义核验和可靠性裁决。
+- [chore] 测试与静态检查显式排除 `.local_archive/`，归档源码不再被 pytest 当成活动测试收集。
+- [文档] 新增 Reports 产品边界、Agent SOP、数据源政策、upstream parity 和技术债台账，并接入文档索引。
+- [测试] 2026-07-15 本地验收：11/11 LLM、0 fallback；后端 `4233 passed, 2 deselected, 359 subtests`；Web `881 passed / 2 skipped`；Pages 21 个必需文件与 48 条链接、9 个 API、语义/时效/安全/浏览器 QA 全部通过。
+- [测试] 2026-07-16 本地验收：11/11 LLM、0 fallback；后端 `4685 passed, 4 deselected, 416 subtests`；Web `971 passed / 2 skipped`；9 个 API 200；Pages、语义、时效、安全与浏览器 QA 通过。当前报告为 `LIMITED_REVIEW / 0.84`，未把本地绿灯误写成云端已发布。
+## [3.26.0] - 2026-07-12
 
 ### 发布亮点
 
@@ -2252,3 +2271,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 [1.2.0]: https://github.com/ZhuLinsen/daily_stock_analysis/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/ZhuLinsen/daily_stock_analysis/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/ZhuLinsen/daily_stock_analysis/releases/tag/v1.0.0
+
+## 2026-07-01 local daily universe repair
+
+- 接入 daily universe 到官方事件刷新，避免空 symbols 造成公告/SEC 证据缺失。
+- 新增 Pages 兼容 bundle 生成器，保证 `daily/`、`market_cycle/` 旧入口与新 Reader 报告同步。
+- FRED 宏观缓存进入 provider/evidence ledger，宏观不再被误判为缺失。
+- 原系统 `DataFetcherManager` subject evidence 参与日报 artifact。
+- Reader 文案去掉“禁用”口径，改成“未生成仓位建议”。
+- 本地生成并验证 2026-07-01 日报：`FULL_REVIEW`，health `0.901`，verified facts `25`。

@@ -2,17 +2,22 @@
 
 set -euo pipefail
 
+if [[ -n "${PYTHON:-}" ]]; then
+  PYTHON_BIN="$PYTHON"
+elif [[ -x ".venv/bin/python" ]]; then
+  PYTHON_BIN=".venv/bin/python"
+else
+  PYTHON_BIN="python3"
+fi
+
 syntax_check() {
   echo "==> backend-gate: Python syntax check"
-  python -m py_compile main.py src/config.py src/auth.py src/analyzer.py src/notification.py
-  python -m py_compile src/storage.py src/scheduler.py src/search_service.py
-  python -m py_compile src/market_analyzer.py src/stock_analyzer.py
-  python -m py_compile data_provider/*.py
+  "$PYTHON_BIN" -m compileall -q main.py server.py api bot data_provider scripts src
 }
 
 flake8_checks() {
   echo "==> backend-gate: flake8 critical checks"
-  flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+  "$PYTHON_BIN" -m flake8 . --select E9,F63,F7,F82 --show-source --statistics --count
 }
 
 deterministic_checks() {
@@ -52,7 +57,7 @@ offline_test_suite() {
       exit 2
     fi
     echo "==> backend-gate: pytest shard ${PYTEST_GROUP}/${PYTEST_SPLITS}"
-    python scripts/ci_test_shard.py \
+    "$PYTHON_BIN" scripts/ci_test_shard.py \
       --splits "${PYTEST_SPLITS}" \
       --group "${PYTEST_GROUP}" \
       --first-shard-overhead "${PYTEST_FIRST_SHARD_OVERHEAD:-0}" \
@@ -60,7 +65,7 @@ offline_test_suite() {
     return
   fi
 
-  python -m pytest "${pytest_args[@]}"
+  "$PYTHON_BIN" -m pytest "${pytest_args[@]}"
 }
 
 run_all() {

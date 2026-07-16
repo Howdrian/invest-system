@@ -554,7 +554,7 @@ class TestFeishuSender(unittest.TestCase):
         )
         sender = FeishuSender(cfg)
 
-        with mock.patch("src.notification_sender.feishu_sender.FEISHU_SDK_AVAILABLE", False), \
+        with mock.patch("src.notification_sender.feishu_sender._load_feishu_sdk", return_value=False), \
              self.assertLogs("src.notification_sender.feishu_sender", level="WARNING") as logs:
             result = sender.send_to_feishu("hello")
 
@@ -567,6 +567,44 @@ class TestFeishuSender(unittest.TestCase):
         self.assertEqual(install_hints, logs.output)
         self.assertEqual(len(install_hints), 1)
 
+    def test_app_bot_resolves_domain_after_lazy_sdk_load(self):
+        """Lazy loading must pass the SDK URL, not the config token, to ClientBuilder."""
+        cfg = _config(
+            feishu_app_id="cli_app",
+            feishu_app_secret="secret",
+            feishu_chat_id="oc_chat",
+            feishu_domain="lark",
+        )
+        sender = FeishuSender(cfg)
+        builder = mock.MagicMock()
+        builder.app_id.return_value = builder
+        builder.app_secret.return_value = builder
+        builder.domain.return_value = builder
+        builder.log_level.return_value = builder
+        builder.build.return_value = object()
+        fake_lark = SimpleNamespace(
+            Client=SimpleNamespace(builder=mock.Mock(return_value=builder)),
+            LogLevel=SimpleNamespace(WARNING="warning"),
+        )
+
+        with mock.patch("src.notification_sender.feishu_sender._load_feishu_sdk", return_value=True), \
+             mock.patch("src.notification_sender.feishu_sender._lark", fake_lark), \
+             mock.patch("src.notification_sender.feishu_sender.LARK_DOMAIN", "https://open.larksuite.com"):
+            client = sender._ensure_app_client()
+
+        self.assertIs(client, builder.build.return_value)
+        builder.domain.assert_called_once_with("https://open.larksuite.com")
+
+    def test_app_bot_missing_credentials_do_not_load_sdk(self):
+        """Credential validation stays cheap and does not import the optional SDK."""
+        sender = FeishuSender(_config(feishu_chat_id="oc_chat"))
+
+        with mock.patch(
+            "src.notification_sender.feishu_sender._load_feishu_sdk",
+            side_effect=AssertionError("SDK should not load"),
+        ):
+            self.assertIsNone(sender._ensure_app_client())
+
     def test_app_bot_chunking_long_content(self):
         """Long content is chunked for App Bot."""
         cfg = _config(
@@ -578,6 +616,10 @@ class TestFeishuSender(unittest.TestCase):
         sender = FeishuSender(cfg)
 
         with mock.patch.object(FeishuSender, "_ensure_app_client", return_value=object()), \
+             mock.patch(
+                 "src.notification_sender.feishu_sender._load_feishu_sdk",
+                 return_value=True,
+             ), \
              mock.patch.object(FeishuSender, "_app_send_raw", return_value=False) as mock_raw, \
              mock.patch("src.notification_sender.feishu_sender.time.sleep") as mock_sleep:
             result = sender.send_to_feishu("A" * 500)
@@ -727,8 +769,7 @@ class TestFeishuSender(unittest.TestCase):
         mock_sleep.assert_not_called()
 
     @mock.patch("src.notification_sender.feishu_sender.time.sleep")
-    @mock.patch("src.notification_sender.feishu_sender.CreateMessageRequest.builder", side_effect=RuntimeError("bad builder"))
-    def test_app_bot_builder_failure_does_not_retry(self, _mock_builder, mock_sleep):
+    def test_app_bot_builder_failure_does_not_retry(self, mock_sleep):
         """Request builder failures are not treated as transient send failures."""
         cfg = _config(
             feishu_app_id="cli_app",
@@ -738,7 +779,14 @@ class TestFeishuSender(unittest.TestCase):
         sender = FeishuSender(cfg)
         client, create = _fake_feishu_client(_sdk_response(True))
 
-        result = sender._app_send_raw(client, "text", json.dumps({"text": "bad"}))
+        with mock.patch(
+            "src.notification_sender.feishu_sender._load_feishu_sdk",
+            return_value=True,
+        ), mock.patch(
+            "src.notification_sender.feishu_sender.CreateMessageRequest"
+        ) as request_type:
+            request_type.builder.side_effect = RuntimeError("bad builder")
+            result = sender._app_send_raw(client, "text", json.dumps({"text": "bad"}))
 
         self.assertFalse(result)
         create.assert_not_called()

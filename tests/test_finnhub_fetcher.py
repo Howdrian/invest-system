@@ -101,6 +101,20 @@ class TestFinnhubFetcherFetchRaw(unittest.TestCase):
         with self.assertRaises(DataFetchError):
             self.fetcher._fetch_raw_data('AAPL', '2024-06-10', '2024-06-11')
 
+    @patch('data_provider.finnhub_fetcher.requests.get')
+    def test_fetch_raw_http_error_redacts_token_url(self, mock_get):
+        from data_provider.base import DataFetchError
+        mock_get.side_effect = Exception(
+            "403 Client Error: Forbidden for url: "
+            "https://finnhub.io/api/v1/stock/candle?symbol=AAPL&token=secret-token-123"
+        )
+        with self.assertRaises(DataFetchError) as ctx:
+            self.fetcher._fetch_raw_data('AAPL', '2024-06-10', '2024-06-11')
+
+        message = str(ctx.exception)
+        self.assertIn("token=<redacted>", message)
+        self.assertNotIn("secret-token-123", message)
+
 
 class TestFinnhubFetcherRealtimeQuote(unittest.TestCase):
     """Test get_realtime_quote with mocked HTTP."""

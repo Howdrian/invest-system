@@ -2889,6 +2889,7 @@ class ScreeningOpportunitiesApiTestCase(unittest.TestCase):
                     "LLM_MAX_CANDIDATES": "",
                     "DAILY_FETCH_RETRIES": "",
                     "DAILY_FETCH_MAX_WORKERS": "",
+                    "TUSHARE_TOKEN": "",
                 },
                 clear=False,
             ),

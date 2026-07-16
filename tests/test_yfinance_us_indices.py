@@ -57,6 +57,7 @@ class TestFetchYfTickerData(unittest.TestCase):
         result = self.fetcher._fetch_yf_ticker_data(mock_yf, '^GSPC', '标普500指数', 'SPX')
 
         self.assertIsNotNone(result)
+        mock_yf.Ticker.return_value.history.assert_called_once_with(period='5d')
         self.assertEqual(result['code'], 'SPX')
         self.assertEqual(result['name'], '标普500指数')
         self.assertEqual(result['current'], 5100.0)
