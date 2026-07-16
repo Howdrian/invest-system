@@ -17,6 +17,7 @@ from typing import List, Optional
 from src.agent.agents.base_agent import BaseAgent
 from src.agent.protocols import AgentContext, AgentOpinion, normalize_decision_signal
 from src.report_language import normalize_report_language
+from src.agent.department_prompt import department_prompt_suffix
 
 logger = logging.getLogger(__name__)
 
@@ -131,7 +132,7 @@ should sum to 100; all-zero means no effective signal and must not be faked.
 ``market_conditions`` explains the impact of overall market environment on the recommendation.
 ``strongest_bullish_signal`` is the name of the strongest bullish signal (e.g., MACD golden cross, earnings surprise, low valuation).
 ``strongest_bearish_signal`` is the name of the strongest bearish signal (e.g., MA death cross, earnings warning, high valuation).
-"""
+""" + department_prompt_suffix("CIO Editor")
         if report_language == "en":
             return prompt + """
 

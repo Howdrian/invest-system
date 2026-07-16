@@ -20,6 +20,7 @@ import logging
 from typing import Optional
 
 from src.agent.agents.base_agent import BaseAgent
+from src.agent.department_prompt import department_prompt_suffix
 from src.agent.protocols import AgentContext, AgentOpinion
 from src.agent.runner import try_parse_json
 
@@ -77,7 +78,7 @@ Return **only** a JSON object:
 
 Important: be thorough but factual. Only flag risks backed by evidence \
 from your search results. Do NOT invent risks.
-"""
+""" + department_prompt_suffix("Risk Officer")
 
     def build_user_message(self, ctx: AgentContext) -> str:
         parts = [f"Screen stock **{ctx.stock_code}**"]
@@ -125,4 +126,3 @@ def _risk_to_signal(risk_level: str) -> str:
         "high": "strong_sell",
     }
     return mapping.get(risk_level, "hold")
-

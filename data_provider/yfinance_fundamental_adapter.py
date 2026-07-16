@@ -131,12 +131,19 @@ def _convert_to_yf_symbol(stock_code: str) -> str:
         return f"{digits.zfill(4)}.HK"
     if "." in code:
         return code
-    # Assume US ticker by default for non-HK / non-CN callers
+    if code.isdigit() and len(code) == 6:
+        if code.startswith(("5", "6", "9")):
+            return f"{code}.SS"
+        if code.startswith(("0", "1", "2", "3")):
+            return f"{code}.SZ"
+        if code.startswith(("4", "8")):
+            return f"{code}.BJ"
+    # Assume US ticker by default for non-HK / non-CN callers.
     return code
 
 
 class YfinanceFundamentalAdapter:
-    """HK/US fundamental adapter backed by yfinance.
+    """A/H/US fundamental adapter backed by yfinance.
 
     Returns the same bundle keys as :class:`AkshareFundamentalAdapter` so the
     aggregation in :func:`data_provider.base.get_fundamental_context` can stay

@@ -261,6 +261,134 @@ def _extract_latest_row(df: pd.DataFrame, stock_code: str) -> Optional[pd.Series
     return df.iloc[0]
 
 
+def _date_column(value: Any) -> Optional[str]:
+    """Return a normalized YYYYMMDD column label when one is present."""
+
+    text = re.sub(r"\D", "", _safe_str(value))
+    if len(text) != 8:
+        return None
+    try:
+        datetime.strptime(text, "%Y%m%d")
+    except ValueError:
+        return None
+    return text
+
+
+def _metric_value_from_wide_frame(
+    df: pd.DataFrame,
+    labels: List[str],
+    period: str,
+) -> Optional[float]:
+    """Read a metric from AkShare's metric-as-row financial abstract."""
+
+    if "指标" not in df.columns or period not in df.columns:
+        return None
+    names = df["指标"].astype(str).str.strip()
+    for label in labels:
+        exact = df[names == label]
+        if not exact.empty:
+            return _safe_float(exact.iloc[0].get(period))
+    for label in labels:
+        matched = df[names.str.contains(re.escape(label), na=False)]
+        if not matched.empty:
+            return _safe_float(matched.iloc[0].get(period))
+    return None
+
+
+def _growth_percent(current: Optional[float], previous: Optional[float]) -> Optional[float]:
+    if current is None or previous in (None, 0):
+        return None
+    return round((current / previous - 1.0) * 100.0, 4)
+
+
+def _parse_financial_abstract_wide(df: pd.DataFrame) -> Dict[str, Any]:
+    """Parse the current AkShare ``stock_financial_abstract`` wide layout.
+
+    Current AkShare responses store metrics in rows and report dates in
+    columns.  Treating the first row as a company record silently produced
+    empty or incorrect growth fields, so this layout needs an explicit parser.
+    """
+
+    if df is None or df.empty or "指标" not in df.columns:
+        return {}
+    periods = [period for column in df.columns if (period := _date_column(column))]
+    if not periods:
+        return {}
+    periods = sorted(set(periods), reverse=True)
+    latest = periods[0]
+    prior_year = str(int(latest[:4]) - 1) + latest[4:]
+
+    revenue = _metric_value_from_wide_frame(df, ["营业总收入", "营业收入"], latest)
+    previous_revenue = _metric_value_from_wide_frame(df, ["营业总收入", "营业收入"], prior_year)
+    net_profit = _metric_value_from_wide_frame(df, ["归母净利润", "归属于母公司股东的净利润"], latest)
+    previous_net_profit = _metric_value_from_wide_frame(
+        df,
+        ["归母净利润", "归属于母公司股东的净利润"],
+        prior_year,
+    )
+    operating_cash_flow = _metric_value_from_wide_frame(
+        df,
+        ["经营活动产生的现金流量净额", "经营现金流量净额"],
+        latest,
+    )
+    roe = _metric_value_from_wide_frame(df, ["净资产收益率", "ROE"], latest)
+    gross_margin = _metric_value_from_wide_frame(df, ["毛利率"], latest)
+
+    growth = {
+        "revenue_yoy": _growth_percent(revenue, previous_revenue),
+        "net_profit_yoy": _growth_percent(net_profit, previous_net_profit),
+        "roe": roe,
+        "gross_margin": gross_margin,
+    }
+    report = {
+        "report_date": datetime.strptime(latest, "%Y%m%d").date().isoformat(),
+        "comparison_period": (
+            datetime.strptime(prior_year, "%Y%m%d").date().isoformat()
+            if prior_year in periods
+            else None
+        ),
+        "revenue": revenue,
+        "net_profit_parent": net_profit,
+        "operating_cash_flow": operating_cash_flow,
+        "roe": roe,
+    }
+    growth = {key: value for key, value in growth.items() if value is not None}
+    report = {key: value for key, value in report.items() if value is not None}
+    return {"growth": growth, "financial_report": report} if growth or report else {}
+
+
+def _parse_financial_frame(df: pd.DataFrame, stock_code: str) -> Dict[str, Any]:
+    wide = _parse_financial_abstract_wide(df)
+    if wide:
+        return wide
+    row = _extract_latest_row(df, stock_code)
+    if row is None:
+        return {}
+    revenue_yoy = _safe_float(_pick_by_keywords(row, ["营业收入同比", "营收同比", "收入同比", "同比增长"]))
+    profit_yoy = _safe_float(_pick_by_keywords(row, ["净利润同比", "净利同比", "归母净利润同比"]))
+    roe = _safe_float(_pick_by_keywords(row, ["净资产收益率", "ROE", "净资产收益"]))
+    gross_margin = _safe_float(_pick_by_keywords(row, ["毛利率"]))
+    report = {
+        "report_date": _normalize_report_date(_pick_by_keywords(row, _DIVIDEND_KEYWORD_MAP["report_date"])),
+        "revenue": _safe_float(_pick_by_keywords(row, ["营业总收入", "营业收入", "营收"])),
+        "net_profit_parent": _safe_float(_pick_by_keywords(row, ["归母净利润", "母公司股东净利润", "净利润"])),
+        "operating_cash_flow": _safe_float(
+            _pick_by_keywords(row, ["经营活动产生的现金流量净额", "经营现金流", "经营活动现金流"])
+        ),
+        "roe": roe,
+    }
+    growth = {
+        "revenue_yoy": revenue_yoy,
+        "net_profit_yoy": profit_yoy,
+        "roe": roe,
+        "gross_margin": gross_margin,
+    }
+    return {
+        "growth": {key: value for key, value in growth.items() if value is not None},
+        "financial_report": {key: value for key, value in report.items() if value is not None},
+    }
+
+
 class AkshareFundamentalAdapter:
     """AkShare adapter for fundamentals, capital flow and dragon-tiger signals."""
 
@@ -310,32 +438,11 @@ class AkshareFundamentalAdapter:
         ])
         result["errors"].extend(fin_errors)
         if fin_df is not None:
-            row = _extract_latest_row(fin_df, stock_code)
-            if row is not None:
-                revenue_yoy = _safe_float(_pick_by_keywords(row, ["营业收入同比", "营收同比", "收入同比", "同比增长"]))
-                profit_yoy = _safe_float(_pick_by_keywords(row, ["净利润同比", "净利同比", "归母净利润同比"]))
-                roe = _safe_float(_pick_by_keywords(row, ["净资产收益率", "ROE", "净资产收益"]))
-                gross_margin = _safe_float(_pick_by_keywords(row, ["毛利率"]))
-                report_date = _normalize_report_date(_pick_by_keywords(row, _DIVIDEND_KEYWORD_MAP["report_date"]))
-                revenue = _safe_float(_pick_by_keywords(row, ["营业总收入", "营业收入", "营收"]))
-                net_profit_parent = _safe_float(_pick_by_keywords(row, ["归母净利润", "母公司股东净利润", "净利润"]))
-                operating_cash_flow = _safe_float(
-                    _pick_by_keywords(row, ["经营活动产生的现金流量净额", "经营现金流", "经营活动现金流"])
-                )
-                result["growth"] = {
-                    "revenue_yoy": revenue_yoy,
-                    "net_profit_yoy": profit_yoy,
-                    "roe": roe,
-                    "gross_margin": gross_margin,
-                }
-                financial_report_payload = {
-                    "report_date": report_date,
-                    "revenue": revenue,
-                    "net_profit_parent": net_profit_parent,
-                    "operating_cash_flow": operating_cash_flow,
-                    "roe": roe,
-                }
-                if any(v is not None for v in financial_report_payload.values()):
+            parsed = _parse_financial_frame(fin_df, stock_code)
+            if parsed:
+                result["growth"] = parsed.get("growth") or {}
+                financial_report_payload = parsed.get("financial_report") or {}
+                if financial_report_payload:
                     result["earnings"]["financial_report"] = financial_report_payload
                 result["source_chain"].append(f"growth:{fin_source}")
 
@@ -411,6 +518,40 @@ class AkshareFundamentalAdapter:
 
         has_content = bool(result["growth"] or result["earnings"] or result["institution"])
         result["status"] = "partial" if has_content else "not_supported"
+        return result
+
+    def get_core_financials(self, stock_code: str) -> Dict[str, Any]:
+        """Fetch only the lightweight A-share financial abstract.
+
+        Daily research uses this when the broader fundamental context exceeds
+        its latency budget.  It deliberately avoids unrelated optional calls
+        and never routes a mainland symbol through Yahoo fundamentals.
+        """
+
+        result: Dict[str, Any] = {
+            "status": "not_supported",
+            "growth": {},
+            "earnings": {},
+            "institution": {},
+            "source_chain": [],
+            "errors": [],
+        }
+        fin_df, fin_source, errors = self._call_df_candidates([
+            ("stock_financial_abstract", {"symbol": stock_code}),
+            ("stock_financial_analysis_indicator", {"symbol": stock_code}),
+        ])
+        result["errors"].extend(errors)
+        if fin_df is None:
+            return result
+        parsed = _parse_financial_frame(fin_df, stock_code)
+        if not parsed:
+            return result
+        result["growth"] = parsed.get("growth") or {}
+        report = parsed.get("financial_report") or {}
+        if report:
+            result["earnings"]["financial_report"] = report
+        result["source_chain"].append(f"growth:{fin_source}")
+        result["status"] = "partial"
         return result
 
     def get_capital_flow(self, stock_code: str, top_n: int = 5) -> Dict[str, Any]:

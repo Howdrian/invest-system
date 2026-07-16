@@ -17,6 +17,7 @@ from typing import Optional
 from src.agent.agents.base_agent import BaseAgent
 from src.agent.protocols import AgentContext, AgentOpinion
 from src.agent.runner import try_parse_json
+from src.agent.department_prompt import department_prompt_suffix
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +77,7 @@ Return **only** a JSON object:
     {"title": "...", "impact": "positive|negative|neutral"}
   ]
 }
-"""
+""" + department_prompt_suffix("News and Intelligence Analyst")
 
     def build_user_message(self, ctx: AgentContext) -> str:
         parts = [f"Gather intelligence and assess sentiment for stock **{ctx.stock_code}**"]
@@ -114,5 +115,4 @@ Return **only** a JSON object:
             reasoning=parsed.get("reasoning", ""),
             raw_data=parsed,
         )
-
 

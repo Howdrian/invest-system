@@ -1821,6 +1821,18 @@ class AkshareFetcher(BaseFetcher):
                         high = safe_float(row.get('最高', 0))
                         low = safe_float(row.get('最低', 0))
 
+                        # 新浪指数接口在收盘后偶尔把“涨跌额/涨跌幅”置 0，
+                        # 但最新价和昨收仍然有效。不要把这种字段漂移写进报告。
+                        change = safe_float(row.get('涨跌额', 0))
+                        change_pct = safe_float(row.get('涨跌幅', 0))
+                        if current > 0 and prev_close > 0 and abs(current - prev_close) > 1e-9:
+                            computed_change = current - prev_close
+                            computed_change_pct = computed_change / prev_close * 100
+                            if abs(change) < 1e-9:
+                                change = computed_change
+                            if abs(change_pct) < 1e-9:
+                                change_pct = computed_change_pct
+
                         # 计算振幅
                         amplitude = 0.0
                         if prev_close > 0:
@@ -1830,8 +1842,8 @@ class AkshareFetcher(BaseFetcher):
                             'code': code,
                             'name': name,
                             'current': current,
-                            'change': safe_float(row.get('涨跌额', 0)),
-                            'change_pct': safe_float(row.get('涨跌幅', 0)),
+                            'change': change,
+                            'change_pct': change_pct,
                             'open': safe_float(row.get('今开', 0)),
                             'high': high,
                             'low': low,

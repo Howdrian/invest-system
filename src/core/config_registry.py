@@ -79,6 +79,11 @@ WEB_SETTINGS_HIDDEN_FROM_UI = {
     "USE_PROXY",
     "PROXY_HOST",
     "PROXY_PORT",
+    "RESEARCH_AGENT_RUNTIME",
+    "RESEARCH_AGENT_MODEL_POLICY",
+    "RESEARCH_AGENT_MAX_CONCURRENCY",
+    "RESEARCH_AGENT_LLM_RETRY",
+    "RESEARCH_AGENT_LLM_TIMEOUT_SECONDS",
 }
 
 _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
@@ -989,7 +994,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
     },
     "TAVILY_API_KEYS": {
         "title": "Tavily API Keys",
-        "description": "Comma-separated Tavily API keys.",
+        "description": "Comma-separated Tavily API keys. Preferred variable for one or more keys; TAVILY_API_KEY is accepted as a single-key compatibility alias.",
         "category": "data_source",
         "data_type": "string",
         "ui_control": "password",
@@ -1012,6 +1017,31 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
             },
         ],
         "warning_codes": ["secret_value", "comma_separated_keys"],
+    },
+    "TAVILY_API_KEY": {
+        "title": "Tavily API Key",
+        "description": "Single Tavily API key compatibility alias. Prefer TAVILY_API_KEYS for one or more keys.",
+        "category": "data_source",
+        "data_type": "string",
+        "ui_control": "password",
+        "is_sensitive": True,
+        "is_required": False,
+        "is_editable": True,
+        "default_value": None,
+        "options": [],
+        "validation": {},
+        "display_order": 31,
+        "help_key": "settings.data_source.search_api_keys",
+        "examples": [
+            "TAVILY_API_KEY=tvly-xxxx",
+        ],
+        "docs": [
+            {
+                "label": "完整指南：搜索服务配置",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#搜索服务配置",
+            },
+        ],
+        "warning_codes": ["secret_value"],
     },
     "SERPAPI_API_KEYS": {
         "title": "SerpAPI Keys",

@@ -319,8 +319,9 @@ class YfinanceFetcher(BaseFetcher):
             行情字典，失败时返回 None
         """
         ticker = yf.Ticker(yf_code)
-        # 取近两日数据以计算涨跌幅
-        hist = ticker.history(period='2d')
+        # Yahoo 的 ``2d`` 在部分 A 股指数收盘后只返回一行，随后会把
+        # 当日涨跌错误写成 0。取 5d 仍然很轻量，并能稳定取得前一交易日。
+        hist = ticker.history(period='5d')
         if hist.empty:
             return None
         today_row = hist.iloc[-1]
