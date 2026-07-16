@@ -23,6 +23,7 @@ from api.v1.endpoints import (
     history,
     intelligence,
     portfolio,
+    reports,
     stocks,
     system_config,
     usage,
@@ -54,6 +55,12 @@ router.include_router(
     history.router,
     prefix="/history",
     tags=["History"]
+)
+
+router.include_router(
+    reports.router,
+    prefix="/reports",
+    tags=["Reports"]
 )
 
 router.include_router(

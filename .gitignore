@@ -58,7 +58,7 @@ env/
 /.llm_usage_hmac_secret
 **/.llm_usage_hmac_secret
 logs/
-reports/
+/reports/
 *.db
 *.sqlite
 *.sqlite3
@@ -89,3 +89,20 @@ static/
 /apps/dsa-desktop/node_modules/
 /node_modules/
 docs/specs/
+# local generated report artifacts
+/docs/index.html
+/docs/reports/
+/docs/daily/
+/docs/agent_memos/
+/docs/market_cycle/
+/docs/market_heat/
+/docs/official_events/
+/docs/run_status/
+/docs/local_acceptance/
+/docs/governed_results.json
+/docs/report_*.md
+/docs/report_*.html
+/.pages_staging/
+
+# local generated artifact archive
+/.local_archive/

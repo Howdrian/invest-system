@@ -37,23 +37,50 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 FEISHU_SDK_AVAILABLE = False
+_SDK_IMPORT_ATTEMPTED = False
+_SDK_IMPORT_LOCK = threading.Lock()
 _lark: Any = None  # type: ignore[assignment]
+CreateMessageRequest: Any = None
+CreateMessageRequestBody: Any = None
 FEISHU_DOMAIN = "feishu"
 LARK_DOMAIN = "lark"
-try:
-    import lark_oapi as _lark
-    from lark_oapi.api.im.v1 import (
-        CreateMessageRequest,
-        CreateMessageRequestBody,
-    )
-    from lark_oapi.core.const import FEISHU_DOMAIN as _SDK_FEISHU_DOMAIN
-    from lark_oapi.core.const import LARK_DOMAIN as _SDK_LARK_DOMAIN
 
-    FEISHU_DOMAIN = _SDK_FEISHU_DOMAIN
-    LARK_DOMAIN = _SDK_LARK_DOMAIN
-    FEISHU_SDK_AVAILABLE = True
-except ImportError:
-    pass
+
+def _load_feishu_sdk() -> bool:
+    """Load the optional Feishu SDK only when App Bot delivery is used.
+
+    ``server.py`` imports notification routing while booting the API. Importing
+    the large SDK at module load time made every Web/API startup pay that cost,
+    even for installations that only use webhooks or no Feishu channel at all.
+    """
+    global _SDK_IMPORT_ATTEMPTED
+    global FEISHU_SDK_AVAILABLE, FEISHU_DOMAIN, LARK_DOMAIN
+    global _lark, CreateMessageRequest, CreateMessageRequestBody
+
+    if _SDK_IMPORT_ATTEMPTED:
+        return FEISHU_SDK_AVAILABLE
+    with _SDK_IMPORT_LOCK:
+        if _SDK_IMPORT_ATTEMPTED:
+            return FEISHU_SDK_AVAILABLE
+        _SDK_IMPORT_ATTEMPTED = True
+        try:
+            import lark_oapi as lark_sdk
+            from lark_oapi.api.im.v1 import (
+                CreateMessageRequest as MessageRequest,
+                CreateMessageRequestBody as MessageRequestBody,
+            )
+            from lark_oapi.core.const import FEISHU_DOMAIN as sdk_feishu_domain
+            from lark_oapi.core.const import LARK_DOMAIN as sdk_lark_domain
+        except ImportError:
+            return False
+
+        _lark = lark_sdk
+        CreateMessageRequest = MessageRequest
+        CreateMessageRequestBody = MessageRequestBody
+        FEISHU_DOMAIN = sdk_feishu_domain
+        LARK_DOMAIN = sdk_lark_domain
+        FEISHU_SDK_AVAILABLE = True
+        return True
 
 # File-upload SDK classes (isolated from the core messaging SDK availability
 # so that an older lark-oapi without file support doesn't break App Bot text).
@@ -124,7 +151,7 @@ class FeishuSender:
                 "无效的 FEISHU_DOMAIN=%s，回退为 feishu", raw_domain
             )
             raw_domain = "feishu"
-        self._feishu_domain = FEISHU_DOMAIN if raw_domain == "feishu" else LARK_DOMAIN
+        self._feishu_domain_name = raw_domain
 
         self._app_client: Any = _NO_CLIENT
         self._app_client_lock = threading.Lock()
@@ -188,12 +215,6 @@ class FeishuSender:
         with self._app_client_lock:
             if self._app_client is not _NO_CLIENT:
                 return self._app_client
-            if not FEISHU_SDK_AVAILABLE:
-                logger.warning(
-                    "飞书 App Bot 需要 lark-oapi 库；标准安装请运行: pip install -r requirements.txt"
-                )
-                self._app_client = None
-                return None
             if not self._feishu_app_id or not self._feishu_app_secret:
                 missing = []
                 if not self._feishu_app_id:
@@ -203,16 +224,23 @@ class FeishuSender:
                 logger.warning("飞书 App Bot 凭据不全，缺少: %s", ", ".join(missing))
                 self._app_client = None
                 return None
+            if not _load_feishu_sdk():
+                logger.warning(
+                    "飞书 App Bot 需要 lark-oapi 库；标准安装请运行: pip install -r requirements.txt"
+                )
+                self._app_client = None
+                return None
+            domain = FEISHU_DOMAIN if self._feishu_domain_name == "feishu" else LARK_DOMAIN
             try:
                 self._app_client = (
                     _lark.Client.builder()
                     .app_id(self._feishu_app_id)
                     .app_secret(self._feishu_app_secret)
-                    .domain(self._feishu_domain)
+                    .domain(domain)
                     .log_level(_lark.LogLevel.WARNING)
                     .build()
                 )
-                logger.info("飞书 App Bot 客户端初始化成功 (domain=%s)", self._feishu_domain)
+                logger.info("飞书 App Bot 客户端初始化成功 (domain=%s)", domain)
             except Exception as e:
                 logger.error("飞书 App Bot 客户端初始化失败: %s", e)
                 self._app_client = None
@@ -230,6 +258,11 @@ class FeishuSender:
 
         client = self._ensure_app_client()
         if client is None:
+            return False
+        if not _load_feishu_sdk():
+            logger.warning(
+                "飞书 App Bot 需要 lark-oapi 库；标准安装请运行: pip install -r requirements.txt"
+            )
             return False
 
         formatted = format_feishu_markdown(content)

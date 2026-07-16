@@ -297,6 +297,7 @@ class AnalysisReport(BaseModel):
     summary: ReportSummary = Field(..., description="概览区")
     strategy: Optional[ReportStrategy] = Field(None, description="策略点位区")
     details: Optional[ReportDetails] = Field(None, description="详情区")
+    artifact: Optional[Dict[str, Any]] = Field(None, description="统一 ReportArtifact v1，可供 Web/App 和 Pages 共用")
 
     model_config = ConfigDict(json_schema_extra={
         "example": {

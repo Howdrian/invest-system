@@ -37,6 +37,7 @@ from src.notification_noise import (
     record_notification_noise,
     release_notification_noise,
 )
+from src.core.run_context import report_filename_for_date
 from src.report_language import (
     get_localized_stock_name,
     get_report_labels,
@@ -479,7 +480,7 @@ class NotificationService(
         if getattr(config, "wechat_webhook_url", None):
             channels.append(NotificationChannel.WECHAT)
         if getattr(config, "dingtalk_webhook_url", None):
-            channels.append(NotificationChannel.DINGTALK)    
+            channels.append(NotificationChannel.DINGTALK)
 
         if is_feishu_static_configured(config):
             channels.append(NotificationChannel.FEISHU)
@@ -2831,14 +2832,16 @@ class NotificationService(
     def save_report_to_file(
         self,
         content: str,
-        filename: Optional[str] = None
+        filename: Optional[str] = None,
+        report_date: Optional[str] = None,
     ) -> str:
         """
         保存日报到本地文件
 
         Args:
             content: 日报内容
-            filename: 文件名（可选，默认按日期生成）
+            filename: 文件名（可选，默认按分析日期生成）
+            report_date: 报告日期 YYYY-MM-DD（可选，优先于 ANALYSIS_RUN_DATE）
 
         Returns:
             保存的文件路径
@@ -2846,8 +2849,7 @@ class NotificationService(
         from pathlib import Path
 
         if filename is None:
-            date_str = datetime.now().strftime('%Y%m%d')
-            filename = f"report_{date_str}.md"
+            filename = report_filename_for_date(report_date)
 
         # 确保 reports 目录存在（使用项目根目录下的 reports）
         reports_dir = Path(__file__).parent.parent / 'reports'

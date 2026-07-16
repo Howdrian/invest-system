@@ -28,6 +28,9 @@ concurrency:
   group: stock-analysis
   cancel-in-progress: false
 
+permissions:
+  contents: read
+
 jobs:
   analyze:
     runs-on: ubuntu-latest
@@ -274,6 +277,11 @@ jobs:
           TUSHARE_TOKEN: ${{ secrets.TUSHARE_TOKEN }}
           # Tushare Pro 自定义接入地址（可选；指向自建网关或第三方兼容镜像时设置）
           TUSHARE_HTTP_URL: ${{ vars.TUSHARE_HTTP_URL || secrets.TUSHARE_HTTP_URL }}
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+          SEC_USER_AGENT: ${{ vars.SEC_USER_AGENT || secrets.SEC_USER_AGENT }}
+          FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
+          FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+          ALPHAVANTAGE_API_KEY: ${{ secrets.ALPHAVANTAGE_API_KEY }}
           # TickFlow（A 股日 K、实时行情、股票列表/名称与大盘复盘增强；不设则走免费源 fallback）
           TICKFLOW_API_KEY: ${{ secrets.TICKFLOW_API_KEY }}
           TICKFLOW_PRIORITY: ${{ vars.TICKFLOW_PRIORITY || secrets.TICKFLOW_PRIORITY }}
@@ -304,6 +312,7 @@ jobs:
           ANSPIRE_LLM_ENABLED: ${{ vars.ANSPIRE_LLM_ENABLED || secrets.ANSPIRE_LLM_ENABLED }}
           BOCHA_API_KEYS: ${{ secrets.BOCHA_API_KEYS }}
           TAVILY_API_KEYS: ${{ secrets.TAVILY_API_KEYS }}
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
           SERPAPI_API_KEYS: ${{ secrets.SERPAPI_API_KEYS }}
           MINIMAX_API_KEYS: ${{ secrets.MINIMAX_API_KEYS }}
           BRAVE_API_KEYS: ${{ secrets.BRAVE_API_KEYS }}
@@ -430,11 +439,11 @@ jobs:
           # 解析自选股配置：
           # 1. Repository/Environment secrets 或 Repository variables（STOCK_LIST_CONFIG）
           # 2. 同名 Environment variables 注入的 runner 环境变量（STOCK_LIST）
-          # 3. 最小默认值
+          # 3. 未配置时保持为空；daily universe 会生成 market/candidate-only 日报
           if [ -n "${STOCK_LIST_CONFIG:-}" ]; then
             export STOCK_LIST="$STOCK_LIST_CONFIG"
           elif [ -z "${STOCK_LIST:-}" ]; then
-            export STOCK_LIST="600519"
+            export STOCK_LIST=""
           fi
 
           # 处理 LITELLM YAML 配置文件
@@ -455,7 +464,7 @@ jobs:
           echo "=========================================="
           echo "⏰ 时间: $(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S')"
           echo "🎯 运行模式: $MODE"
-          echo "📊 自选股: $STOCK_LIST"
+          echo "📊 自选股: ${STOCK_LIST:-空；将生成市场/候选日报}"
           echo "📝 报告类型: $REPORT_TYPE"
           echo ""
           echo "=========================================="
@@ -534,6 +543,72 @@ jobs:
             python main.py $FORCE_RUN_ARG
           fi
       
+
+      - name: 生成静态报告中心
+        if: always()
+        env:
+          # Reports LLM：GitHub-hosted runner 使用 Gemini API Key；本机 Vertex ADC 不会自动带到云端。
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_KEYS: ${{ secrets.GEMINI_API_KEYS }}
+          LITELLM_MODEL: ${{ vars.LITELLM_MODEL || secrets.LITELLM_MODEL || 'gemini/gemini-3-flash-preview' }}
+          AGENT_LITELLM_MODEL: ${{ vars.AGENT_LITELLM_MODEL || secrets.AGENT_LITELLM_MODEL }}
+          AGENT_GENERATION_BACKEND: litellm
+          RESEARCH_AGENT_RUNTIME: ${{ vars.RESEARCH_AGENT_RUNTIME || 'llm' }}
+          RESEARCH_AGENT_MODEL_POLICY: ${{ vars.RESEARCH_AGENT_MODEL_POLICY || 'best' }}
+          RESEARCH_AGENT_MAX_CONCURRENCY: ${{ vars.RESEARCH_AGENT_MAX_CONCURRENCY || '3' }}
+          RESEARCH_AGENT_LLM_RETRY: ${{ vars.RESEARCH_AGENT_LLM_RETRY || '1' }}
+          RESEARCH_AGENT_LLM_TIMEOUT_SECONDS: ${{ vars.RESEARCH_AGENT_LLM_TIMEOUT_SECONDS || '90' }}
+
+          # Daily Universe / 原系统数据源。
+          STOCK_LIST: ${{ vars.STOCK_LIST || secrets.STOCK_LIST }}
+          PORTFOLIO_HOLDINGS: ${{ vars.PORTFOLIO_HOLDINGS || secrets.PORTFOLIO_HOLDINGS }}
+          MARKET_REVIEW_REGION: ${{ vars.MARKET_REVIEW_REGION || secrets.MARKET_REVIEW_REGION || 'cn' }}
+          TUSHARE_TOKEN: ${{ secrets.TUSHARE_TOKEN }}
+          SEC_USER_AGENT: ${{ vars.SEC_USER_AGENT || secrets.SEC_USER_AGENT }}
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+          FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
+          FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+          ALPHAVANTAGE_API_KEY: ${{ secrets.ALPHAVANTAGE_API_KEY }}
+          TAVILY_API_KEYS: ${{ secrets.TAVILY_API_KEYS }}
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+          SERPAPI_API_KEYS: ${{ secrets.SERPAPI_API_KEYS }}
+          BRAVE_API_KEYS: ${{ secrets.BRAVE_API_KEYS }}
+          SEARXNG_BASE_URLS: ${{ vars.SEARXNG_BASE_URLS || secrets.SEARXNG_BASE_URLS }}
+          RELIEFWEB_APPNAME: ${{ vars.RELIEFWEB_APPNAME || secrets.RELIEFWEB_APPNAME }}
+        run: |
+          TODAY=$(TZ=Asia/Shanghai date +%F)
+          export ANALYSIS_RUN_DATE="$TODAY"
+          TODAY_COMPACT=${TODAY//-/}
+          scripts/run_research_daily_local.sh \
+            --date "$TODAY" \
+            --runtime "${RESEARCH_AGENT_RUNTIME:-llm}" \
+            --symbols "${STOCK_LIST:-}" \
+            --market "${MARKET_REVIEW_REGION:-cn}" \
+            --docs-dir docs \
+            --runtime-reports-dir reports
+          test -f "docs/reports/$TODAY.artifact.json"
+          test -f "docs/reports/$TODAY.html"
+          test -f "docs/report_${TODAY_COMPACT}.html"
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          run_date = os.environ["ANALYSIS_RUN_DATE"]
+          summary = json.loads(Path(f"docs/run_status/{run_date}/llm_agent_summary.json").read_text())
+          assert summary.get("allLlmSucceeded") is True, summary
+          assert int(summary.get("llmSuccessCount") or 0) == int(summary.get("totalAgents") or 0) == 11, summary
+          assert int(summary.get("fallbackCount") or 0) == 0, summary
+          PY
+          python scripts/publish_pages_bundle.py \
+            --date "$TODAY" \
+            --stage-from docs \
+            --staging-dir ".pages_staging/$TODAY" \
+            --docs-dir docs \
+            --publish \
+            --fail-on-error \
+            --validation-output "docs/run_status/${TODAY}/pages_validation.json"
+
       - name: 上传分析报告
         uses: actions/upload-artifact@v6
         if: always()
@@ -542,7 +617,14 @@ jobs:
           path: |
             reports/
             logs/
+            docs/
           retention-days: 30
+
+      - name: 上传 GitHub Pages 产物
+        uses: actions/upload-pages-artifact@v4
+        if: success()
+        with:
+          path: docs
       
       - name: 显示运行结果
         if: always()
@@ -562,3 +644,18 @@ jobs:
             echo "📜 最近日志（最后 30 行）:"
             tail -30 logs/stock_analysis_*.log 2>/dev/null || echo "无日志"
           fi
+
+  deploy-pages:
+    needs: analyze
+    if: ${{ github.ref == 'refs/heads/main' && needs.analyze.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: 部署 GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
