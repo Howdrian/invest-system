@@ -44,6 +44,503 @@ export interface MarketReviewAccepted {
 
 export type ReportLanguage = 'zh' | 'en' | 'ko';
 
+export type ReportArtifactType =
+  | 'daily'
+  | 'market_summary'
+  | 'macro_review'
+  | 'source_health'
+  | 'screening_funnel'
+  | 'deep_review_queue'
+  | 'preliminary_review'
+  | 'market_strategy'
+  | 'stock_governed'
+  | 'agent_memo'
+  | 'run_status';
+
+export type ReportArtifactAudience = 'reader' | 'audit' | 'machine' | 'run_status';
+export type ReportArtifactSectionKind =
+  | 'source'
+  | 'facts'
+  | 'analysis'
+  | 'final_conclusion'
+  | 'next_steps'
+  | 'risk'
+  | 'evidence'
+  | 'raw';
+
+export interface ReportArtifactSummary {
+  oneLine: string;
+  keyFacts: string[];
+  analysis: string;
+  finalConclusion: string;
+  nextSteps: string[];
+}
+
+export interface ReportArtifactSection {
+  key: string;
+  title: string;
+  kind: ReportArtifactSectionKind;
+  contentMarkdown?: string;
+  data?: unknown;
+  sourceRefs?: string[];
+  confidence?: 'high' | 'medium' | 'low';
+  blocking?: boolean;
+  readerVisible?: boolean;
+}
+
+export interface ReportArtifactSourceHealth {
+  status?: string;
+  verdict?: string;
+  canScore?: boolean;
+  canTradeReview?: boolean;
+  coverageScore?: number;
+  freshnessStatus?: string;
+  fallbackUsed?: string;
+  failureReason?: string;
+  decisionImpact?: string;
+  [key: string]: unknown;
+}
+
+export type ReportArtifactAnalysisMode =
+  | 'FULL_REVIEW'
+  | 'LIMITED_REVIEW'
+  | 'SCREEN_ONLY'
+  | 'OBSERVE_ONLY'
+  | 'BLOCKED';
+
+export interface ReportArtifactSourceHealthDomain {
+  label?: string;
+  status: string;
+  coverage: number;
+  freshness: string;
+  confidence: string;
+  blockers: string[];
+  repairHints: string[];
+}
+
+export interface ReportArtifactProviderMatrixRow {
+  provider: string;
+  market?: string;
+  domain?: string;
+  operation?: string;
+  status: string;
+  authState?: string;
+  recordCount?: number;
+  latencyMs?: number;
+  errorType?: string;
+  fallbackTo?: string;
+  sourceTier?: string;
+  sourceScope?: 'subject_evidence' | 'source_smoke';
+  factType?: string;
+  observedAt?: string;
+}
+
+export interface ReportArtifactClaimPolicy {
+  canScore: boolean;
+  canActionableAdvice: boolean;
+  canPositionSizing: boolean;
+  mustShowCaveat: boolean;
+}
+
+export interface ReportArtifactClaimEvidenceRow {
+  label?: string;
+  status: 'supported' | 'partial' | 'missing' | string;
+  requiredDomains: string[];
+  evidenceIds: string[];
+  evidenceCount: number;
+  missingDomains: string[];
+  blockers?: string[];
+}
+
+export interface ReportArtifactClaimEvidence {
+  schema: 'claim_evidence_v1';
+  supportFactTypes: string[];
+  positionSizingMissingCriticalThreshold: number;
+  claims: Record<string, ReportArtifactClaimEvidenceRow>;
+}
+
+export interface ReportArtifactEvidenceStats {
+  schema: 'evidence_stats_v1';
+  verifiedFacts: number;
+  derivedFacts?: number;
+  discoveryItems: number;
+  missingFacts?: number;
+  missingCriticalFacts: number;
+}
+
+export interface ReportArtifactEvidenceItem {
+  id?: string;
+  domain?: string;
+  factType?: 'verified_fact' | 'derived_fact' | 'discovery' | 'missing';
+  provider?: string;
+  symbol?: string;
+  value?: string;
+  asOf?: string;
+  eventTime?: string;
+  publishedAt?: string;
+  fetchedAt?: string;
+  sourceUrl?: string;
+  rawPath?: string;
+  confidence?: string;
+  evidenceScope?: 'subject_evidence' | 'source_smoke';
+}
+
+export interface ReportArtifactReaderBrief {
+  schema?: string;
+  runDate?: string;
+  mode?: ReportArtifactAnalysisMode;
+  oneLine?: string;
+  analysis?: string;
+  finalConclusion?: string;
+  why?: string[];
+  risks?: string[];
+  watchlist?: string[];
+  universe?: {
+    mode?: string;
+    subjectCount?: number;
+    subjects?: string[];
+  };
+  dataConfidence?: string;
+  nextSteps?: string[];
+}
+
+export interface ReportArtifactDailyUniverseGroup {
+  name: string;
+  source?: string;
+  symbols?: string[];
+  market?: string;
+  series?: string[];
+  whyIncluded?: string;
+  evidenceRequirements?: string[];
+}
+
+export interface ReportArtifactDailyUniverse {
+  schema?: 'daily_universe_v1' | string;
+  runDate?: string;
+  mode?: string;
+  market?: string;
+  subjectSymbols?: string[];
+  groups?: ReportArtifactDailyUniverseGroup[];
+  notes?: string[];
+}
+
+export interface ReportArtifactDepartmentReport {
+  agent?: string;
+  label?: string;
+  subject?: string;
+  origin?: string;
+  readerVisible?: boolean;
+  summaryForReader?: string;
+  keyClaims?: string[];
+  evidenceIds?: string[];
+  counterpoints?: string[];
+  dataGaps?: string[];
+  confidence?: string;
+  nextAction?: string;
+}
+
+export interface ReportArtifactOriginalAnalysis {
+  runDate?: string;
+  marketContextAvailable?: boolean;
+  marketReviewAvailable?: boolean;
+  stockContextCount?: number;
+  stockAnalysisCount?: number;
+  decisionSignalCount?: number;
+  portfolioSnapshotAvailable?: boolean;
+  refsPath?: string;
+  refCount?: number;
+  availableKinds?: string[];
+  notes?: string[];
+}
+
+export interface ReportArtifactDepartmentInputRef {
+  kind?: string;
+  status?: string;
+  summary?: string;
+  sourceKind?: string;
+  evidenceIds?: string[];
+  symbols?: string[];
+}
+
+export interface ReportArtifactDepartmentInput {
+  agent?: string;
+  inputProfile?: string;
+  sourceKinds?: string[];
+  originalKinds?: string[];
+  evidenceDomains?: string[];
+  description?: string;
+  evidenceIds?: string[];
+  originalAnalysisRefs?: ReportArtifactDepartmentInputRef[];
+}
+
+export interface ReportArtifactReaderV2EvidenceSample {
+  id?: string;
+  label?: string;
+  provider?: string;
+  factType?: string;
+  sourceUrl?: string;
+}
+
+export interface ReportArtifactReaderV2Section {
+  key: string;
+  title: string;
+  body?: string;
+  bullets?: string[];
+}
+
+export interface ReportArtifactReaderV2DepartmentCard {
+  agent?: string;
+  label?: string;
+  conclusion?: string;
+  keyClaims?: string[];
+  counterpoints?: string[];
+  dataGaps?: string[];
+  nextAction?: string;
+  nextActions?: string[];
+  confidence?: string;
+  supportSignals?: string[];
+  usedOriginalAnalysis?: string[];
+  evidenceIds?: string[];
+  evidenceSamples?: ReportArtifactReaderV2EvidenceSample[];
+}
+
+export interface ReportArtifactReaderV2SupportDrawer {
+  agent?: string;
+  title?: string;
+  originalAnalysis?: string[];
+  evidence?: ReportArtifactReaderV2EvidenceSample[];
+}
+
+export interface ReportArtifactReaderV2 {
+  schema?: string;
+  runDate?: string;
+  sections?: ReportArtifactReaderV2Section[];
+  departmentCards?: ReportArtifactReaderV2DepartmentCard[];
+  supportDrawers?: ReportArtifactReaderV2SupportDrawer[];
+}
+
+export interface ReportArtifactReaderV3Hero {
+  action?: string;
+  status?: string;
+  confidence?: string;
+  oneLine?: string;
+  maxLimitation?: string;
+  coverage?: string;
+}
+
+export interface ReportArtifactReaderV3DepartmentCard {
+  agent?: string;
+  label?: string;
+  conclusion?: string;
+  keyClaims?: string[];
+  counterpoints?: string[];
+  dataGaps?: string[];
+  nextAction?: string;
+  nextActions?: string[];
+  confidence?: string;
+  supportSignals?: string[];
+  challengedClaims?: Array<{
+    claim?: string;
+    status?: string;
+    opposingScenario?: string;
+    falsifier?: string;
+  }>;
+  evidenceSamples?: ReportArtifactReaderV2EvidenceSample[];
+}
+
+export interface ReportArtifactReaderV3Section {
+  key?: string;
+  title?: string;
+  body?: string;
+  bullets?: string[];
+  counterpoints?: string[];
+  nextActions?: string[];
+  evidenceSamples?: ReportArtifactReaderV2EvidenceSample[];
+}
+
+export interface ReportArtifactReaderV3 {
+  schema?: string;
+  runDate?: string;
+  timing?: {
+    reportDate?: string;
+    generatedAt?: string;
+    dataAsOf?: string;
+  };
+  hero?: ReportArtifactReaderV3Hero;
+  assessment?: {
+    dataCoverage?: string;
+    conclusionConfidence?: string;
+  };
+  keyReasons?: string[];
+  counterpoints?: string[];
+  nextSteps?: string[];
+  marketGeo?: string[];
+  adjudication?: {
+    sharedFacts?: string[];
+    baseCase?: string;
+    strongestAlternative?: string;
+    judgment?: string;
+    why?: string;
+    invalidationTriggers?: string[];
+  };
+  challengeVerdicts?: Array<{
+    department?: string;
+    claim?: string;
+    status?: string;
+    opposingScenario?: string;
+    falsifier?: string;
+  }>;
+  reliability?: {
+    label?: string;
+    headlineSafe?: boolean;
+    warnings?: string[];
+    supportedClaims?: number;
+    hypothesisClaims?: number;
+    rejectedClaims?: number;
+  };
+  reportSections?: ReportArtifactReaderV3Section[];
+  dataConfidence?: string;
+  evidenceSummary?: {
+    verifiedFacts?: number;
+    derivedFacts?: number;
+    discoveryItems?: number;
+    missingCriticalFacts?: number;
+    departmentGapItems?: number;
+  };
+  departmentCards?: ReportArtifactReaderV3DepartmentCard[];
+  diagnosticsPath?: string;
+}
+
+export interface ReportArtifactSourceHealthV2 {
+  schema: 'source_health_v2';
+  generatedAt?: string;
+  overallMode: ReportArtifactAnalysisMode;
+  overallScore: number;
+  domains: Record<string, ReportArtifactSourceHealthDomain>;
+  providerMatrix: ReportArtifactProviderMatrixRow[];
+  claimPolicy: ReportArtifactClaimPolicy;
+  claimEvidence?: ReportArtifactClaimEvidence;
+  evidenceStats?: ReportArtifactEvidenceStats;
+  blockingReasons?: string[];
+}
+
+
+export interface ReportArtifactRunMatrixRef {
+  runId?: string;
+  runDate?: string;
+}
+
+export interface ReportArtifactSnapshotRefs {
+  providerLedgerPath?: string;
+  evidenceLedgerPath?: string;
+  sourceHealthPath?: string;
+  runMatrixPath?: string;
+  providerLedgerSha256?: string;
+  evidenceLedgerSha256?: string;
+  sourceHealthSha256?: string;
+  runMatrixSha256?: string;
+  agentRunId?: string;
+}
+
+export interface ReportArtifactDecision {
+  action: 'buy' | 'sell' | 'hold' | 'watch' | 'no_action';
+  gateStatus: 'passed' | 'blocked' | 'watch';
+  score?: number;
+  targetPct?: number;
+  blockedReasons?: string[];
+}
+
+export interface ReportArtifactAgentOrigins {
+  raw: number;
+  derived: number;
+  missing: number;
+}
+
+export interface ReportArtifactProvenance {
+  origin: string;
+  sourceFiles: string[];
+  generatedBy: string;
+  runId?: string;
+  taskId?: string;
+  recordId?: string;
+  queryId?: string;
+}
+
+export interface ReportArtifactPublish {
+  webPath?: string;
+  docsPath?: string;
+  markdownPath?: string;
+  jsonPath?: string;
+  htmlPath?: string;
+}
+
+export interface ReportArtifactQuality {
+  completeness: 'complete' | 'partial' | 'failed';
+  missingFields: string[];
+  validationErrors: string[];
+  staleAsOf?: string;
+}
+
+export interface ReportArtifactV1 {
+  schemaVersion: 'report_artifact_v1';
+  artifactId: string;
+  runDate: string;
+  generatedAt: string;
+  artifactType: ReportArtifactType;
+  audience: ReportArtifactAudience;
+  title: string;
+  summary: ReportArtifactSummary;
+  sections: ReportArtifactSection[];
+  sourceHealth?: ReportArtifactSourceHealth;
+  sourceHealthV2?: ReportArtifactSourceHealthV2;
+  analysisMode?: ReportArtifactAnalysisMode;
+  dataCoverage?: {
+    mode?: ReportArtifactAnalysisMode;
+    label?: string;
+    score?: number;
+    missingCriticalFacts?: number;
+  };
+  conclusionConfidence?: {
+    label?: string;
+    headlineSafe?: boolean;
+    supportedClaims?: number;
+    hypothesisClaims?: number;
+    rejectedClaims?: number;
+  };
+  claimPolicy?: ReportArtifactClaimPolicy;
+  claimEvidence?: ReportArtifactClaimEvidence;
+  evidenceStats?: ReportArtifactEvidenceStats;
+  evidenceItems?: ReportArtifactEvidenceItem[];
+  readerBrief?: ReportArtifactReaderBrief;
+  dailyUniverse?: ReportArtifactDailyUniverse;
+  departmentReports?: ReportArtifactDepartmentReport[];
+  originalAnalysis?: ReportArtifactOriginalAnalysis;
+  departmentInputs?: ReportArtifactDepartmentInput[];
+  readerV2?: ReportArtifactReaderV2;
+  readerV3?: ReportArtifactReaderV3;
+  researchReliability?: {
+    schema?: string;
+    label?: string;
+    headlineSafe?: boolean;
+    inputClaims?: number;
+    readerClaims?: number;
+    supportedClaims?: number;
+    partialClaims?: number;
+    hypothesisClaims?: number;
+    disputedClaims?: number;
+    rejectedClaims?: number;
+    warnings?: string[];
+  };
+  runMatrix?: ReportArtifactRunMatrixRef;
+  snapshotRefs?: ReportArtifactSnapshotRefs;
+  decision?: ReportArtifactDecision;
+  agentOrigins?: ReportArtifactAgentOrigins;
+  provenance: ReportArtifactProvenance;
+  publish: ReportArtifactPublish;
+  quality: ReportArtifactQuality;
+}
+
+
 export type MarketPhaseValue =
   | 'premarket'
   | 'intraday'

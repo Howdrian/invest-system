@@ -23,6 +23,7 @@ const DecisionSignalsPage = lazy(() => import('./pages/DecisionSignalsPage'));
 const AlertsPage = lazy(() => import('./pages/AlertsPage'));
 const TokenUsagePage = lazy(() => import('./pages/TokenUsagePage'));
 const StockScreeningPage = lazy(() => import('./pages/StockScreeningPage'));
+const ReportsPage = lazy(() => import('./pages/ReportsPage'));
 
 const AppContent: React.FC = () => {
   const location = useLocation();
@@ -87,6 +88,9 @@ const AppContent: React.FC = () => {
         <Route path="/backtest" element={<BacktestPage />} />
         <Route path="/alerts" element={<AlertsPage />} />
         <Route path="/usage" element={<TokenUsagePage />} />
+        <Route path="/reports" element={<ReportsPage />} />
+        <Route path="/reports/:date" element={<ReportsPage />} />
+        <Route path="/reports/:date/diagnostics" element={<ReportsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>

@@ -8,6 +8,9 @@
 :root {
   /* Typography */
   font-family:
+    "Noto Sans SC",
+    "PingFang SC",
+    "Microsoft YaHei",
     "Inter",
     "SF Pro Display",
     "Segoe UI",
@@ -2627,6 +2630,43 @@ textarea {
   background: hsl(var(--destructive) / 0.08);
   color: hsl(349 82% 56%);
 }
+
+/* Report Reader: contain long titles, identifiers, and tables on mobile. */
+.report-reader {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.report-reader * {
+  min-width: 0;
+}
+
+.report-reader :where(h1, h2, h3, h4, p, li, a, summary, span) {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.report-reader :where(table, pre) {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.report-department:not([open]) .report-department-summary {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+@media (max-width: 640px) {
+  .report-reader h1 {
+    font-size: 1.35rem;
+    line-height: 1.35;
+  }
+}
+
 /* =========================================
    Backtest Workspace Styles
    ========================================= */
