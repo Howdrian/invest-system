@@ -55,7 +55,7 @@ def provider_runs_from_macro_context(docs: Path, run_date: str) -> List[Dict[str
     fred = components.get("fred") if isinstance(components, Mapping) and isinstance(components.get("fred"), Mapping) else {}
     series = fred.get("series") if isinstance(fred.get("series"), list) else []
     success = str(payload.get("status") or "").upper() == "REFRESHED" and bool(series)
-    return [{
+    rows = [{
         "provider": "FRED",
         "domain": "macro",
         "data_type": "macro",
@@ -66,6 +66,22 @@ def provider_runs_from_macro_context(docs: Path, run_date: str) -> List[Dict[str
         "error_message_sanitized": None if success else "macro_context_not_refreshed",
         "source_scope": "subject_evidence",
     }]
+    china_public = components.get("china_public") if isinstance(components, Mapping) and isinstance(components.get("china_public"), Mapping) else {}
+    china_series = china_public.get("series") if isinstance(china_public.get("series"), list) else []
+    if china_public:
+        china_success = str(china_public.get("status") or "").lower() in {"available", "degraded"} and bool(china_series)
+        rows.append({
+            "provider": "AkShareChinaMacro",
+            "domain": "macro",
+            "data_type": "macro",
+            "operation": "china_public_macro",
+            "success": china_success,
+            "record_count": len(china_series),
+            "error_type": None if china_success else "empty",
+            "error_message_sanitized": None if china_success else "china_public_macro_unavailable",
+            "source_scope": "subject_evidence",
+        })
+    return rows
 
 
 def provider_runs_from_pages_validation(docs: Path, run_date: str) -> List[Dict[str, Any]]:

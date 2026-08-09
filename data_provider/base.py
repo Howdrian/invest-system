@@ -827,7 +827,21 @@ class DataFetcherManager:
 
     @classmethod
     def _record_daily_source_failure(cls, fetcher: BaseFetcher, market: str, error: str) -> None:
-        cls._daily_source_health.record_failure(cls._daily_health_key(fetcher, market), error=error)
+        key = cls._daily_health_key(fetcher, market)
+        normalized = str(error or "").lower()
+        permanent_tokens = (
+            "permission",
+            "unauthorized",
+            "forbidden",
+            "没有接口",
+            "访问权限",
+            "权限不足",
+            "无权限",
+        )
+        if any(token in normalized for token in permanent_tokens):
+            cls._daily_source_health.record_permanent_failure(key, error=error)
+            return
+        cls._daily_source_health.record_failure(key, error=error)
 
     @classmethod
     def reset_daily_source_health(cls) -> None:

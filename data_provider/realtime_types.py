@@ -422,6 +422,21 @@ class CircuitBreaker:
                               f"(冷却 {self.cooldown_seconds}s)")
                 if error:
                     logger.warning(f"[熔断器] 最后错误: {error}")
+
+    def record_permanent_failure(self, source: str, error: Optional[str] = None) -> None:
+        """立即熔断本轮无法自愈的权限/认证失败，避免对后续标的重复慢试。"""
+        with self._lock:
+            state = self._get_state_locked(source)
+            state['state'] = self.OPEN
+            state['failures'] = max(state['failures'] + 1, self.failure_threshold)
+            state['half_open_calls'] = 0
+            state['last_failure_time'] = time.time()
+            logger.warning(
+                f"[熔断器] {source} 权限或认证失败，立即进入熔断状态 "
+                f"(冷却 {self.cooldown_seconds}s)"
+            )
+            if error:
+                logger.warning(f"[熔断器] 最后错误: {error}")
     
     def get_status(self) -> Dict[str, str]:
         """获取所有数据源状态"""

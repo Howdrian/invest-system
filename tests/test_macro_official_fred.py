@@ -124,3 +124,47 @@ def test_macro_context_redacts_fred_key_from_errors(monkeypatch, tmp_path):
     errors = " ".join(fred["errors"].values())
     assert "api_key=<redacted>" in errors
     assert "fred-secret" not in errors
+
+
+def test_macro_context_adds_public_china_series_without_claiming_official_fact(monkeypatch, tmp_path):
+    import sys
+    import types
+
+    import pandas as pd
+
+    from src.macro.official_sources import MacroContextService
+    from src.macro.source_cache import JsonSourceCache
+
+    fake_akshare = types.SimpleNamespace(
+        macro_china_gdp=lambda: pd.DataFrame({
+            "季度": ["2099年第1季度", "2098年第4季度"],
+            "国内生产总值-同比增长": [5.2, 5.0],
+        }),
+        macro_china_cpi=lambda: pd.DataFrame({
+            "月份": ["2099年02月份", "2099年01月份"],
+            "全国-同比增长": [1.1, 0.9],
+        }),
+        macro_china_pmi=lambda: pd.DataFrame({
+            "月份": ["2099年02月份", "2099年01月份"],
+            "制造业-指数": [50.3, 49.8],
+        }),
+    )
+    monkeypatch.setitem(sys.modules, "akshare", fake_akshare)
+    monkeypatch.setattr("src.macro.official_sources.record_provider_run", lambda **_kwargs: None)
+    service = MacroContextService(
+        cache=JsonSourceCache(cache_dir=tmp_path),
+        enable_fmp=False,
+        enable_china_public=True,
+    )
+
+    payload = service.refresh()
+
+    china = payload["components"]["china_public"]
+    assert china["status"] == "available"
+    assert china["fact_policy"] == "public_secondary_derived"
+    assert {row["series_id"] for row in china["series"]} == {
+        "CN_GDP_YOY",
+        "CN_CPI_YOY",
+        "CN_PMI_MANUFACTURING",
+    }
+    assert all(row["source"] == "Eastmoney via AkShare" for row in china["series"])

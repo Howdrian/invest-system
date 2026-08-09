@@ -50,6 +50,10 @@ def test_semantic_quality_audit_accepts_conditional_scenario(tmp_path):
         "researchReliability": {"audited": True, "headlineSafe": True, "label": "可用，含待确认情景"},
         "readerV3": {
             "hero": {"oneLine": "当前维持震荡判断。"},
+            "reliability": {
+                "headlineSafe": True,
+                "headlineEvidenceSupported": True,
+            },
             "adjudication": {
                 "baseCase": "震荡",
                 "strongestAlternative": "若宽度恶化则转弱",

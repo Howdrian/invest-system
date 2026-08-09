@@ -9,6 +9,7 @@ from typing import Any, Dict, Iterable, List, Mapping
 from .daily_common import iter_agent_memos, official_events_payload, read_json
 from .daily_evidence import (
     dedupe_evidence_facts,
+    evidence_from_daily_universe,
     evidence_from_macro_context,
     evidence_from_market_cycle,
     evidence_from_official_events,
@@ -18,6 +19,7 @@ from .daily_providers import (
     provider_runs_from_agent_memos,
     provider_runs_from_macro_context,
     provider_runs_from_official_events,
+    provider_runs_from_pages_validation,
 )
 from .daily_universe import load_daily_universe, write_daily_universe
 from .evidence_ledger import load_evidence_ledger, write_evidence_ledger
@@ -45,6 +47,7 @@ def write_daily_source_health_ledgers(
     run_date: str,
     *,
     preserve_runtime_enrichment: bool = False,
+    include_pages_validation: bool = False,
 ) -> Dict[str, Any]:
     """Write provider/evidence ledgers under ``docs/run_status/{run_date}``.
 
@@ -75,8 +78,10 @@ def write_daily_source_health_ledgers(
         *subject_provider_rows,
         *intelligence_provider_rows,
         *provider_runs_from_official_events(docs, run_date),
+        *(provider_runs_from_pages_validation(docs, run_date) if include_pages_validation else []),
     ])
     evidence_rows = dedupe_evidence_facts([
+        *evidence_from_daily_universe(universe, run_date),
         *evidence_from_macro_context(docs, run_date),
         *subject_evidence_rows,
         *intelligence_evidence_rows,

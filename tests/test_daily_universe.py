@@ -5,6 +5,7 @@ def test_daily_universe_does_not_fallback_to_single_600519(tmp_path, monkeypatch
     from src.source_health.daily_universe import build_daily_universe
 
     monkeypatch.setenv("STOCK_LIST", "600519")
+    monkeypatch.setenv("PORTFOLIO_HOLDINGS", "")
     docs = tmp_path / "docs"
     payload = build_daily_universe(docs, "2099-01-02")
 
@@ -19,6 +20,7 @@ def test_daily_universe_uses_explicit_multi_market_symbols(tmp_path, monkeypatch
     from src.source_health.daily_universe import build_daily_universe
 
     monkeypatch.setenv("STOCK_LIST", "600519")
+    monkeypatch.setenv("PORTFOLIO_HOLDINGS", "")
     payload = build_daily_universe(
         tmp_path / "docs",
         "2099-01-02",
@@ -38,6 +40,7 @@ def test_daily_universe_includes_candidate_symbols_from_market_docs(tmp_path, mo
 
     monkeypatch.setenv("ENV_FILE", str(tmp_path / "missing.env"))
     monkeypatch.setenv("STOCK_LIST", "")
+    monkeypatch.setenv("PORTFOLIO_HOLDINGS", "")
     docs = tmp_path / "docs"
     date = "2099-01-02"
     path = docs / "market_cycle" / date
@@ -53,3 +56,22 @@ def test_daily_universe_includes_candidate_symbols_from_market_docs(tmp_path, mo
     assert payload["subjectSymbols"] == ["300750", "002594"]
     candidates = next(row for row in payload["groups"] if row["name"] == "candidates")
     assert candidates["symbols"] == ["300750", "002594"]
+
+
+def test_daily_universe_does_not_publish_private_portfolio_holdings(tmp_path, monkeypatch):
+    from src.source_health.daily_universe import build_daily_universe
+
+    monkeypatch.setenv("ENV_FILE", str(tmp_path / "missing.env"))
+    monkeypatch.setenv("STOCK_LIST", "")
+    monkeypatch.setenv("PORTFOLIO_HOLDINGS", "PRIVATE-CANARY-160644,PRIVATE-CANARY-301013")
+
+    payload = build_daily_universe(tmp_path / "docs", "2099-01-02")
+
+    assert payload["mode"] == "market_and_candidates"
+    assert payload["subjectSymbols"] == []
+    portfolio = next(row for row in payload["groups"] if row["name"] == "portfolio")
+    assert portfolio["source"] == "not_connected"
+    assert portfolio["scope"] == "not_connected"
+    assert portfolio["symbols"] == []
+    assert portfolio["snapshotAvailable"] is False
+    assert "PRIVATE-CANARY" not in json.dumps(payload)

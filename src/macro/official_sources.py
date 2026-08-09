@@ -46,12 +46,14 @@ class MacroContextService:
         fmp_api_key: Optional[str] = None,
         fred_api_key: Optional[str] = None,
         enable_fmp: Optional[bool] = None,
+        enable_china_public: bool = False,
     ):
         self.cache = cache or JsonSourceCache()
         self.timeout_s = timeout_s
         self.fmp_api_key = fmp_api_key
         self.fred_api_key = fred_api_key
         self.enable_fmp = enable_fmp
+        self.enable_china_public = enable_china_public
 
     def get_context(
         self,
@@ -115,6 +117,9 @@ class MacroContextService:
         else:
             components["fred"] = {"status": "missing_key", "source": "FRED", "needs_key": True}
             warnings.append("fred_key_missing")
+
+        if self.enable_china_public:
+            components["china_public"] = self._fetch_china_public_context()
 
         # Free official/public hints. These are intentionally lightweight and
         # can be expanded without changing the Agent-facing contract.
@@ -254,6 +259,107 @@ class MacroContextService:
             }
         return {"status": "unavailable", "source": "FRED", "errors": errors or {"FRED": "empty_response"}}
 
+    def _fetch_china_public_context(self) -> Dict[str, Any]:
+        """Fetch free, market-wide China macro series through AkShare.
+
+        The upstream endpoints are public Eastmoney datasets.  They are useful
+        secondary macro observations, but are not labelled official/verified
+        facts because this runtime did not fetch them from NBS directly.
+        """
+
+        try:
+            import akshare as ak
+        except Exception as exc:
+            return {
+                "status": "unavailable",
+                "source": "AkShare public China macro",
+                "errors": {"import": sanitize_diagnostic_text(exc)},
+            }
+
+        specs = (
+            (
+                "CN_GDP_YOY",
+                "growth",
+                "macro_china_gdp",
+                "季度",
+                "国内生产总值-同比增长",
+                "https://data.eastmoney.com/cjsj/gdp.html",
+            ),
+            (
+                "CN_CPI_YOY",
+                "inflation",
+                "macro_china_cpi",
+                "月份",
+                "全国-同比增长",
+                "https://data.eastmoney.com/cjsj/cpi.html",
+            ),
+            (
+                "CN_PMI_MANUFACTURING",
+                "growth",
+                "macro_china_pmi",
+                "月份",
+                "制造业-指数",
+                "https://data.eastmoney.com/cjsj/pmi.html",
+            ),
+        )
+        rows: list[Dict[str, Any]] = []
+        errors: Dict[str, str] = {}
+        for series_id, factor, function_name, date_column, value_column, source_url in specs:
+            started = datetime.now(timezone.utc)
+            try:
+                fn = getattr(ak, function_name)
+                frame = fn()
+                history = _china_macro_history(frame, date_column=date_column, value_column=value_column)
+                if not history:
+                    raise ValueError("empty_observations")
+                latest = history[0]
+                rows.append({
+                    "series_id": series_id,
+                    "factor": factor,
+                    "date": latest["date"],
+                    "value": latest["value"],
+                    "fetched_at": datetime.now(timezone.utc).isoformat(),
+                    "history": history[:120],
+                    "source": "Eastmoney via AkShare",
+                    "source_url": source_url,
+                    "fact_policy": "public_secondary_derived",
+                })
+                record_provider_run(
+                    data_type="macro",
+                    provider="AkShareChinaMacro",
+                    operation=function_name,
+                    success=True,
+                    latency_ms=int((datetime.now(timezone.utc) - started).total_seconds() * 1000),
+                    record_count=len(history),
+                )
+            except Exception as exc:
+                sanitized = sanitize_diagnostic_text(exc)
+                errors[series_id] = sanitized
+                record_provider_run(
+                    data_type="macro",
+                    provider="AkShareChinaMacro",
+                    operation=function_name,
+                    success=False,
+                    error_type=type(exc).__name__,
+                    error_message=sanitized,
+                    record_count=0,
+                )
+        if rows:
+            return {
+                "status": "available" if not errors else "degraded",
+                "source": "AkShare public China macro",
+                "series": rows,
+                "errors": errors,
+                "fact_policy": "public_secondary_derived",
+            }
+        return {
+            "status": "unavailable",
+            "source": "AkShare public China macro",
+            "series": [],
+            "errors": errors or {"china_public": "empty_response"},
+            "fact_policy": "public_secondary_derived",
+        }
+
     def _get_json(self, url: str, *, timeout_s: float) -> Dict[str, Any]:
         with urllib.request.urlopen(url, timeout=timeout_s) as response:  # nosec - configured public HTTPS endpoint
             raw = response.read(512_000)
@@ -353,6 +459,23 @@ def _latest_numeric_observation(observations: Any) -> Optional[Dict[str, Any]]:
     return None
 
 
+def _china_macro_history(frame: Any, *, date_column: str, value_column: str) -> list[Dict[str, Any]]:
+    if frame is None or not hasattr(frame, "columns"):
+        return []
+    if date_column not in frame.columns or value_column not in frame.columns:
+        return []
+    history: list[Dict[str, Any]] = []
+    seen: set[str] = set()
+    for _, row in frame.iterrows():
+        date = str(row.get(date_column) or "").strip()
+        value = _to_float(row.get(value_column))
+        if not date or value is None or date in seen:
+            continue
+        seen.add(date)
+        history.append({"date": date, "value": value})
+    return history
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Refresh governed macro context cache")
     parser.add_argument("--refresh", action="store_true", help="Fetch network sources and update cache")
@@ -366,7 +489,10 @@ def main(argv: Optional[list[str]] = None) -> int:
         load_dotenv(os.getenv("ENV_FILE") or ".env", override=False)
     except Exception:
         pass
-    service = MacroContextService(enable_fmp=False if args.fred_only else None)
+    service = MacroContextService(
+        enable_fmp=False if args.fred_only else None,
+        enable_china_public=args.refresh,
+    )
     payload = service.get_context(allow_network=args.refresh, force_refresh=args.refresh)
     if args.json:
         print(json.dumps(payload, ensure_ascii=False, indent=2, default=str))

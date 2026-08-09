@@ -318,11 +318,12 @@ def test_daily_ledgers_include_official_event_payload(tmp_path):
     result = write_daily_source_health_ledgers(docs, run_date)
 
     assert result["providerRuns"] >= 1
-    assert result["evidenceFacts"] == 2
+    assert result["evidenceFacts"] == 3
     provider_rows = load_provider_ledger(docs / "run_status" / run_date / "provider_runs.jsonl")
     evidence_rows = load_evidence_ledger(docs / "run_status" / run_date / "evidence_ledger.jsonl")
     assert any(row["provider"] == "SEC_EDGAR" for row in provider_rows)
     assert {row["fact_type"] for row in evidence_rows} == {"verified_fact", "derived_fact"}
+    assert any(row.get("metric") == "portfolio_snapshot_status" for row in evidence_rows)
 
 
 def test_cninfo_null_announcements_is_empty_not_crash(monkeypatch):

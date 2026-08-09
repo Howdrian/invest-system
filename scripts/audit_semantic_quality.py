@@ -22,6 +22,17 @@ FORBIDDEN_READER_TERMS = (
     "fallbackTo",
     "recordCount",
     "runMatrix",
+    "range_position_pct",
+    "volume_vs_avg20",
+)
+
+CONFLICTING_READER_TERMS = (
+    "采纳红队",
+    "系统性走弱",
+    "基本面失速",
+    "业绩下修",
+    "补跌概率更高",
+    "主要受持续股份回购支撑",
 )
 
 
@@ -45,10 +56,23 @@ def audit_semantic_quality(docs_dir: str | Path, run_date: str) -> Dict[str, Any
             errors.append("cio_headline_not_safe")
 
     reader = artifact.get("readerV3") if isinstance(artifact.get("readerV3"), Mapping) else {}
+    reader_reliability = reader.get("reliability") if isinstance(reader.get("reliability"), Mapping) else {}
+    if not reader_reliability:
+        errors.append("reader_reliability_missing")
+    elif not reader_reliability.get("headlineSafe"):
+        errors.append("reader_final_headline_not_safe")
+    elif not reader_reliability.get("headlineEvidenceSupported"):
+        errors.append("reader_final_headline_without_evidence_closure")
     reader_text = json.dumps(reader, ensure_ascii=False)
     leaked = [term for term in FORBIDDEN_READER_TERMS if term in reader_text]
     if leaked:
         errors.append("reader_engineering_terms:" + ",".join(leaked))
+    conflicting = [term for term in CONFLICTING_READER_TERMS if term in reader_text]
+    if conflicting:
+        errors.append("reader_unresolved_reasoning_terms:" + ",".join(conflicting))
+
+    if "-21.28" in json.dumps(artifact.get("departmentReports") or [], ensure_ascii=False) and "21.28%" in reader_text and "-21.28%" not in reader_text:
+        errors.append("reader_negative_sign_lost")
 
     adjudication = reader.get("adjudication") if isinstance(reader.get("adjudication"), Mapping) else {}
     for key in ("baseCase", "strongestAlternative", "judgment"):

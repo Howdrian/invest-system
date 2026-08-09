@@ -52,7 +52,7 @@ _CLAIM_REQUIREMENTS = {
     },
     "position_sizing": {
         "label": "仓位建议",
-        "domains": ("price", "fundamentals", "macro"),
+        "domains": ("price", "fundamentals", "macro", "portfolio"),
     },
     "risk_warning": {
         "label": "风险提示",
@@ -245,6 +245,9 @@ def _apply_provider_runs(domains: Dict[str, Dict[str, Any]], matrix: List[Dict[s
             continue
         status = str(row.get("status") or "")
         if status == "success":
+            if domain == "publish_bundle" and str(row.get("provider") or "") == "PagesValidator":
+                _set_domain(domains, domain, status="available", coverage=1.0, confidence="high")
+                continue
             # A successful call proves provider availability, not that the
             # returned rows substantively support a research conclusion.
             _set_domain(domains, domain, status="partial", coverage=0.55, confidence="medium")
@@ -705,6 +708,8 @@ def _claim_evidence(
 ) -> Dict[str, Any]:
     support_by_domain: Dict[str, List[str]] = {domain: [] for domain in DOMAINS}
     for fact in facts:
+        if fact.get("supports_claims") is False:
+            continue
         fact_type = str(fact.get("fact_type") or fact.get("factType") or "").lower()
         if fact_type not in {"verified_fact", "derived_fact"}:
             continue

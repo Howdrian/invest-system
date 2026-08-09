@@ -42,6 +42,7 @@ from src.cio_enrichment import run_cio_enrichment
 from src.department_data_profiles import department_profile_payload, filter_original_refs_for_agent
 from src.original_analysis_adapter import build_original_analysis_bundle, load_original_analysis, load_original_analysis_refs
 from src.research_core import ClaimStatus, validate_claim_dicts
+from src.safe_diagnostics import sanitize_diagnostic_text
 from src.source_health.run_matrix import sha256_file, upsert_run_matrix_stage
 
 
@@ -71,6 +72,10 @@ FORBIDDEN_READER_TERMS = (
     "runMatrix",
     "evidence_ledger",
     "provider_runs",
+    "range_position_pct",
+    "rows=",
+    "premarket",
+    "采纳红队",
 )
 
 
@@ -112,7 +117,7 @@ DEPARTMENT_SPECS: tuple[DepartmentSpec, ...] = (
         "MarketAgent",
         "市场部门",
         "daily",
-        "判断大盘结构、市场宽度、资金面、指数和风险偏好。",
+        "判断已有市场级数据覆盖范围内的大盘结构、宽度、资金面、指数和风险偏好。",
         ("price", "news_sentiment", "macro"),
     ),
     DepartmentSpec(
@@ -128,7 +133,7 @@ DEPARTMENT_SPECS: tuple[DepartmentSpec, ...] = (
         "PortfolioAgent",
         "持仓部门",
         "portfolio",
-        "判断 watchlist/持仓对组合暴露的影响；无持仓数据时明确缺口。",
+        "判断 watchlist/持仓对组合暴露的影响；已确认空仓时说明范围，不把空仓写成数据缺口。",
         ("portfolio", "price", "fundamentals"),
     ),
     DepartmentSpec(
@@ -193,7 +198,10 @@ DEPARTMENT_PLAYBOOKS: Dict[str, Dict[str, Any]] = {
             "哪些宏观信号适用于 A/H/US，哪些只能作为外部背景",
             "未来 1-3 个最重要的宏观触发条件",
         ],
-        "avoid": ["不要把美国宏观指标直接等同于中国市场结论", "不要重复待确认项，必须先提炼可用信号"],
+        "avoid": [
+            "不要把美国宏观指标直接等同于中国市场结论",
+            "不要重复待确认项，必须先提炼可用信号",
+        ],
         "readerStyle": "像晨会宏观策略摘要：短、锋利、讲传导链。",
     },
     "GeoPolicyAgent": {
@@ -205,7 +213,6 @@ DEPARTMENT_PLAYBOOKS: Dict[str, Dict[str, Any]] = {
             "逐项回应上下文中的最新地缘 discovery；有事件线索时不得笼统写成“未见重大事件”",
         ],
         "avoid": [
-            "不要把 Tavily/GDELT 当事实",
             "没有重大事件时不要硬编地缘风险",
             "不要把与本轮市场、行业、标的或传导链无关的全球新闻塞进结论",
         ],
@@ -215,7 +222,6 @@ DEPARTMENT_PLAYBOOKS: Dict[str, Dict[str, Any]] = {
         "role": "市场策略师，先看指数、宽度、资金面、风险偏好，再看个股异动。",
         "mustAnswer": [
             "今日市场是趋势、震荡、轮动还是风险收缩",
-            "A股、港股、美股之间谁更强，是否联动",
             "单股异动是否污染了市场结论",
         ],
         "avoid": ["不要让 AAPL 或单一股票主导日报总判断", "不要把热点等同于趋势"],
@@ -230,7 +236,6 @@ DEPARTMENT_PLAYBOOKS: Dict[str, Dict[str, Any]] = {
         ],
         "avoid": [
             "不要把 hot_stocks 当交易结论",
-            "单日行业排行只能说明当日相对强弱；没有多日、资金、基本面或催化证据时，不得写持续占优",
             "concept_rankings 为空时用已拿到的 sector/hot/candidate 证据分析，不要整段阻断",
         ],
         "readerStyle": "像行业晨会：强弱排序、为什么、持续性、触发条件。",
@@ -242,7 +247,10 @@ DEPARTMENT_PLAYBOOKS: Dict[str, Dict[str, Any]] = {
             "基本面证据支持还是反驳价格表现",
             "缺的是结构化财务模型、估值同业，还是公告事实",
         ],
-        "avoid": ["不要因为某个 provider not_supported 就否定已有 SEC/CNINFO/HKEX/YFinance 事实", "不要编盈利预测"],
+        "avoid": [
+            "不要因为某个 provider not_supported 就否定已有 SEC/CNINFO/HKEX/YFinance 事实",
+            "不要编盈利预测",
+        ],
         "readerStyle": "像基本面 memo：事实、解释、估值约束、缺口分清。",
     },
     "TechnicalAgent": {
@@ -263,7 +271,6 @@ DEPARTMENT_PLAYBOOKS: Dict[str, Dict[str, Any]] = {
             "哪些事件可能成为催化剂，哪些是噪音",
         ],
         "avoid": [
-            "不要把 discovery 写成确定事实",
             "不要堆新闻标题",
             "过滤个人理财、健康、生活方式和与本轮 universe 无关的监管杂讯",
         ],
@@ -278,7 +285,6 @@ DEPARTMENT_PLAYBOOKS: Dict[str, Dict[str, Any]] = {
         ],
         "avoid": [
             "不要假设用户真实持仓",
-            "没有真实持仓快照时，不得写观察池已经对冲组合、拖累组合或改善组合收益",
             "不要因为持仓为空否定日报价值",
         ],
         "readerStyle": "像组合复盘：持仓事实、观察池影响、待补字段。",
@@ -303,10 +309,7 @@ DEPARTMENT_PLAYBOOKS: Dict[str, Dict[str, Any]] = {
         ],
         "avoid": [
             "不要重写一遍日报",
-            "不要为了唱反调而制造没有证据的相反观点",
             "不要把所有结论都否定成无效",
-            "不要把局部行业踩踏直接命名为系统性流动性危机，除非存在市场宽度、信用或跨市场共振证据",
-            "一个原因未被证实，只能削弱该原因；不能据此证明另一个原因成立，更不能直接推出低吸/买入",
         ],
         "readerStyle": "像投资委员会反方：直接、尖锐、有证据。",
     },
@@ -316,16 +319,72 @@ DEPARTMENT_PLAYBOOKS: Dict[str, Dict[str, Any]] = {
             "今日一句话总判断，不能只是可用/中性",
             "3-5 条核心理由，覆盖宏观、市场、行业/风格、个股、风险",
             "最大反证、下一步触发条件、哪些事不要做",
-            "明确裁决基准情景和最强竞争情景；不能把两边机械平均成中性",
-            "先列双方共同事实，再比较哪种解释覆盖更多事实、依赖更少未经证实假设；红队观点不能因更悲观而自动胜出",
         ],
         "avoid": [
-            "不要让单一股票覆盖全局结论",
             "不要写 provider/run/ledger/error_type 这类工程词",
-            "不要把 FULL_REVIEW 写成不能分析；但可以说明投研限制",
         ],
         "readerStyle": "像资深投研负责人给老板的晨会摘要：结论先行、依据清楚、反证强、下一步可执行。",
     },
+}
+
+
+GLOBAL_ANALYSIS_RULES: tuple[str, ...] = (
+    "只使用本次 Context Pack；事实、解释、情景和建议分开写，每条核心判断绑定直接 evidence id。",
+    "verified_fact/derived_fact 可支持事实；discovery、研报和原系统分析只能提出待验证假设。",
+    "数字、主体、单位、报告期和时点必须逐字对账；不得估算、换算或把盘中数据写成收盘事实。",
+    "判断范围跟随 dailyUniverse 动态变化；观察标的不能外推为整个市场。",
+    "结论可以明确，但因果必须写传导机制和失效条件，相关性不得冒充已证实因果。",
+    "只有会改变当前结论且现有证据未覆盖的内容才进入 data_gaps；否则返回空数组。",
+)
+
+
+AGENT_ANALYSIS_RULES: Dict[str, tuple[str, ...]] = {
+    "MacroAgent": (
+        "收益率曲线只使用 10Y-3M、10Y-2Y 等可比期限；不得用 10 年期国债与联邦基金利率判断倒挂。",
+        "高位、低位、走陡、走平、加速或放缓必须有历史分布或跨期比较。",
+    ),
+    "GeoPolicyAgent": (
+        "逐项检查最新地缘 discovery，并回跳官方制裁、政策、公司或交易所来源。",
+        "输出事件事实、传导链、受影响资产和失效条件；没有直接传导证据时不得解释价格。",
+    ),
+    "MarketAgent": (
+        "整体市场判断必须引用市场指数、宽度、成交、资金或行业排行；只有观察池时必须明确范围。",
+        "跨市场比较必须使用对应市场级证据，不能用单只股票代替市场。",
+    ),
+    "SectorAgent": (
+        "单日行业排行和 hot_stocks 只能说明当日相对强弱；持续性必须引用多日历史、资金、基本面或催化证据。",
+        "没有行业资金证据时不得使用资金抱团、主动流入等因果措辞。",
+    ),
+    "FundamentalAgent": (
+        "财务判断必须标明报告期和比较期；只有单期同比时不得写加速、放缓、筑底或回暖。",
+        "没有 PE/PB/股息率、历史分位或同业可比时，不得给高估、低估或安全边际结论。",
+        "回购、分红和权益分派是公司行动事实，不能单独证明护盘、托底或价格支撑。",
+    ),
+    "TechnicalAgent": (
+        "returned N rows 只证明数据存在；破位、突破、放量必须引用 OHLCV、均线、区间或量比。",
+        "range_position_pct=100 只表示当前价格位于样本区间上沿，不是概率、估值分位或必然回吐信号。",
+    ),
+    "IntelAgent": (
+        "先过滤与 universe 和传导链无关的标题；公告事实、新闻线索和噪音分开。",
+        "未回跳权威源的搜索结果只能作为 discovery，不得进入确定性结论。",
+    ),
+    "PortfolioAgent": (
+        "portfolio 为空时只描述观察池的假设性暴露，不得声称已经影响、对冲或改善真实组合。",
+        "没有真实持仓快照时不得使用持有、加仓、减仓等用户动作。",
+    ),
+    "RiskAgent": (
+        "系统性风险必须同时有市场宽度、流动性/成交、信用或跨市场共振中至少两类直接证据。",
+        "区分主风险、竞争解释和升级/解除触发条件，不复读各部门待确认项。",
+    ),
+    "RedTeamAgent": (
+        "红队不是强行给完全相反结论，而是提出能解释同一事实的最强竞争假设。",
+        "缺少某个原因的证据只能削弱该原因，不能自动证明替代原因或支持交易动作。",
+    ),
+    "CIOAgent": (
+        "先列双方共同事实，再裁决基准解释与最强竞争解释；红队不能因更悲观而自动胜出。",
+        "必须消解部门冲突；当前更符合/基准解释是可以明确，但要写翻转条件。",
+        "系统性风险需至少两类直接证据；session_phase=intraday 必须写盘中，range_position_pct=100 仅代表区间上沿。",
+    ),
 }
 
 
@@ -760,7 +819,10 @@ def _call_litellm_direct(
             fallbackable=True,
             backend=LITELLM_BACKEND_ID,
             provider=LITELLM_BACKEND_ID,
-            details={"reason": "litellm_not_installed", "error": str(exc)[:120]},
+            details={
+                "reason": "litellm_not_installed",
+                "error": sanitize_diagnostic_text(exc, max_len=120),
+            },
         ) from exc
 
     from src.config import extra_litellm_params, get_api_keys_for_model, get_effective_agent_models_to_try
@@ -1023,7 +1085,7 @@ def _generate_validated_memo(
         try:
             generation = backend.generate(
                 prompt,
-                {"temperature": 0.1, "max_output_tokens": 4000},
+                {"temperature": 0.1, "max_output_tokens": 4000, "response_format": "json_object"},
                 system_prompt=system_prompt,
                 audit_context={
                     "run_date": context.get("runDate"),
@@ -1035,6 +1097,8 @@ def _generate_validated_memo(
             payload = _parse_agent_output(generation.text, spec)
             memo = _payload_to_memo(spec, str(context.get("runDate") or ""), payload, generation)
             _fill_missing_memo_fields(memo, spec, valid_refs)
+            if spec.agent == "CIOAgent":
+                _complete_cio_adjudication(memo, previous_outputs)
             _apply_semantic_gate_to_memo(memo, spec, context.get("evidence") or [])
             _validate_memo(memo, spec, valid_refs)
             return {
@@ -1128,12 +1192,8 @@ def _run_department_spec(
 
 def _system_prompt() -> str:
     return (
-        "你是机构投研系统里的专业部门 Agent。只基于用户给出的 Evidence、Universe、SourceHealth、"
-        "原系统分析摘要和上游部门输出。禁止编造价格、财报、公告、新闻或来源。"
-        "搜索、新闻、Tavily、GDELT、研报观点只能作为 discovery/opinion，不能当 verified fact。"
-        "先给可读结论，再给依据、反证、待确认项和下一步；没有会改变结论的缺口时，待确认项必须为空或写“无”。"
-        "不要输出 providerMatrix、ledger、error_type、record_count、RAW_AGENT、artifactId 等工程字段。"
-        "输出 JSON 或固定 Markdown 小标题均可；必须包含：结论、依据、引用 evidence id、反证、待确认项、下一步、置信度。"
+        "你是机构投研部门 Agent。严格执行给定岗位、证据政策和输出合同。"
+        "只输出一个面向投资研究读者的 JSON object。"
     )
 
 
@@ -1147,114 +1207,49 @@ def _department_prompt(
 ) -> str:
     playbook = DEPARTMENT_PLAYBOOKS.get(spec.agent, {})
     evidence_rows = _prompt_evidence_for_spec(context, spec, previous_outputs)
-    providers = _provider_summary(context.get("providers") or [], spec)
     deps = {
         agent: _compact_memo(memo)
         for agent, memo in previous_outputs.items()
-        if not spec.depends_on or agent in spec.depends_on
+        if agent in spec.depends_on
     }
     payload = {
         "agent": spec.agent,
         "mission": spec.mission,
-        "rolePlaybook": playbook,
-        "qualityBar": {
-            "reader": "结论必须像投研晨会摘要，不要写成工程诊断或笼统的“可用/中性”。",
-            "specificity": "每条核心判断必须说明驱动、反证、触发条件之一；少写空话。",
-            "scope": "日报先看市场/宏观/行业，再下钻个股；除非证据显示系统性传导，单一股票不能主导总判断。",
-            "atomicClaims": (
-                "每条 key_claim 只写一个可核验判断。事实、因果解释、情景和建议必须拆开；"
-                "禁止把价格事实、新闻事件和跨市场因果揉成一句后共用一个 evidence id。"
-            ),
-            "originalAnalysisBoundary": (
-                "原系统分析摘要属于 analyst input/opinion，不是事实。只能用于提出待验证假设；"
-                "最终判断仍必须回到 Evidence。"
-            ),
-            "macroMethod": (
-                "收益率曲线必须使用长期与短期美国国债利率的可比期限差，例如 10Y-3M 或 10Y-2Y；"
-                "不得仅用 10 年期国债与联邦基金利率比较后声称收益率曲线是否倒挂；"
-                "只有当前截面不能写“陡峭化/走陡/走平”，这些变化判断必须引用利差历史比较。"
-            ),
-            "technicalEvidence": (
-                "returned N rows 只证明数据存在，不能支持趋势、破位或放量结论。"
-                "只有 Evidence 明确提供 OHLCV、区间高低点、均线或量比时才能使用“破位/突破/放量”；"
-                "否则只能描述当日价格变化并写明待确认条件。"
-            ),
-            "marketBreadth": (
-                "整体市场结论必须有指数、涨跌家数、市场宽度、行业排行或资金证据。"
-                "只有观察池个股时，必须明确写成观察池表现，不能外推市场整体。"
-            ),
-            "numericIntegrity": (
-                "凡 Evidence 提供 measurements，涨跌家数、成交额、同比增速等数字必须逐字使用该字段；"
-                "不得凭摘要估算、换算或补写不存在的数字。数字所在的每个 claim 必须引用实际含该 measurement 的 evidence id；"
-                "指数涨跌必须写准确指数名，不能用“科创权重”等模糊主体逃避核对。解释可以大胆，底层数字不能改写。"
-            ),
-            "interpretationPolicy": (
-                "严格区分事实与观点：事实数字必须完全对账；观点可以明确、有力度，但必须写清传导机制、"
-                "关键依据和失效条件。不要因为是推论就统一改成“可能相关”，也不要把相关性冒充已证实因果。"
-            ),
-            "causalDiscipline": (
-                "跨市场背离只能削弱某个单一解释，不能自动证明另一个原因；盈利增速放缓不能单独证明资金流入动机；"
-                "discovery 事件不能直接解释价格异动。因果判断必须区分观察事实、传导机制、竞争解释和可证伪信号。"
-            ),
-            "crossMarketScope": (
-                "AAPL、HK00700 和两只 A 股只代表本轮观察标的，不代表美股、港股和 A 股整体。"
-                "没有对应市场指数/市场宽度时，只能写“本轮观察标的中”，不能写“美股强于 A 股”。"
-            ),
-            "decisiveWording": (
-                "已核验事实用确定句；机制推断用“当前更符合/基准解释是”，保持明确但不写成“本质上就是/已经证实”。"
-                "这不是统一弱化成“可能”，而是把事实、裁决和因果证明分开。"
-                "没有历史分位/阈值时，不用“极端/极高/良性/流动性充裕”这类带基准含义的形容词；"
-                "可直接写“明显分化/成交活跃/暂未见全市场流动性收缩”。"
-            ),
-            "systemicRiskCalibration": (
-                "不要把单一行业或指数暴跌直接升级为全市场流动性危机。只有市场宽度明显恶化、成交/融资流动性收缩、"
-                "信用压力或跨市场共振等至少两类直接证据同时出现，才能使用“系统性风险收缩/流动性危机”作为基准判断；"
-                "若上涨家数占优、涨停多于跌停且成交活跃，应先判断为结构分化或局部去杠杆，并把系统性风险放在竞争情景。"
-            ),
-            "temporalDiscipline": (
-                "严格区分盘中实时报价与上一完整交易日K线。session_phase=intraday 的 quote 必须写“盘中/截至当前”，"
-                "不能写成收盘事实；上一交易日 return_1d_pct 不得冒充今日盘中涨跌。"
-            ),
-            "redTeamPolicy": (
-                "RedTeam 不是强行给完全相反结论，而是提供能解释同一事实的最强竞争假设和可区分两种解释的证据。"
-                "CIO 必须选择当前更有证据的一边，并写明什么新信息会让裁决翻转。"
-                "缺少某项原因的证据不等于替代原因被证明，也不能单独支持低吸、买入或加仓。"
-            ),
-            "sectorPersistence": (
-                "单日行业涨跌、hot_stocks 或两只样本只能支持当日相对强弱。"
-                "只有多日相对收益、连续资金、基本面或明确催化至少一项补强时，才可判断持续性。"
-            ),
-            "portfolioBoundary": (
-                "若 portfolio 为空，只能描述观察池的假设性风格暴露；"
-                "不得声称已经对冲、拖累或改善用户真实组合。"
-            ),
-            "intelligenceRelevance": (
-                "新闻先做相关性和权威性筛选。个人理财、健康、生活方式及与本轮 universe/市场传导无关的标题属于噪音，"
-                "不得进入核心结论。"
-            ),
-            "gapPolicy": (
-                "如果某源失败但同域已有 verified_fact/derived_fact，就说“待确认项”或“需补强”，不要说“无法分析”。"
-                "只有 evidence 真的没有覆盖、且会改变结论时，才写入 data_gaps；没有就输出空数组或“无”。"
-            ),
+        "rolePlaybook": {
+            "role": playbook.get("role"),
+            "mustAnswer": list(playbook.get("mustAnswer") or []),
+            "avoid": list(playbook.get("avoid") or []),
+            "readerStyle": playbook.get("readerStyle"),
         },
+        "analysisRules": [
+            *GLOBAL_ANALYSIS_RULES,
+            *AGENT_ANALYSIS_RULES.get(spec.agent, ()),
+        ],
         "departmentInputProfile": department_profile_payload(spec.agent),
         "runDate": context.get("runDate"),
         "dailyUniverse": _compact_universe_for_spec(context.get("universe") or {}, spec),
         "sourceHealth": _compact_source_health(context.get("health") or {}, spec),
-        "providerSummary": providers,
         "evidence": evidence_rows,
-        "originalAnalysisSummary": _compact_original_analysis(context.get("originalAnalysis") or {}, spec),
-        "originalAnalysisRefs": filter_original_refs_for_agent(context.get("originalAnalysisRefs") or [], spec.agent, limit=10),
-        "allowedEvidenceRefs": sorted(valid_refs)[:80],
-        "upstreamStockSummaries": _stock_summaries_for_spec(context.get("stockSummaries") or [], spec),
-        "marketSnapshot": context.get("marketSnapshot") or {},
-        "officialEventsSummary": _compact_official(context.get("official") or {}),
+        # Only ids present in the department's evidence payload may be cited as
+        # evidence.  Context handles (dailyUniverse/kind:*) and memo handles are
+        # useful navigation aids, but presenting them as evidence ids causes the
+        # model to create claims that the semantic gate can never substantiate.
+        "allowedEvidenceRefs": sorted(_valid_evidence_ids(evidence_rows))[:80],
+        "allowedMemoRefs": sorted(ref for ref in valid_refs if str(ref).startswith("memo:"))[:20],
         "previousDepartmentOutputs": deps,
-        "reportExcerpts": _report_excerpts_for_spec(context, spec),
         "modeGuidance": _mode_guidance(context.get("health") or {}),
         "outputContract": {
-            "acceptedFormats": ["json_object", "markdown_sections"],
-            "requiredSections": ["结论", "依据", "引用 evidence id", "反证", "待确认项", "下一步", "置信度"],
+            "format": "json_object",
+            "requiredKeys": [
+                "agent",
+                "summary_for_reader",
+                "key_claims",
+                "evidence_ids",
+                "counterpoints",
+                "data_gaps",
+                "next_action",
+                "confidence",
+            ],
             "readerTone": [
                 "短、硬、专业",
                 "先判断，后解释",
@@ -1288,12 +1283,13 @@ def _department_prompt(
                     else "下一步看什么信号，触发后如何改变判断"
                 ),
             },
-            "markdownExample": (
-                "## 结论\n...\n## 依据\n- ...\n## 引用 evidence id\n- ...\n"
-                "## 反证\n- ...\n## 待确认项\n- 无\n## 下一步\n...\n## 置信度\nmedium"
-            ),
         },
     }
+    if not spec.depends_on:
+        payload["originalAnalysisSummary"] = _compact_original_analysis(context.get("originalAnalysis") or {}, spec)
+        payload["originalAnalysisRefs"] = _compact_original_refs_for_prompt(
+            filter_original_refs_for_agent(context.get("originalAnalysisRefs") or [], spec.agent, limit=8)
+        )
     if spec.agent == "RedTeamAgent":
         payload["outputContract"]["redTeamContract"] = {
             "challenges": [
@@ -1304,7 +1300,11 @@ def _department_prompt(
                     "evidence_ids": ["支持竞争情景的直接 evidence id"],
                     "falsifier": "什么新事实会否定这个竞争情景",
                 }
-            ]
+            ],
+            "discipline": (
+                "竞争情景必须用“若/如果”表述，并给出能区分基准与竞争情景的可观察信号；"
+                "不得机械唱反调。"
+            ),
         }
     if spec.agent == "CIOAgent":
         payload["outputContract"]["cioAdjudicationContract"] = {
@@ -1315,11 +1315,15 @@ def _department_prompt(
                 "judgment": "CIO 当前裁决",
                 "why": "为何采用该裁决；必须说明证据权重",
                 "invalidationTriggers": ["哪些信号会推翻当前裁决"],
-            }
+            },
+            "discipline": (
+                "adjudication 不得引入 key_claims 之外的新事实或数字；"
+                "why 只解释已验证的 key_claims，并明确采用基准情景的证据权重。"
+            ),
         }
     if previous_error:
         payload["previousValidationError"] = previous_error
-        payload["repairInstruction"] = "修复上面的错误，输出 JSON 或固定 Markdown 段落均可，但 evidence id 必须存在于 allowedEvidenceRefs。"
+        payload["repairInstruction"] = "修复上面的错误并只输出 JSON object；evidence id 必须存在于 allowedEvidenceRefs。"
     return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
@@ -1403,15 +1407,82 @@ def _normalize_cio_adjudication(value: Any) -> Dict[str, Any]:
     if not isinstance(value, Mapping):
         return {}
     return {
-        "sharedFacts": _dedupe_strings(_string_list(value.get("sharedFacts") or value.get("shared_facts")))[:3],
-        "baseCase": str(value.get("baseCase") or value.get("base_case") or "").strip(),
-        "strongestAlternative": str(value.get("strongestAlternative") or value.get("strongest_alternative") or "").strip(),
-        "judgment": str(value.get("judgment") or value.get("adjudication") or "").strip(),
-        "why": str(value.get("why") or value.get("reason") or "").strip(),
+        "sharedFacts": _dedupe_strings(_string_list(
+            value.get("sharedFacts") or value.get("shared_facts") or value.get("双方共同事实") or value.get("共同事实")
+        ))[:3],
+        "baseCase": str(value.get("baseCase") or value.get("base_case") or value.get("基准情景") or "").strip(),
+        "strongestAlternative": str(
+            value.get("strongestAlternative")
+            or value.get("strongest_alternative")
+            or value.get("最强竞争情景")
+            or value.get("最强相反情景")
+            or value.get("竞争情景")
+            or value.get("替代情景")
+            or value.get("反方情景")
+            or ""
+        ).strip(),
+        "judgment": str(
+            value.get("judgment") or value.get("adjudication") or value.get("CIO裁决") or value.get("当前裁决") or value.get("裁决") or ""
+        ).strip(),
+        "why": str(value.get("why") or value.get("reason") or value.get("裁决理由") or value.get("为什么") or "").strip(),
         "invalidationTriggers": _dedupe_strings(
-            _string_list(value.get("invalidationTriggers") or value.get("invalidation_triggers"))
+            _string_list(
+                value.get("invalidationTriggers")
+                or value.get("invalidation_triggers")
+                or value.get("翻转信号")
+                or value.get("失效条件")
+            )
         )[:3],
     }
+
+
+def _complete_cio_adjudication(
+    memo: Dict[str, Any],
+    previous_outputs: Mapping[str, Mapping[str, Any]],
+) -> None:
+    """Normalize a useful CIO response without replacing it with rule prose."""
+
+    adjudication = dict(memo.get("adjudication") or {})
+    filled: List[str] = []
+    summary = str(memo.get("summary_for_reader") or memo.get("conclusion") or "").strip()
+    key_claims = _string_list(memo.get("key_claims"))
+    red_team = previous_outputs.get("RedTeamAgent") or {}
+    challenges = red_team.get("challenges") if isinstance(red_team.get("challenges"), list) else []
+
+    if not adjudication.get("strongestAlternative"):
+        alternatives = [
+            str(item.get("opposingScenario") or item.get("opposing_scenario") or "").strip()
+            for item in challenges
+            if isinstance(item, Mapping)
+        ]
+        alternatives.extend(_string_list(red_team.get("counterpoints")))
+        strongest = next((item for item in alternatives if item), "")
+        if strongest:
+            adjudication["strongestAlternative"] = strongest
+            filled.append("strongestAlternative")
+    if not adjudication.get("baseCase") and summary:
+        adjudication["baseCase"] = summary
+        filled.append("baseCase")
+    if not adjudication.get("judgment") and summary:
+        adjudication["judgment"] = summary
+        filled.append("judgment")
+    if not adjudication.get("why"):
+        reason = next((item for item in key_claims if item and item != summary), "")
+        if reason:
+            adjudication["why"] = reason
+            filled.append("why")
+    if not adjudication.get("invalidationTriggers"):
+        triggers = [
+            str(item.get("falsifier") or "").strip()
+            for item in challenges
+            if isinstance(item, Mapping) and str(item.get("falsifier") or "").strip()
+        ]
+        if triggers:
+            adjudication["invalidationTriggers"] = _dedupe_strings(triggers)[:3]
+            filled.append("invalidationTriggers")
+    memo["adjudication"] = adjudication
+    if filled:
+        memo["adjudicationNormalizedFields"] = filled
 
 
 def _normalize_next_action(value: Any) -> str:
@@ -1482,6 +1553,21 @@ def _validate_memo(memo: Mapping[str, Any], spec: DepartmentSpec, valid_refs: Se
         raise ValueError("summary_for_reader too short")
     for field in ("key_claims", "counterpoints"):
         if not _string_list(memo.get(field)):
+            semantic = memo.get("semantic_validation") if isinstance(memo.get("semantic_validation"), Mapping) else {}
+            validation_key = "claims" if field == "key_claims" else "counterpoints"
+            rows = semantic.get(validation_key) if isinstance(semantic.get(validation_key), list) else []
+            reasons = _dedupe_strings(
+                reason
+                for row in rows
+                if isinstance(row, Mapping)
+                for reason in row.get("reasons") or []
+            )
+            detail = ",".join(reasons[:4])
+            if detail:
+                raise ValueError(
+                    f"{field} missing after semantic gate ({detail}); "
+                    "rewrite with only directly cited, subject-matched evidence"
+                )
             raise ValueError(f"{field} missing")
     if not str(memo.get("next_action") or "").strip():
         raise ValueError("next_action missing")
@@ -1526,6 +1612,20 @@ def _validate_memo(memo: Mapping[str, Any], spec: DepartmentSpec, valid_refs: Se
     semantic = memo.get("semantic_validation") if isinstance(memo.get("semantic_validation"), Mapping) else {}
     if semantic and int(semantic.get("readerClaimCount") or 0) <= 0:
         raise ValueError("semantic_gate: no safe reader claims")
+    summary_semantic = semantic.get("summary") if isinstance(semantic.get("summary"), Mapping) else {}
+    if str(summary_semantic.get("status") or "").lower() == "rejected":
+        reasons = _dedupe_strings(
+            reason
+            for row in summary_semantic.get("sentences") or []
+            if isinstance(row, Mapping)
+            for reason in row.get("reasons") or []
+        )
+        detail = ",".join(reasons[:5])
+        raise ValueError(
+            "summary_for_reader rejected by semantic gate"
+            + (f" ({detail})" if detail else "")
+            + "; rewrite the conclusion using only supported department evidence"
+        )
     if spec.agent == "MacroAgent":
         _validate_macro_claim_methodology(memo)
     if spec.agent == "CIOAgent":
@@ -1622,14 +1722,24 @@ def _apply_semantic_gate_to_memo(
     summary_validation: Dict[str, Any] = {}
     summary_text = str(memo.get("summary_for_reader") or "").strip()
     if summary_text:
+        safe_summary_evidence_ids = _dedupe_strings(
+            evidence_id
+            for mapping in safe_mappings
+            for evidence_id in mapping.get("evidence_ids") or []
+        )
+        summary_sentences = [
+            sentence
+            for sentence in _split_summary_sentences(summary_text)
+            if _summary_sentence_matches_retained_claim(sentence, safe_claims)
+        ]
         summary_claims = [
             {
                 "claimId": f"{spec.agent}:summary:{index + 1}",
                 "claim": sentence,
                 "claimType": "interpretation",
-                "evidence_ids": _string_list(memo.get("evidence_ids")),
+                "evidence_ids": safe_summary_evidence_ids,
             }
-            for index, sentence in enumerate(_split_summary_sentences(summary_text))
+            for index, sentence in enumerate(summary_sentences)
         ]
         summary_results = validate_claim_dicts(summary_claims, list(evidence_rows), source_agent=spec.agent)
         if summary_results:
@@ -1666,7 +1776,11 @@ def _apply_semantic_gate_to_memo(
             if safe_summary:
                 for field in ("summary_for_reader", "readable_summary", "conclusion"):
                     memo[field] = safe_summary
+        elif safe_claims:
+            for field in ("summary_for_reader", "readable_summary", "conclusion"):
+                memo[field] = safe_claims[0]
 
+    semantic_repairs: List[str] = []
     counterpoint_validations, safe_counterpoints = _validate_reader_claims(
         texts=_string_list(memo.get("counterpoints")),
         prefix=f"{spec.agent}:counterpoint",
@@ -1680,6 +1794,9 @@ def _apply_semantic_gate_to_memo(
         for row in counterpoint_validations
         for reason in row.get("reasons") or []
     )
+    if not safe_counterpoints and safe_claims and spec.agent != "RedTeamAgent":
+        safe_counterpoints = [_neutral_counterpoint(spec)]
+        semantic_repairs.append("neutral_counterpoint_after_rejected_counterpoints")
     memo["counterpoints"] = safe_counterpoints
 
     next_action_validations, safe_next_actions = _validate_reader_claims(
@@ -1705,6 +1822,27 @@ def _apply_semantic_gate_to_memo(
             evidence_rows=evidence_rows,
         )
         memo["challenges"] = sanitized_challenges
+        if (
+            str(summary_validation.get("status") or "").lower() == ClaimStatus.REJECTED.value
+            and sanitized_challenges
+        ):
+            repaired_summary = str(sanitized_challenges[0].get("opposingScenario") or "").strip()
+            if repaired_summary:
+                for field in ("summary_for_reader", "readable_summary", "conclusion"):
+                    memo[field] = repaired_summary
+                summary_validation = {
+                    "status": ClaimStatus.HYPOTHESIS.value,
+                    "sentences": [],
+                    "repairedFrom": "validated_red_team_challenge",
+                }
+                semantic_repairs.append("summary_from_validated_red_team_challenge")
+        if not _string_list(memo.get("counterpoints")) and sanitized_challenges:
+            memo["counterpoints"] = _dedupe_strings(
+                row.get("opposingScenario")
+                for row in sanitized_challenges
+                if isinstance(row, Mapping)
+            )[:3]
+            semantic_repairs.append("counterpoints_from_validated_challenges")
     if spec.agent == "CIOAgent" and isinstance(memo.get("adjudication"), Mapping):
         sanitized_adjudication, adjudication_validation = _validate_cio_adjudication(
             memo.get("adjudication") or {},
@@ -1723,6 +1861,9 @@ def _apply_semantic_gate_to_memo(
     )
     memo["data_gaps"] = sanitized_gaps
     memo["missing_data"] = list(sanitized_gaps)
+    if not str(memo.get("next_action") or "").strip() and safe_claims:
+        memo["next_action"] = _neutral_next_review_action(spec)
+        semantic_repairs.append("neutral_next_action_after_rejected_recommendation")
     memo["semantic_validation"] = {
         "schema": "claim_semantic_validation_v1",
         "sourceAgent": spec.agent,
@@ -1736,11 +1877,30 @@ def _apply_semantic_gate_to_memo(
         "adjudication": adjudication_validation,
     }
     memo["semantic_warnings"] = _dedupe_strings(warnings)
+    memo["semantic_repairs"] = semantic_repairs
     statuses = {row["status"] for row in validation_rows}
     if statuses and statuses <= {ClaimStatus.HYPOTHESIS.value, ClaimStatus.DISPUTED.value}:
         memo["confidence"] = "low"
     elif ClaimStatus.HYPOTHESIS.value in statuses or ClaimStatus.REJECTED.value in statuses:
         memo["confidence"] = "medium"
+
+
+def _neutral_next_review_action(spec: DepartmentSpec) -> str:
+    if spec.agent == "GeoPolicyAgent":
+        return "继续核验最新官方制裁、出口管制和冲突升级信息；出现直接传导证据时再调整判断。"
+    if spec.agent == "IntelAgent":
+        return "继续回跳交易所、监管机构与公司公告核验关键事件；未核实线索不进入核心结论。"
+    if spec.agent == "PortfolioAgent":
+        return "接入真实持仓后复核组合暴露；在此之前只跟踪观察池变化。"
+    return "下一轮继续复核直接证据、主要反证和结论翻转条件。"
+
+
+def _neutral_counterpoint(spec: DepartmentSpec) -> str:
+    if spec.agent == "RiskAgent":
+        return "若市场宽度、流动性或官方事件与当前价格及信用证据同步恶化，应上调风险等级。"
+    if spec.agent == "PortfolioAgent":
+        return "未接入真实持仓；观察池的风格分散不能代表实际组合已经获得对冲。"
+    return "若后续直接证据与本轮判断反向变化，应降低置信度并重新评估。"
 
 
 def _sanitize_data_gaps(
@@ -1858,7 +2018,10 @@ def _validate_cio_adjudication(
         else:
             sanitized[field] = safe[0] if safe else ""
         audit["fields"][field] = rows
-    audit["validated"] = bool(sanitized.get("judgment") and sanitized.get("strongestAlternative"))
+    audit["validated"] = all(
+        bool(sanitized.get(field))
+        for field in ("baseCase", "strongestAlternative", "judgment", "why")
+    )
     return sanitized, audit
 
 
@@ -1869,6 +2032,19 @@ def _split_summary_sentences(text: str) -> List[str]:
         if item.strip(" \t\r\n。！？!?；;")
     ]
     return rows or ([str(text).strip()] if str(text).strip() else [])
+
+
+def _summary_sentence_matches_retained_claim(sentence: str, safe_claims: Sequence[str]) -> bool:
+    """Prevent rejected detailed claims from resurfacing through a broad memo summary."""
+
+    normalized = re.sub(r"[\s，。；：、！？!?;:]", "", str(sentence or ""))
+    if not normalized:
+        return False
+    for claim in safe_claims:
+        candidate = re.sub(r"[\s，。；：、！？!?;:]", "", str(claim or ""))
+        if candidate and (normalized in candidate or candidate in normalized):
+            return True
+    return False
 
 
 def _validate_reader_claims(
@@ -2318,7 +2494,11 @@ def _evidence_for_spec(rows: Sequence[Mapping[str, Any]], spec: DepartmentSpec, 
             and _intelligence_context_priority(item, spec.agent) < 0
         ):
             continue
-        market = _research_market_bucket(symbol, domain=domain)
+        market_hint = str(row.get("market") or "").strip().lower()
+        market = {"cn": "CN", "a": "CN", "ashare": "CN", "hk": "HK", "us": "US"}.get(
+            market_hint,
+            _research_market_bucket(symbol, domain=domain),
+        )
         buckets.setdefault((market, domain, symbol), []).append(item)
 
     if spec.agent in {"GeoPolicyAgent", "IntelAgent", "MarketAgent", "SectorAgent"}:
@@ -2398,7 +2578,7 @@ def _prompt_evidence_for_spec(
     rows = context.get("evidence") or []
     limit = _evidence_limit_for_spec(spec)
     selected = _evidence_for_spec(rows, spec, limit=limit)
-    if spec.agent in {"RiskAgent", "RedTeamAgent", "CIOAgent"}:
+    if spec.agent in {"MarketAgent", "RiskAgent", "RedTeamAgent", "CIOAgent"}:
         priority_markers = (":market:market_stats:", ":market:main_indices:")
         priority = [
             _compact_evidence_row(row, domain=str(row.get("domain") or ""))
@@ -2661,22 +2841,107 @@ def _compact_official(official: Mapping[str, Any]) -> Dict[str, Any]:
 
 
 def _compact_memo(memo: Mapping[str, Any]) -> Dict[str, Any]:
+    raw_claims = memo.get("claim_evidence") if isinstance(memo.get("claim_evidence"), list) else []
+    compact_claims: List[Dict[str, Any]] = []
+    for item in raw_claims[:3]:
+        if not isinstance(item, Mapping):
+            continue
+        claim = _clip(str(item.get("claim") or ""), 360)
+        if not claim:
+            continue
+        row = {
+            "claim": claim,
+            "evidence_ids": _string_list(item.get("evidence_ids"))[:4],
+            "claimType": item.get("claimType") or item.get("claim_type"),
+            "subject": item.get("subject"),
+            "domain": item.get("domain"),
+        }
+        compact_claims.append({key: value for key, value in row.items() if value not in (None, "", [], {})})
+    if not compact_claims:
+        compact_claims = [
+            {"claim": _clip(text, 360)}
+            for text in _string_list(memo.get("key_claims"))[:3]
+            if text
+        ]
     compact = {
         "ref": f"memo:{memo.get('agent')}",
         "agent": memo.get("agent"),
-        "summary_for_reader": memo.get("summary_for_reader"),
-        "key_claims": _string_list(memo.get("key_claims"))[:3],
-        "claim_evidence": list(memo.get("claim_evidence") or [])[:3],
+        "summary_for_reader": _clip(str(memo.get("summary_for_reader") or ""), 600),
+        "key_claims": compact_claims,
         "evidence_ids": _string_list(memo.get("evidence_ids"))[:6],
-        "counterpoints": _string_list(memo.get("counterpoints"))[:3],
-        "data_gaps": _string_list(memo.get("data_gaps"))[:3],
-        "next_action": memo.get("next_action"),
+        "counterpoints": [_clip(text, 300) for text in _string_list(memo.get("counterpoints"))[:3]],
+        "data_gaps": [_clip(text, 240) for text in _string_list(memo.get("data_gaps"))[:3]],
+        "next_action": _compact_prompt_value(memo.get("next_action"), limit=360),
     }
     if memo.get("challenges"):
-        compact["challenges"] = list(memo.get("challenges") or [])[:3]
+        compact["challenges"] = [
+            _compact_prompt_mapping(item, text_limit=320)
+            for item in list(memo.get("challenges") or [])[:3]
+            if isinstance(item, Mapping)
+        ]
     if memo.get("adjudication"):
-        compact["adjudication"] = dict(memo.get("adjudication") or {})
+        compact["adjudication"] = _compact_prompt_mapping(
+            dict(memo.get("adjudication") or {}),
+            text_limit=360,
+        )
     return compact
+
+
+def _compact_original_refs_for_prompt(refs: Sequence[Mapping[str, Any]]) -> List[Dict[str, Any]]:
+    """Keep upstream conclusions usable without repeating hashes and raw adapter payloads."""
+
+    out: List[Dict[str, Any]] = []
+    analysis_fields = {
+        "action",
+        "analysisSummary",
+        "confidenceLevel",
+        "coreConclusion",
+        "operationAdvice",
+        "riskWarning",
+        "keyPoints",
+        "sentimentScore",
+        "currentPrice",
+        "changePct",
+    }
+    for ref in refs:
+        analysis = ref.get("analysis") if isinstance(ref.get("analysis"), Mapping) else {}
+        compact_analysis = {
+            str(key): _compact_prompt_value(value, limit=420)
+            for key, value in analysis.items()
+            if str(key) in analysis_fields and value not in (None, "", [], {})
+        }
+        row = {
+            "kind": ref.get("kind"),
+            "status": ref.get("status"),
+            "summary": _clip(str(ref.get("summary") or ""), 420),
+            "analysis": compact_analysis,
+            "evidenceIds": _string_list(ref.get("evidenceIds"))[:8],
+            "symbols": _string_list(ref.get("symbols"))[:8],
+        }
+        out.append({key: value for key, value in row.items() if value not in (None, "", [], {})})
+    return out
+
+
+def _compact_prompt_mapping(value: Mapping[str, Any], *, text_limit: int) -> Dict[str, Any]:
+    return {
+        str(key): _compact_prompt_value(item, limit=text_limit)
+        for key, item in value.items()
+        if item not in (None, "", [], {})
+    }
+
+
+def _compact_prompt_value(value: Any, *, limit: int) -> Any:
+    if isinstance(value, Mapping):
+        return _compact_prompt_mapping(value, text_limit=limit)
+    if isinstance(value, list):
+        return [
+            _compact_prompt_value(item, limit=limit)
+            for item in value[:6]
+            if item not in (None, "", [], {})
+        ]
+    if isinstance(value, str):
+        return _clip(value, limit)
+    return value
 
 
 def _claim_payload(value: Any) -> tuple[List[str], List[Dict[str, Any]], List[str]]:
@@ -2796,6 +3061,15 @@ def _parse_agent_output(text: str, spec: DepartmentSpec) -> Dict[str, Any]:
         "_parse_status": "parse_partial",
         "_raw_output": raw,
     }
+    if spec.agent == "CIOAgent":
+        payload["adjudication"] = {
+            "sharedFacts": _markdown_items(_first_section(sections, "双方共同事实", "共同事实")),
+            "baseCase": _first_section(sections, "基准情景"),
+            "strongestAlternative": _first_section(sections, "最强竞争情景", "最强相反情景", "竞争情景", "替代情景", "反方情景"),
+            "judgment": _first_section(sections, "CIO裁决", "当前裁决", "裁决"),
+            "why": _first_section(sections, "裁决理由", "为什么"),
+            "invalidationTriggers": _markdown_items(_first_section(sections, "翻转信号", "失效条件")),
+        }
     return payload
 
 
@@ -2827,6 +3101,11 @@ def _normalize_agent_payload(payload: Mapping[str, Any]) -> Dict[str, Any]:
             if alias in data and data.get(alias) not in (None, "", []):
                 normalized[target] = data.get(alias)
                 break
+    if normalized.get("adjudication") in (None, "", []):
+        for alias in ("情景裁决", "CIO裁决", "裁决", "基准情景与竞争情景"):
+            if isinstance(data.get(alias), Mapping):
+                normalized["adjudication"] = data.get(alias)
+                break
     if isinstance(normalized.get("evidence_ids"), str):
         extracted = _extract_evidence_ids(str(normalized.get("evidence_ids") or ""))
         normalized["evidence_ids"] = extracted or _string_list(normalized.get("evidence_ids"))
@@ -2837,7 +3116,7 @@ def _parse_markdown_sections(raw: str) -> Dict[str, str]:
     sections: Dict[str, str] = {}
     current = "body"
     buf: List[str] = []
-    heading_re = re.compile(r"^\s{0,3}(?:#{1,4}\s*)?(结论|总结|今日结论|依据|核心依据|理由|引用 evidence id|证据|引用|反证|风险|待确认项|数据缺口|缺口|下一步|置信度|summary|conclusion|key_claims|claims|evidence|evidence_ids|counterpoints|risks|data_gaps|gaps|next_action|next action|confidence)\s*[:：]?\s*$", re.I)
+    heading_re = re.compile(r"^\s{0,3}(?:#{1,4}\s*)?(结论|总结|今日结论|依据|核心依据|理由|引用 evidence id|证据|引用|反证|风险|待确认项|数据缺口|缺口|下一步|置信度|双方共同事实|共同事实|基准情景|最强竞争情景|最强相反情景|竞争情景|替代情景|反方情景|CIO裁决|当前裁决|裁决|裁决理由|为什么|翻转信号|失效条件|summary|conclusion|key_claims|claims|evidence|evidence_ids|counterpoints|risks|data_gaps|gaps|next_action|next action|confidence)\s*[:：]?\s*$", re.I)
     for line in str(raw or "").splitlines():
         match = heading_re.match(line.strip())
         if match:
@@ -2957,8 +3236,11 @@ def _error_text(exc: BaseException | str | None) -> str:
         reason = str(exc.details.get("reason") or "")
         last_error = str(exc.details.get("last_error") or "")
         suffix = f":{last_error}" if last_error and last_error != reason else ""
-        return f"{exc.error_code.value}:{exc.stage}:{reason}{suffix}"
-    return _clip(str(exc), 500)
+        return sanitize_diagnostic_text(
+            f"{exc.error_code.value}:{exc.stage}:{reason}{suffix}",
+            max_len=500,
+        )
+    return sanitize_diagnostic_text(exc, max_len=500)
 
 
 def _clip(text: str, limit: int) -> str:

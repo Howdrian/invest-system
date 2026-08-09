@@ -72,6 +72,12 @@ class TestYfinanceFundamentalAdapter(unittest.TestCase):
             "profitMargins": 0.272,
             "trailingAnnualDividendRate": 1.04,
             "dividendYield": 0.36,
+            "trailingPE": 31.2,
+            "forwardPE": 28.4,
+            "priceToBook": 42.1,
+            "enterpriseToRevenue": 7.8,
+            "enterpriseToEbitda": 23.5,
+            "marketCap": 3.2e12,
         }
         income_df = pd.DataFrame(
             {
@@ -117,11 +123,22 @@ class TestYfinanceFundamentalAdapter(unittest.TestCase):
         self.assertAlmostEqual(growth["roe"], 141.47, places=1)
         self.assertAlmostEqual(growth["gross_margin"], 47.9, places=1)
 
+        valuation = bundle["valuation"]
+        self.assertEqual(valuation["trailing_pe"], 31.2)
+        self.assertEqual(valuation["forward_pe"], 28.4)
+        self.assertEqual(valuation["price_to_book"], 42.1)
+        self.assertEqual(valuation["currency"], "USD")
+
         fr = bundle["earnings"]["financial_report"]
         self.assertEqual(fr["report_date"], "2026-03-31")
         self.assertEqual(fr["revenue"], 1.11e11)
         self.assertEqual(fr["operating_cash_flow"], 2.87e10)
         self.assertEqual(fr["currency"], "USD")
+        history = bundle["earnings"]["financial_history"]
+        self.assertEqual(len(history), 5)
+        self.assertEqual(history[0]["report_date"], "2026-03-31")
+        self.assertEqual(history[-1]["report_date"], "2025-03-31")
+        self.assertEqual(history[0]["operating_cash_flow"], 2.87e10)
 
         div = bundle["earnings"]["dividend"]
         self.assertEqual(div["ttm_event_count"], 4)

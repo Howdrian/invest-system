@@ -325,15 +325,23 @@ class YfinanceFetcher(BaseFetcher):
         if hist.empty:
             return None
         today_row = hist.iloc[-1]
-        prev_row = hist.iloc[-2] if len(hist) > 1 else today_row
         price = float(today_row['Close'])
-        prev_close = float(prev_row['Close'])
-        change = price - prev_close
-        change_pct = (change / prev_close) * 100 if prev_close else 0
         high = float(today_row['High'])
         low = float(today_row['Low'])
-        # 振幅 = (最高 - 最低) / 昨收 * 100
-        amplitude = ((high - low) / prev_close * 100) if prev_close else 0
+        # A one-row Yahoo payload has no previous close.  Treating the same row
+        # as both current and previous produced a false 0% move (observed on
+        # HSTECH).  Keep the level, but leave change fields unknown so another
+        # provider or the Reader can state that the move still needs checking.
+        if len(hist) > 1:
+            prev_close: Optional[float] = float(hist.iloc[-2]['Close'])
+            change: Optional[float] = price - prev_close
+            change_pct: Optional[float] = (change / prev_close) * 100 if prev_close else None
+            amplitude: Optional[float] = ((high - low) / prev_close * 100) if prev_close else None
+        else:
+            prev_close = None
+            change = None
+            change_pct = None
+            amplitude = None
         return {
             'code': return_code,
             'name': name,

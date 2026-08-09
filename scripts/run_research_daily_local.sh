@@ -51,7 +51,7 @@ PY
   SYMBOLS="${SYMBOLS:-$ENV_STOCK_LIST}"
   MARKET="${MARKET:-$ENV_MARKET}"
 fi
-SYMBOLS="${SYMBOLS:-600519,000001,AAPL,HK00700}"
+SYMBOLS="${SYMBOLS:-}"
 MARKET="${MARKET:-cn}"
 
 echo "== invest-system local research daily =="
@@ -95,6 +95,23 @@ fi
 "$PY" src/render_homepage.py --date "$RUN_DATE" --docs-dir "$DOCS_DIR"
 
 VALIDATION_PATH="$DOCS_DIR/run_status/$RUN_DATE/pages_validation.json"
+"$PY" scripts/validate_pages_bundle.py \
+  --date "$RUN_DATE" \
+  --docs-dir "$DOCS_DIR" \
+  --output "$VALIDATION_PATH" \
+  --fail-on-error
+# Finalize publication health from the completed validator, rebuild the same
+# artifact/Reader contract, then validate once more. Research Agents never see
+# this publication-only status.
+"$PY" scripts/write_source_health_ledgers.py \
+  --date "$RUN_DATE" \
+  --docs-dir "$DOCS_DIR" \
+  --preserve-runtime-enrichment \
+  --include-pages-validation
+"$PY" src/render_report_html.py --date "$RUN_DATE" --docs-dir "$DOCS_DIR"
+"$PY" scripts/audit_semantic_quality.py --date "$RUN_DATE" --docs-dir "$DOCS_DIR" --fail-on-error
+"$PY" scripts/build_pages_compat_bundle.py --date "$RUN_DATE" --docs-dir "$DOCS_DIR" --runtime-reports-dir "$REPORTS_DIR"
+"$PY" src/render_homepage.py --date "$RUN_DATE" --docs-dir "$DOCS_DIR"
 "$PY" scripts/validate_pages_bundle.py \
   --date "$RUN_DATE" \
   --docs-dir "$DOCS_DIR" \

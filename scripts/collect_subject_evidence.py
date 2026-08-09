@@ -22,6 +22,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--symbols", default="", help="Comma-separated local override")
     parser.add_argument("--market", default="")
     parser.add_argument("--max-symbols", type=int, default=None)
+    parser.add_argument("--market-only", action="store_true", help="Refresh market scopes while preserving symbol evidence")
     args = parser.parse_args(argv)
 
     symbols = [item.strip() for item in args.symbols.replace("，", ",").split(",") if item.strip()] if args.symbols else None
@@ -31,6 +32,7 @@ def main(argv: list[str] | None = None) -> int:
         symbols=symbols,
         market=args.market or None,
         max_symbols=args.max_symbols,
+        market_only=args.market_only,
     )
     print(json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True))
     return 0

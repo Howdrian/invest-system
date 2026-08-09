@@ -27,7 +27,7 @@ DEPARTMENT_DATA_PROFILES: tuple[DepartmentDataProfile, ...] = (
     DepartmentDataProfile(
         agent="MacroAgent",
         input_profile="macro",
-        source_kinds=("fred", "market_cycle", "rates", "dollar", "energy"),
+        source_kinds=("fred", "china_public_macro", "market_cycle", "rates", "dollar", "energy"),
         original_kinds=("macro_context",),
         evidence_domains=("macro",),
         description="宏观、利率、流动性、通胀、美元、能源和市场周期。",
@@ -92,7 +92,7 @@ DEPARTMENT_DATA_PROFILES: tuple[DepartmentDataProfile, ...] = (
         agent="RiskAgent",
         input_profile="risk",
         source_kinds=("department_summaries", "decision_signals", "risk_evidence"),
-        original_kinds=("decision_signals", "portfolio_snapshot", "market_review"),
+        original_kinds=(),
         evidence_domains=("price", "fundamentals", "filings_events", "macro", "news_sentiment", "portfolio"),
         description="风险、反证、异常缺口、决策信号和不应行动条件。",
     ),
@@ -100,7 +100,7 @@ DEPARTMENT_DATA_PROFILES: tuple[DepartmentDataProfile, ...] = (
         agent="RedTeamAgent",
         input_profile="red_team",
         source_kinds=("department_summaries", "risk_output", "core_evidence"),
-        original_kinds=("decision_signals", "market_review"),
+        original_kinds=(),
         evidence_domains=("price", "fundamentals", "filings_events", "macro", "news_sentiment", "portfolio"),
         description="反驳前面结论，找证据跳跃、偏见和 discovery 误用。",
     ),
@@ -108,13 +108,23 @@ DEPARTMENT_DATA_PROFILES: tuple[DepartmentDataProfile, ...] = (
         agent="CIOAgent",
         input_profile="cio",
         source_kinds=("department_summaries", "red_team", "risk", "core_evidence", "source_health"),
-        original_kinds=("market_review", "decision_signals", "portfolio_snapshot", "history_summary"),
+        original_kinds=(),
         evidence_domains=("price", "fundamentals", "filings_events", "macro", "news_sentiment", "portfolio"),
         description="最终编辑，读部门结论、红队、风险、核心证据和数据可信度。",
     ),
 )
 
 _PROFILE_BY_AGENT = {profile.agent: profile for profile in DEPARTMENT_DATA_PROFILES}
+_DIRECT_ORIGINAL_ANALYSIS_AGENTS = {
+    "MacroAgent",
+    "GeoPolicyAgent",
+    "MarketAgent",
+    "SectorAgent",
+    "FundamentalAgent",
+    "TechnicalAgent",
+    "IntelAgent",
+    "PortfolioAgent",
+}
 
 
 def department_profile(agent: str) -> DepartmentDataProfile | None:
@@ -143,6 +153,8 @@ def department_profile_payload(agent: str) -> Dict[str, Any]:
 
 
 def filter_original_refs_for_agent(refs: Sequence[Mapping[str, Any]], agent: str, *, limit: int = 10) -> List[Dict[str, Any]]:
+    if str(agent or "") not in _DIRECT_ORIGINAL_ANALYSIS_AGENTS:
+        return []
     profile = department_profile(agent)
     allowed_kinds = set(profile.original_kinds if profile else ())
     out: List[Dict[str, Any]] = []
@@ -151,7 +163,7 @@ def filter_original_refs_for_agent(refs: Sequence[Mapping[str, Any]], agent: str
             continue
         targets = {str(item) for item in row.get("agentTargets") or [] if str(item)}
         kind = str(row.get("kind") or "")
-        if agent not in targets and (allowed_kinds and kind not in allowed_kinds):
+        if agent not in targets and kind not in allowed_kinds:
             continue
         out.append(
             {

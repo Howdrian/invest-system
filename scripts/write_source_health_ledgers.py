@@ -25,12 +25,18 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Preserve current-run CIO enrichment while refreshing publication health.",
     )
+    parser.add_argument(
+        "--include-pages-validation",
+        action="store_true",
+        help="Include the completed Pages validator result in final publication health.",
+    )
     args = parser.parse_args(argv)
 
     result = write_daily_source_health_ledgers(
         Path(args.docs_dir),
         args.date,
         preserve_runtime_enrichment=args.preserve_runtime_enrichment,
+        include_pages_validation=args.include_pages_validation,
     )
     text = json.dumps(result, ensure_ascii=False, indent=2) + "\n"
     if args.output:

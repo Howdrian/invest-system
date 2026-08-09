@@ -2,6 +2,12 @@ from __future__ import annotations
 
 import json
 
+from src.source_health.temporal import iso_timestamp
+
+
+def test_iso_timestamp_preserves_date_only_precision():
+    assert iso_timestamp("2026-07-17") == "2026-07-17"
+
 
 def test_data_temporality_audit_accepts_timestamped_comparison_chain(tmp_path):
     from scripts.audit_data_temporality import audit_data_temporality

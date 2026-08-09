@@ -25,6 +25,14 @@ def iso_timestamp(value: Any, *, naive_timezone: tzinfo | None = None) -> str:
     text = str(value).strip()
     if not text:
         return ""
+    # ``datetime.fromisoformat('YYYY-MM-DD')`` silently invents midnight.
+    # Preserve source precision instead: a date-only observation must remain a
+    # date so Reader copy never displays a fabricated 00:00/08:00 timestamp.
+    if len(text) == 10:
+        try:
+            return date.fromisoformat(text).isoformat()
+        except ValueError:
+            return ""
     try:
         parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
     except ValueError:

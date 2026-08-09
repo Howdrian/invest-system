@@ -32,6 +32,62 @@ def evidence_from_agent_memos(docs: Path, run_date: str) -> List[Dict[str, Any]]
     return []
 
 
+def evidence_from_daily_universe(universe: Mapping[str, Any], run_date: str) -> List[Dict[str, Any]]:
+    """Record portfolio/watchlist scope before the PortfolioAgent runs.
+
+    An unavailable holdings snapshot is a system observation, not a fabricated
+    investment fact and not a missing evidence row.  Giving it an explicit
+    evidence id lets the LLM accurately say "no snapshot was connected"
+    instead of falling back because no portfolio-domain citation exists.
+    """
+
+    groups = universe.get("groups") if isinstance(universe.get("groups"), list) else []
+    portfolio = next(
+        (row for row in groups if isinstance(row, Mapping) and row.get("name") == "portfolio"),
+        {},
+    )
+    watchlist = next(
+        (row for row in groups if isinstance(row, Mapping) and row.get("name") == "watchlist"),
+        {},
+    )
+    portfolio_symbols = [str(item) for item in portfolio.get("symbols") or [] if str(item)] if isinstance(portfolio, Mapping) else []
+    watchlist_symbols = [str(item) for item in watchlist.get("symbols") or [] if str(item)] if isinstance(watchlist, Mapping) else []
+    reason = str(portfolio.get("whyIncluded") or "") if isinstance(portfolio, Mapping) else ""
+    explicit_snapshot_state = portfolio.get("snapshotAvailable") if isinstance(portfolio, Mapping) else None
+    if isinstance(explicit_snapshot_state, bool):
+        snapshot_available = explicit_snapshot_state
+    else:
+        snapshot_available = bool(portfolio_symbols) or not any(
+            marker in reason for marker in ("未发现结构化持仓源", "未接入", "unavailable")
+        )
+    status = "available" if snapshot_available else ("symbols_only" if portfolio_symbols else "not_connected")
+    return [{
+        "id": f"daily_universe:portfolio_snapshot_status:{run_date}",
+        "domain": "portfolio",
+        "subject": "portfolio",
+        "symbol": "portfolio",
+        "metric": "portfolio_snapshot_status",
+        "value": (
+            f"portfolio_snapshot_status={status} holdings={len(portfolio_symbols) if snapshot_available else 0} "
+            f"configured_symbols={len(portfolio_symbols)} "
+            f"watchlist={len(watchlist_symbols)}"
+        ),
+        "measurements": {
+            "snapshot_available": 1.0 if snapshot_available else 0.0,
+            "holdings_count": float(len(portfolio_symbols) if snapshot_available else 0),
+            "configured_symbols_count": float(len(portfolio_symbols)),
+            "watchlist_count": float(len(watchlist_symbols)),
+        },
+        "as_of": run_date,
+        "provider": "DailyUniverse",
+        "raw_path": f"run_status/{run_date}/daily_universe.json",
+        "confidence": "high",
+        "fact_type": "derived_fact",
+        "supports_claims": snapshot_available,
+        "evidence_scope": "subject_evidence",
+    }]
+
+
 def evidence_from_market_cycle(docs: Path, run_date: str) -> List[Dict[str, Any]]:
     facts: List[Dict[str, Any]] = []
     base = docs / "market_cycle" / run_date
@@ -111,6 +167,33 @@ def evidence_from_macro_context(docs: Path, run_date: str) -> List[Dict[str, Any
                 "fact_subtype": str(item.get("factor") or "macro"),
                 "evidence_scope": "subject_evidence",
             })
+    china_public = components.get("china_public") if isinstance(components.get("china_public"), Mapping) else {}
+    for item in as_list(china_public.get("series")):
+        if not isinstance(item, Mapping):
+            continue
+        series_id = str(item.get("series_id") or "").strip()
+        if not series_id:
+            continue
+        date = str(item.get("date") or run_date)
+        fetched_at = str(item.get("fetched_at") or payload.get("as_of") or "")
+        rows.append({
+            "id": f"china_macro:{series_id}:{date}",
+            "domain": "macro",
+            "symbol": series_id,
+            "metric": series_id,
+            "value": f"{series_id}={item.get('value')} @ {date}",
+            "as_of": date,
+            "event_time": date,
+            "fetched_at": fetched_at,
+            "provider": "AkShareChinaMacro",
+            "source_url": str(item.get("source_url") or ""),
+            "confidence": "medium",
+            "fact_type": "derived_fact",
+            "fact_subtype": str(item.get("factor") or "macro"),
+            "history": item.get("history") if isinstance(item.get("history"), list) else [],
+            "evidence_scope": "subject_evidence",
+            "source_policy": "public_secondary_derived",
+        })
     return rows
 
 

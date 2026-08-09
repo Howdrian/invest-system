@@ -1,6 +1,57 @@
 import json
 
 
+def test_daily_universe_emits_explicit_unconnected_portfolio_evidence():
+    from src.source_health.daily_evidence import evidence_from_daily_universe
+
+    rows = evidence_from_daily_universe(
+        {
+            "groups": [
+                {
+                    "name": "portfolio",
+                    "symbols": [],
+                    "whyIncluded": "当前未发现结构化持仓源；保留分组以便后续接入",
+                },
+                {"name": "watchlist", "symbols": ["600519", "AAPL"]},
+            ]
+        },
+        "2099-01-02",
+    )
+
+    assert rows[0]["domain"] == "portfolio"
+    assert "portfolio_snapshot_status=not_connected" in rows[0]["value"]
+    assert rows[0]["measurements"]["snapshot_available"] == 0.0
+    assert rows[0]["supports_claims"] is False
+    assert rows[0]["measurements"]["watchlist_count"] == 2.0
+
+
+def test_configured_portfolio_symbols_do_not_masquerade_as_position_snapshot():
+    from src.source_health.daily_evidence import evidence_from_daily_universe
+
+    rows = evidence_from_daily_universe(
+        {
+            "groups": [
+                {
+                    "name": "portfolio",
+                    "symbols": ["160644", "301013"],
+                    "scope": "symbols_only",
+                    "snapshotAvailable": False,
+                    "whyIncluded": "来自 PORTFOLIO_HOLDINGS 的标的清单",
+                },
+                {"name": "watchlist", "symbols": ["AAPL"]},
+            ]
+        },
+        "2099-01-02",
+    )
+
+    assert "portfolio_snapshot_status=symbols_only" in rows[0]["value"]
+    assert rows[0]["measurements"]["snapshot_available"] == 0.0
+    assert rows[0]["measurements"]["holdings_count"] == 0.0
+    assert rows[0]["measurements"]["configured_symbols_count"] == 2.0
+    assert rows[0]["supports_claims"] is False
+    assert rows[0]["measurements"]["watchlist_count"] == 1.0
+
+
 def test_source_health_refresh_preserves_existing_runtime_stages(tmp_path):
     from src.source_health.daily_ledgers import write_daily_source_health_ledgers
     from src.source_health.run_matrix import write_run_matrix
@@ -290,7 +341,19 @@ def test_daily_source_health_ledgers_include_fred_macro_cache(tmp_path):
                         "series": [
                             {"series_id": "DGS10", "factor": "liquidity_rates", "date": run_date, "value": 4.2}
                         ],
-                    }
+                    },
+                    "china_public": {
+                        "status": "available",
+                        "series": [
+                            {
+                                "series_id": "CN_PMI_MANUFACTURING",
+                                "factor": "growth",
+                                "date": "2099年01月份",
+                                "value": 50.3,
+                                "source_url": "https://data.eastmoney.com/cjsj/pmi.html",
+                            }
+                        ],
+                    },
                 },
             },
             ensure_ascii=False,
@@ -303,8 +366,14 @@ def test_daily_source_health_ledgers_include_fred_macro_cache(tmp_path):
     provider_rows = load_provider_ledger(docs / "run_status" / run_date / "provider_runs.jsonl")
     evidence_rows = load_evidence_ledger(docs / "run_status" / run_date / "evidence_ledger.jsonl")
     assert any(row.get("provider") == "FRED" and row.get("success") is True for row in provider_rows)
+    assert any(row.get("provider") == "AkShareChinaMacro" and row.get("success") is True for row in provider_rows)
     assert any(
         row.get("id") == f"fred:DGS10:{run_date}" and row.get("fact_type") == "verified_fact"
+        for row in evidence_rows
+    )
+    assert any(
+        row.get("id") == "china_macro:CN_PMI_MANUFACTURING:2099年01月份"
+        and row.get("fact_type") == "derived_fact"
         for row in evidence_rows
     )
 
@@ -338,3 +407,33 @@ def test_pages_validation_stays_out_of_research_evidence_ledgers(tmp_path):
     evidence_rows = load_evidence_ledger(run_status / "evidence_ledger.jsonl")
     assert not any(row.get("provider") == "PagesValidator" for row in provider_rows)
     assert not any(row.get("id") == f"pages_bundle:{run_date}:validation" for row in evidence_rows)
+
+
+def test_final_publication_health_can_include_completed_pages_validation(tmp_path):
+    from src.source_health.daily_ledgers import write_daily_source_health_ledgers
+    from src.source_health.provider_ledger import load_provider_ledger
+
+    docs = tmp_path / "docs"
+    run_date = "2099-01-02"
+    run_status = docs / "run_status" / run_date
+    run_status.mkdir(parents=True)
+    (run_status / "pages_validation.json").write_text(
+        json.dumps(
+            {
+                "schema": "pages_bundle_validation_v1",
+                "ok": True,
+                "required_files_checked": 20,
+                "links_checked": 48,
+                "legacy_public_files": [],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    write_daily_source_health_ledgers(docs, run_date, include_pages_validation=True)
+
+    provider_rows = load_provider_ledger(run_status / "provider_runs.jsonl")
+    assert any(row.get("provider") == "PagesValidator" and row.get("success") is True for row in provider_rows)
+    health = json.loads((run_status / "source_health_v2.json").read_text(encoding="utf-8"))
+    assert health["domains"]["publish_bundle"]["status"] == "available"

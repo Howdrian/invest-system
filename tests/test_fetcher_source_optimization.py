@@ -80,6 +80,22 @@ def _make_daily_df() -> pd.DataFrame:
 
 
 class TestFetcherSourceOptimization(unittest.TestCase):
+    def test_daily_permission_failure_opens_market_scoped_circuit_immediately(self):
+        fetcher = MagicMock()
+        fetcher.name = "TushareFetcher"
+        DataFetcherManager.reset_daily_source_health()
+        try:
+            DataFetcherManager._record_daily_source_failure(
+                fetcher,
+                "cn",
+                "抱歉，您没有接口 daily 的访问权限",
+            )
+
+            assert not DataFetcherManager._is_daily_source_available(fetcher, "cn")
+            assert DataFetcherManager._is_daily_source_available(fetcher, "hk")
+        finally:
+            DataFetcherManager.reset_daily_source_health()
+
     def test_base_fetcher_returns_opt_in_empty_daily_data_without_error(self):
         df = _EmptyRawFetcher().get_daily_data(
             "000001",

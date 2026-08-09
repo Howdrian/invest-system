@@ -16,6 +16,7 @@ if str(ROOT) not in sys.path:
 from src.daily_department_agents import run_daily_department_agents  # noqa: E402
 from src.daily_department_llm import run_llm_daily_department_agents  # noqa: E402
 from src.original_analysis_adapter import build_original_analysis_bundle  # noqa: E402
+from src.safe_diagnostics import sanitize_diagnostic_text  # noqa: E402
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -90,7 +91,17 @@ def main(argv: list[str] | None = None) -> int:
                 resume_successful=args.resume_successful,
             )
     except RuntimeError as exc:
-        print(json.dumps({"ok": False, "error": str(exc), "runDate": args.date}, ensure_ascii=False, indent=2))
+        print(
+            json.dumps(
+                {
+                    "ok": False,
+                    "error": sanitize_diagnostic_text(exc, max_len=500),
+                    "runDate": args.date,
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
         return 2
     print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
     return 0

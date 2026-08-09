@@ -108,6 +108,52 @@ def _yoy_from_row(row: Optional[pd.Series]) -> Optional[float]:
     return round((latest - prev_year) / abs(prev_year) * 100.0, 4)
 
 
+def _statement_history(
+    income_df: Optional[pd.DataFrame],
+    cashflow_df: Optional[pd.DataFrame],
+    *,
+    currency: Optional[str],
+    limit: int = 12,
+) -> List[Dict[str, Any]]:
+    """Normalize online statement history for deterministic local comparison."""
+
+    if income_df is None or income_df.empty:
+        return []
+    columns = list(income_df.columns)
+    try:
+        columns = sorted(columns, key=lambda value: pd.Timestamp(value), reverse=True)
+    except Exception:
+        pass
+    revenue_row = _pick_row(income_df, _INCOME_REVENUE_KEYS)
+    net_profit_row = _pick_row(income_df, _INCOME_NET_PROFIT_KEYS)
+    cashflow_row = _pick_row(cashflow_df, _CASHFLOW_OP_KEYS) if cashflow_df is not None else None
+    rows: List[Dict[str, Any]] = []
+    for column in columns[: max(1, limit)]:
+        timestamp = pd.to_datetime(column, errors="coerce")
+        if pd.isna(timestamp):
+            continue
+
+        def value_at(series: Optional[pd.Series]) -> Optional[float]:
+            if series is None:
+                return None
+            try:
+                return _safe_float(series.get(column))
+            except Exception:
+                return None
+
+        row = {
+            "report_date": timestamp.date().isoformat(),
+            "revenue": value_at(revenue_row),
+            "net_profit_parent": value_at(net_profit_row),
+            "operating_cash_flow": value_at(cashflow_row),
+            "currency": currency,
+        }
+        normalized = {key: value for key, value in row.items() if value not in (None, "")}
+        if any(normalized.get(key) is not None for key in ("revenue", "net_profit_parent", "operating_cash_flow")):
+            rows.append(normalized)
+    return rows
+
+
 def _epoch_to_date(value: Any) -> Optional[str]:
     raw = _safe_float(value)
     if raw is None:
@@ -153,6 +199,7 @@ class YfinanceFundamentalAdapter:
     def get_fundamental_bundle(self, stock_code: str) -> Dict[str, Any]:
         result: Dict[str, Any] = {
             "status": "not_supported",
+            "valuation": {},
             "growth": {},
             "earnings": {},
             "institution": {},
@@ -189,6 +236,23 @@ class YfinanceFundamentalAdapter:
         # renderer can suffix per-block currency tags correctly.
         financial_currency = str(info.get("financialCurrency") or info.get("currency") or "").upper() or None
         dividend_currency = str(info.get("currency") or info.get("financialCurrency") or "").upper() or None
+
+        # Current valuation is a generic public snapshot.  It is deliberately
+        # not called a historical percentile: the daily research layer builds
+        # time comparisons only from retained dated snapshots.
+        valuation_payload = {
+            "trailing_pe": _safe_float(info.get("trailingPE")),
+            "forward_pe": _safe_float(info.get("forwardPE")),
+            "price_to_book": _safe_float(info.get("priceToBook")),
+            "enterprise_to_revenue": _safe_float(info.get("enterpriseToRevenue")),
+            "enterprise_to_ebitda": _safe_float(info.get("enterpriseToEbitda")),
+            "market_cap": _safe_float(info.get("marketCap")),
+            "currency": dividend_currency,
+            "as_of": datetime.now(timezone.utc).date().isoformat(),
+        }
+        if any(value is not None for key, value in valuation_payload.items() if key not in {"currency", "as_of"}):
+            result["valuation"] = valuation_payload
+            result["source_chain"].append("valuation:yfinance.info")
 
         # ---------------- growth block ----------------
         growth_payload: Dict[str, Any] = {
@@ -272,6 +336,15 @@ class YfinanceFundamentalAdapter:
         if any(v is not None and v != "" for v in financial_report.values()):
             result.setdefault("earnings", {})["financial_report"] = financial_report
             result["source_chain"].append("earnings.financial_report:yfinance")
+
+        financial_history = _statement_history(
+            income_df,
+            cashflow_df,
+            currency=financial_currency,
+        )
+        if financial_history:
+            result.setdefault("earnings", {})["financial_history"] = financial_history
+            result["source_chain"].append("earnings.financial_history:yfinance")
 
         # ---------------- dividend block ----------------
         events: List[Dict[str, Any]] = []
@@ -373,7 +446,8 @@ class YfinanceFundamentalAdapter:
             result["source_chain"].append("belong_boards:yfinance.info")
 
         has_content = bool(
-            result.get("growth")
+            result.get("valuation")
+            or result.get("growth")
             or result.get("earnings")
             or result.get("belong_boards")
         )

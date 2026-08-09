@@ -53,9 +53,11 @@ def build_daily_universe(
         },
         {
             "name": "portfolio",
-            "source": "portfolio_holdings",
+            "source": "not_connected",
             "symbols": [],
-            "whyIncluded": "当前未发现结构化持仓源；保留分组以便后续接入",
+            "snapshotAvailable": False,
+            "scope": "not_connected",
+            "whyIncluded": "公开日报未接入私有持仓；不得从 PORTFOLIO_HOLDINGS 自动展开标的",
             "evidenceRequirements": ["portfolio", "price", "risk"],
         },
         {

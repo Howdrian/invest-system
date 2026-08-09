@@ -239,16 +239,26 @@ def _build_dimensions(macro: Dict[str, Any], heat: Dict[str, Any]) -> Dict[str, 
     official = components.get("official_calendar") if isinstance(components.get("official_calendar"), dict) else {}
     fred = components.get("fred") if isinstance(components.get("fred"), dict) else {}
     fred_by_factor = _fred_by_factor(fred)
+    china_public = components.get("china_public") if isinstance(components.get("china_public"), dict) else {}
+    china_by_factor = _fred_by_factor(china_public)
+    growth_evidence = _join_evidence(
+        _fred_evidence(fred_by_factor.get("growth")),
+        _public_macro_evidence(china_by_factor.get("growth")),
+    )
+    inflation_evidence = _join_evidence(
+        _fred_evidence(fred_by_factor.get("inflation")),
+        _public_macro_evidence(china_by_factor.get("inflation")),
+    )
     return {
         "growth": {
-            "status": "available_limited" if fred_by_factor.get("growth") else "degraded",
-            "signal": "official_series" if fred_by_factor.get("growth") else "unknown",
-            "evidence": _fred_evidence(fred_by_factor.get("growth")) or "GDP/PMI/employment official extensions not yet fully wired in invest-system.",
+            "status": "available_limited" if growth_evidence else "degraded",
+            "signal": "official_and_public_series" if growth_evidence else "unknown",
+            "evidence": growth_evidence or "缺少可追源的增长和就业序列。",
         },
         "inflation": {
-            "status": "available_limited" if fred_by_factor.get("inflation") else "degraded",
-            "signal": "official_series" if fred_by_factor.get("inflation") else "unknown",
-            "evidence": _fred_evidence(fred_by_factor.get("inflation")) or "CPI/PCE/EIA/FRED extension points pending; use original 投研 source as migration reference.",
+            "status": "available_limited" if inflation_evidence else "degraded",
+            "signal": "official_and_public_series" if inflation_evidence else "unknown",
+            "evidence": inflation_evidence or "缺少可追源的通胀序列。",
         },
         "rates_liquidity": {
             "status": "available_limited" if fred_by_factor.get("liquidity_rates") or official else "degraded",
@@ -298,6 +308,17 @@ def _fred_evidence(rows: Optional[List[Dict[str, Any]]]) -> str:
     for row in rows[:3]:
         parts.append(f"{row.get('series_id')}={row.get('value')}@{row.get('date')}")
     return "FRED " + ", ".join(parts)
+
+
+def _public_macro_evidence(rows: Optional[List[Dict[str, Any]]]) -> str:
+    if not rows:
+        return ""
+    parts = [f"{row.get('series_id')}={row.get('value')}@{row.get('date')}" for row in rows[:3]]
+    return "中国公开宏观数据 " + ", ".join(parts)
+
+
+def _join_evidence(*items: str) -> str:
+    return "；".join(item for item in items if item)
 
 
 def _build_geopolitical_scenarios(pm: Dict[str, Any]) -> List[Dict[str, Any]]:

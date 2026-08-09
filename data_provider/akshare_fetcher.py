@@ -1782,8 +1782,13 @@ class AkshareFetcher(BaseFetcher):
 
     def get_main_indices(self, region: str = "cn") -> Optional[List[Dict[str, Any]]]:
         """
-        获取主要指数实时行情 (新浪接口)，仅支持 A 股
+        获取主要指数实时行情。
+
+        A 股使用新浪指数接口；港股使用东方财富公开指数行情。
+        两者都不需要 key，失败时由 DataFetcherManager 继续 fallback。
         """
+        if region == "hk":
+            return self._get_hk_main_indices()
         if region != "cn":
             return None
         import akshare as ak
@@ -1856,6 +1861,62 @@ class AkshareFetcher(BaseFetcher):
 
         except Exception as e:
             logger.error(f"[Akshare] 获取指数行情失败: {e}")
+            return None
+
+    def _get_hk_main_indices(self) -> Optional[List[Dict[str, Any]]]:
+        """获取恒指、恒生科技和国企指数，排除其他港股指数。"""
+        import akshare as ak
+
+        names = {
+            "HSI": "恒生指数",
+            "HSTECH": "恒生科技指数",
+            "HSCEI": "国企指数",
+        }
+        try:
+            self._set_random_user_agent()
+            self._enforce_rate_limit()
+            df = ak.stock_hk_index_spot_em()
+            if df is None or df.empty:
+                return None
+            results: List[Dict[str, Any]] = []
+            for code, display_name in names.items():
+                normalized_codes = df["代码"].astype(str).str.upper().str.replace("HK", "", regex=False)
+                row = df[normalized_codes == code]
+                if row.empty:
+                    row = df[df["名称"].astype(str).str.contains(display_name, regex=False)]
+                if row.empty:
+                    continue
+                item = row.iloc[0]
+                current = safe_float(item.get("最新价", 0))
+                prev_close = safe_float(item.get("昨收", 0))
+                change = safe_float(item.get("涨跌额", 0))
+                change_pct = safe_float(item.get("涨跌幅", 0))
+                if current > 0 and prev_close > 0 and abs(current - prev_close) > 1e-9:
+                    computed_change = current - prev_close
+                    computed_change_pct = computed_change / prev_close * 100
+                    if abs(change) < 1e-9:
+                        change = computed_change
+                    if abs(change_pct) < 1e-9:
+                        change_pct = computed_change_pct
+                high = safe_float(item.get("最高", 0))
+                low = safe_float(item.get("最低", 0))
+                results.append({
+                    "code": code,
+                    "name": display_name,
+                    "current": current,
+                    "change": change,
+                    "change_pct": change_pct,
+                    "open": safe_float(item.get("今开", 0)),
+                    "high": high,
+                    "low": low,
+                    "prev_close": prev_close,
+                    "volume": safe_float(item.get("成交量", 0)),
+                    "amount": safe_float(item.get("成交额", 0)),
+                    "amplitude": (high - low) / prev_close * 100 if prev_close > 0 else 0.0,
+                })
+            return results or None
+        except Exception as exc:
+            logger.warning(f"[Akshare] 获取港股主要指数失败: {exc}")
             return None
 
     def get_market_stats(self) -> Optional[Dict[str, Any]]:

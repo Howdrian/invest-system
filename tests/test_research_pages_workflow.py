@@ -8,7 +8,7 @@ WORKFLOW = Path(".github/workflows/00-daily-analysis.yml").read_text(encoding="u
 
 def _report_step() -> str:
     start = WORKFLOW.index("- name: 生成静态报告中心")
-    end = WORKFLOW.index("- name: 上传分析报告", start)
+    end = WORKFLOW.index("- name: 上传 GitHub Pages 产物", start)
     return WORKFLOW[start:end]
 
 
@@ -61,7 +61,32 @@ def test_report_step_uses_single_orchestrator_without_derived_memo_prefill() -> 
     assert step.count("run_research_daily_local.sh") == 1
 
 
+def test_retired_parallel_market_cycle_runtime_stays_out_of_active_chain() -> None:
+    runner = Path("scripts/run_research_daily_local.sh").read_text(encoding="utf-8")
+
+    assert not Path("src/market_cycle.py").exists()
+    assert "src.market_cycle" not in runner
+    assert "src/market_cycle.py" not in runner
+    assert "build_pages_compat_bundle.py" in runner
+
+
 def test_pages_artifact_and_deploy_jobs_are_present() -> None:
     assert "actions/upload-pages-artifact@v4" in WORKFLOW
     assert "actions/deploy-pages@v4" in WORKFLOW
     assert "needs.analyze.result == 'success'" in WORKFLOW
+
+
+def test_pages_upload_uses_reader_only_staging_directory() -> None:
+    report_step = _report_step()
+    assert '--staging-dir ".pages_staging/site"' in report_step
+    assert "--publish" not in report_step
+    upload_step = WORKFLOW[WORKFLOW.index("- name: 上传 GitHub Pages 产物"):]
+    upload_step = upload_step.split("- name: 显示运行结果", 1)[0]
+    assert "path: .pages_staging/site" in upload_step
+    assert "path: docs" not in upload_step
+
+
+def test_public_repo_does_not_upload_maintenance_artifacts() -> None:
+    assert "actions/upload-artifact@" not in WORKFLOW
+    assert "analysis-reports-" not in WORKFLOW
+    assert "path: |\n            reports/\n            logs/\n            docs/" not in WORKFLOW

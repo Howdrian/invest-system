@@ -9,7 +9,7 @@ import statistics
 import threading
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, List, Mapping, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, List, Mapping, Sequence, Set, Tuple
 
 from .daily_universe import load_daily_universe
 from .provider_ledger import write_provider_ledger
@@ -42,13 +42,15 @@ def collect_subject_evidence(
     symbols: Iterable[str] | None = None,
     market: str | None = None,
     max_symbols: int | None = None,
+    market_only: bool = False,
     manager: DataFetcherManager | None = None,
 ) -> Dict[str, Any]:
     """Collect current-run provider/evidence rows for the daily universe."""
 
     docs = Path(docs_dir)
     universe = load_daily_universe(docs, run_date)
-    subject_symbols = list(symbols or universe.get("subjectSymbols") or [])
+    all_subject_symbols = list(symbols or universe.get("subjectSymbols") or [])
+    subject_symbols = list(all_subject_symbols)
     if max_symbols is not None and max_symbols >= 0:
         subject_symbols = subject_symbols[:max_symbols]
     region = market or str(universe.get("market") or "cn")
@@ -59,15 +61,44 @@ def collect_subject_evidence(
     else:
         mgr = manager
 
-    provider_rows: List[Dict[str, Any]] = []
-    evidence_rows: List[Dict[str, Any]] = []
+    refreshed_operations = {"main_indices"} if market_only else {
+        "main_indices", "market_stats", "sector_rankings", "concept_rankings", "hot_stocks"
+    }
+    if market_only:
+        provider_rows = [
+            row for row in load_subject_provider_runs(docs, run_date)
+            if str(row.get("operation") or "") not in refreshed_operations
+        ]
+        evidence_rows = [
+            row for row in load_subject_evidence_facts(docs, run_date)
+            if str(row.get("metric") or "") not in refreshed_operations
+        ]
+    else:
+        provider_rows = []
+        evidence_rows = []
 
-    provider_rows.extend(_collect_market_scope(mgr, run_date, region, evidence_rows))
-    for symbol in subject_symbols:
-        provider_rows.extend(_collect_symbol_scope(mgr, run_date, str(symbol), evidence_rows))
-    universe_comparison = _universe_price_comparison_evidence(run_date, evidence_rows)
-    if universe_comparison:
-        evidence_rows.append(universe_comparison)
+    market_regions = _market_regions(region, all_subject_symbols)
+    for market_region in market_regions:
+        provider_rows.extend(_collect_market_scope(
+            mgr,
+            run_date,
+            market_region,
+            evidence_rows,
+            indices_only=market_only,
+        ))
+    if not market_only:
+        for symbol in subject_symbols:
+            provider_rows.extend(_collect_symbol_scope(mgr, run_date, str(symbol), evidence_rows))
+        universe_comparison = _universe_price_comparison_evidence(run_date, evidence_rows)
+        if universe_comparison:
+            evidence_rows.append(universe_comparison)
+        sector_history = _sector_history_evidence(docs, run_date, evidence_rows)
+        if sector_history:
+            evidence_rows.append(sector_history)
+        market_stats_history = _market_stats_history_evidence(docs, run_date, evidence_rows)
+        if market_stats_history:
+            evidence_rows.append(market_stats_history)
+        evidence_rows.extend(_valuation_history_evidence(docs, run_date, evidence_rows))
 
     out_dir = docs / "run_status" / run_date
     provider_path = out_dir / "subject_provider_runs.jsonl"
@@ -78,6 +109,8 @@ def collect_subject_evidence(
         "schema": "subject_evidence_collection_v1",
         "runDate": run_date,
         "market": region,
+        "marketRegions": market_regions,
+        "marketOnly": market_only,
         "symbols": subject_symbols,
         "providerRuns": len(provider_rows),
         "evidenceFacts": len(evidence_rows),
@@ -145,10 +178,11 @@ def _collect_symbol_scope(
             )
         )
 
+    fundamental_budget = _fundamental_budget_seconds(symbol)
     fundamental, fund_run = _timed_call(
         "fundamental_context",
-        lambda: mgr.get_fundamental_context(symbol, budget_seconds=8),
-        timeout_seconds=12,
+        lambda: mgr.get_fundamental_context(symbol, budget_seconds=fundamental_budget),
+        timeout_seconds=fundamental_budget + 5,
     )
     rows.extend(_provider_rows_from_context(symbol, "fundamentals", "fundamental_context", fundamental, fund_run))
     fundamental_facts = _fundamental_evidence(
@@ -158,7 +192,15 @@ def _collect_symbol_scope(
         fetched_at=str(fund_run.get("observed_at") or ""),
     )
     evidence_rows.extend(fundamental_facts)
-    if not fundamental_facts and _is_cn_equity_symbol(symbol):
+    fundamental_metrics = {str(item.get("metric") or "") for item in fundamental_facts}
+    has_valuation_ratios = _has_valuation_ratios(fundamental_facts)
+    needs_cn_supplement = _is_cn_equity_symbol(symbol) and (
+        "fundamental_growth" not in fundamental_metrics or not has_valuation_ratios
+    )
+    needs_offshore_supplement = _is_offshore_equity_symbol(symbol) and (
+        "fundamental_growth" not in fundamental_metrics or not has_valuation_ratios
+    )
+    if needs_cn_supplement:
         fallback, fallback_run = _timed_call(
             "fundamental_context_akshare_core",
             lambda: _akshare_cn_fundamental_context(symbol),
@@ -181,7 +223,31 @@ def _collect_symbol_scope(
                 record_count=len(fallback_facts),
             )
         )
-        evidence_rows.extend(fallback_facts)
+        evidence_rows.extend(_merge_fundamental_facts(fundamental_facts, fallback_facts))
+    elif needs_offshore_supplement:
+        fallback, fallback_run = _timed_call(
+            "fundamental_context_yfinance_public",
+            lambda: _yfinance_public_fundamental_context(symbol),
+            timeout_seconds=35,
+        )
+        fallback_facts = _fundamental_evidence(
+            symbol,
+            run_date,
+            fallback,
+            provider="YfinanceFundamentalAdapter",
+            fetched_at=str(fallback_run.get("observed_at") or ""),
+        )
+        rows.append(
+            _provider_row(
+                symbol,
+                "YfinanceFundamentalAdapter",
+                "fundamentals",
+                "fundamental_context_yfinance_public",
+                fallback_run,
+                record_count=len(fallback_facts),
+            )
+        )
+        evidence_rows.extend(_merge_fundamental_facts(fundamental_facts, fallback_facts))
 
     capital, capital_run = _timed_call(
         "capital_flow",
@@ -228,29 +294,43 @@ def _collect_market_scope(
     run_date: str,
     market: str,
     evidence_rows: List[Dict[str, Any]],
+    *,
+    indices_only: bool = False,
 ) -> List[Dict[str, Any]]:
     rows: List[Dict[str, Any]] = []
-    for operation, domain, fn in [
+    market = str(market or "cn").lower()
+    operations: List[Tuple[str, str, Callable[[], Any]]] = [
         ("main_indices", "price", lambda: mgr.get_main_indices(market)),
-        ("market_stats", "price", lambda: mgr.get_market_stats(purpose="daily_universe")),
-        ("sector_rankings", "news_sentiment", lambda: mgr.get_sector_rankings(n=8)),
-        ("concept_rankings", "news_sentiment", lambda: mgr.get_concept_rankings(n=8)),
-        ("hot_stocks", "news_sentiment", lambda: mgr.get_hot_stocks(n=10)),
-    ]:
-        payload, run = _timed_call(operation, fn, timeout_seconds=30)
+    ]
+    if market == "cn" and not indices_only:
+        operations.extend([
+            ("market_stats", "price", lambda: mgr.get_market_stats(purpose="daily_universe")),
+            ("sector_rankings", "news_sentiment", lambda: mgr.get_sector_rankings(n=8)),
+            ("concept_rankings", "news_sentiment", lambda: mgr.get_concept_rankings(n=8)),
+            ("hot_stocks", "news_sentiment", lambda: mgr.get_hot_stocks(n=10)),
+        ])
+    subject = "market" if market == "cn" else f"market_{market}"
+    for operation, domain, fn in operations:
+        timeout_seconds = 60 if operation == "market_stats" else 30
+        payload, run = _timed_call(operation, fn, timeout_seconds=timeout_seconds)
         count = _market_record_count(payload)
-        rows.append(_provider_row("market", "DataFetcherManager", domain, operation, run, record_count=count))
+        rows.append(_provider_row(subject, "DataFetcherManager", domain, operation, run, record_count=count))
         if count > 0:
             measurements = _market_measurements(operation, payload)
-            evidence_rows.append(
-                {
-                    "id": f"subject:market:{operation}:{run_date}",
+            fact = {
+                    "id": f"subject:{subject}:{operation}:{run_date}",
                     "domain": domain,
-                    "subject": "market",
+                    "subject": subject,
+                    "market": market,
                     "metric": operation,
                     "value": _market_evidence_value(operation, payload, count, measurements=measurements),
                     "measurements": measurements,
-                    "as_of": run_date,
+                    "as_of": _market_snapshot_date(
+                        market,
+                        run_date,
+                        str(run.get("observed_at") or ""),
+                        source_date=_market_payload_date(payload),
+                    ),
                     "fetched_at": run.get("observed_at"),
                     "provider": "DataFetcherManager",
                     "raw_path": f"run_status/{run_date}/subject_provider_runs.jsonl",
@@ -258,8 +338,73 @@ def _collect_market_scope(
                     "fact_type": "derived_fact",
                     "evidence_scope": "subject_evidence",
                 }
-            )
+            samples = _market_sample_records(payload)
+            if samples:
+                fact["records"] = samples
+            evidence_rows.append(fact)
     return rows
+
+
+def _market_regions(primary: str, symbols: Iterable[str]) -> List[str]:
+    """Return ordered market scopes required by the actual daily universe."""
+
+    from src.core.trading_calendar import get_market_for_stock
+
+    ordered: List[str] = []
+    for candidate in [str(primary or "cn").lower(), *(get_market_for_stock(str(symbol)) for symbol in symbols)]:
+        if candidate in {"cn", "hk", "us", "jp", "kr", "tw"} and candidate not in ordered:
+            ordered.append(candidate)
+    return ordered or ["cn"]
+
+
+def _market_snapshot_date(
+    market: str,
+    run_date: str,
+    observed_at: str,
+    *,
+    source_date: str = "",
+) -> str:
+    """Prefer the provider's bar date and never relabel current data as a backtest date."""
+
+    from datetime import datetime
+
+    normalized_source_date = date_part(source_date, "")
+    if normalized_source_date:
+        return normalized_source_date
+    try:
+        observed = datetime.fromisoformat(observed_at.replace("Z", "+00:00"))
+        from zoneinfo import ZoneInfo
+
+        zones = {
+            "cn": "Asia/Shanghai",
+            "hk": "Asia/Hong_Kong",
+            "us": "America/New_York",
+            "jp": "Asia/Tokyo",
+            "kr": "Asia/Seoul",
+            "tw": "Asia/Taipei",
+        }
+        local = observed.astimezone(ZoneInfo(zones.get(market, "UTC")))
+        effective = local.date()
+        if local.hour < 9:
+            from datetime import timedelta
+
+            effective -= timedelta(days=1)
+            while effective.weekday() >= 5:
+                effective -= timedelta(days=1)
+        return effective.isoformat()
+    except (KeyError, TypeError, ValueError):
+        return run_date
+
+
+def _market_payload_date(payload: Any) -> str:
+    """Extract the newest explicit exchange date from provider rows, if present."""
+
+    timestamps = [
+        first_timestamp(row, "trade_date", "date", "日期", "datetime", "timestamp")
+        for row in _records(payload)
+    ]
+    dates = [date_part(value, "") for value in timestamps if value]
+    return max((value for value in dates if value), default="")
 
 
 def _timed_call(
@@ -461,22 +606,29 @@ def _fundamental_evidence(
     if not isinstance(payload, Mapping):
         return []
     facts: List[Dict[str, Any]] = []
+    report_date, comparison_period = _fundamental_periods(payload)
     for block in ("valuation", "growth", "earnings", "institution"):
         item = payload.get(block) if isinstance(payload.get(block), Mapping) else {}
         status = str(item.get("status") or "").lower()
         data = item.get("data") if isinstance(item.get("data"), Mapping) else {}
         if status in {"ok", "success", "partial", "available"} and data:
-            measurements = _fundamental_measurements(block, data)
-            facts.append(
-                {
+            summary_data = dict(data)
+            summary_data.pop("financial_history", None)
+            measurements = _fundamental_measurements(block, summary_data)
+            as_of = (
+                str(data.get("as_of") or "")
+                if block == "valuation"
+                else report_date
+            ) or date_part(fetched_at, run_date)
+            fact = {
                     "id": f"subject:{symbol}:fundamental:{block}:{run_date}",
                     "domain": "fundamentals",
                     "symbol": symbol,
                     "subject": symbol,
                     "metric": f"fundamental_{block}",
-                    "value": f"{block} available: {_mapping_summary(data, limit=6)}",
+                    "value": f"{block} available: {_mapping_summary(summary_data, limit=6)}",
                     "measurements": measurements,
-                    "as_of": run_date,
+                    "as_of": as_of,
                     "fetched_at": fetched_at,
                     "provider": provider,
                     "raw_path": f"run_status/{run_date}/subject_evidence.jsonl",
@@ -484,8 +636,120 @@ def _fundamental_evidence(
                     "fact_type": "derived_fact",
                     "evidence_scope": "subject_evidence",
                 }
-            )
+            currency = str(data.get("currency") or payload.get("currency") or "").strip().upper()
+            if currency:
+                fact["currency"] = currency
+            if block != "valuation":
+                fact["report_period"] = str(data.get("report_date") or report_date or "")
+                fact["comparison_period"] = str(data.get("comparison_period") or comparison_period or "")
+            facts.append(fact)
+    history_fact = _fundamental_history_comparison_evidence(
+        symbol,
+        run_date,
+        payload,
+        provider=provider,
+        fetched_at=fetched_at,
+    )
+    if history_fact:
+        facts.append(history_fact)
     return facts
+
+
+def _has_valuation_ratios(facts: Iterable[Mapping[str, Any]]) -> bool:
+    """Return whether PE/PB-style valuation, not only market cap, is present."""
+
+    ratio_keys = {"trailing_pe", "forward_pe", "pe_ttm", "pe_ratio", "pe", "price_to_book", "pb_ratio", "pb"}
+    for fact in facts:
+        if str(fact.get("metric") or "") != "fundamental_valuation":
+            continue
+        measurements = fact.get("measurements") if isinstance(fact.get("measurements"), Mapping) else {}
+        if any(_number(measurements.get(key)) is not None for key in ratio_keys):
+            return True
+    return False
+
+
+def _merge_fundamental_facts(
+    primary_facts: List[Dict[str, Any]],
+    fallback_facts: Iterable[Mapping[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Merge missing fields from a generic fallback without duplicating IDs.
+
+    A primary valuation block may contain only market cap.  Treating that block
+    as complete used to discard public PE/PB fallback data.  Existing values
+    keep priority; only absent measurements are supplemented.
+    """
+
+    by_metric = {str(item.get("metric") or ""): item for item in primary_facts}
+    appended: List[Dict[str, Any]] = []
+    for raw in fallback_facts:
+        incoming = dict(raw)
+        metric = str(incoming.get("metric") or "")
+        current = by_metric.get(metric)
+        if current is None:
+            appended.append(incoming)
+            by_metric[metric] = incoming
+            continue
+        current_measurements = current.get("measurements") if isinstance(current.get("measurements"), Mapping) else {}
+        incoming_measurements = incoming.get("measurements") if isinstance(incoming.get("measurements"), Mapping) else {}
+        if metric == "fundamental_valuation":
+            # Cross-provider valuation supplementation is limited to
+            # dimensionless PE/PB ratios. Currency-denominated market cap or
+            # price fields cannot be combined without a shared currency basis.
+            allowed_keys = {
+                "trailing_pe", "forward_pe", "pe_ttm", "pe_ratio", "pe",
+                "price_to_book", "pb_ratio", "pb",
+            }
+        elif _fundamental_periods_match(current, incoming):
+            allowed_keys = set(str(key) for key in incoming_measurements)
+        else:
+            continue
+        merged = dict(current_measurements)
+        added_keys: List[str] = []
+        for key, value in incoming_measurements.items():
+            if str(key) not in allowed_keys:
+                continue
+            if key not in merged or merged.get(key) in (None, ""):
+                merged[key] = value
+                added_keys.append(str(key))
+        if not added_keys:
+            continue
+        current["measurements"] = merged
+        providers = [
+            *list(current.get("supplemental_providers") or []),
+            str(incoming.get("provider") or ""),
+        ]
+        current["supplemental_providers"] = list(dict.fromkeys(item for item in providers if item))
+        supplemental_sources = list(current.get("supplemental_sources") or [])
+        supplemental_sources.append({
+            "provider": str(incoming.get("provider") or ""),
+            "measurement_keys": added_keys,
+            "as_of": str(incoming.get("as_of") or ""),
+            "report_period": str(incoming.get("report_period") or ""),
+            "comparison_period": str(incoming.get("comparison_period") or ""),
+            "currency": str(incoming.get("currency") or ""),
+        })
+        current["supplemental_sources"] = supplemental_sources
+        current["value"] = (
+            f"{str(current.get('value') or '').rstrip('; ')}; supplemental "
+            f"{', '.join(f'{key}={_compact_number(merged[key])}' for key in added_keys[:8])}"
+        ).strip("; ")
+    return appended
+
+
+def _fundamental_periods_match(current: Mapping[str, Any], incoming: Mapping[str, Any]) -> bool:
+    """Require an explicit common reporting basis before mixing provider fields."""
+
+    current_period = str(current.get("report_period") or "")
+    incoming_period = str(incoming.get("report_period") or "")
+    if not current_period or current_period != incoming_period:
+        return False
+    current_comparison = str(current.get("comparison_period") or "")
+    incoming_comparison = str(incoming.get("comparison_period") or "")
+    if current_comparison != incoming_comparison:
+        return False
+    current_currency = str(current.get("currency") or "").upper()
+    incoming_currency = str(incoming.get("currency") or "").upper()
+    return not (current_currency and incoming_currency and current_currency != incoming_currency)
 
 
 def _akshare_cn_fundamental_context(symbol: str) -> Dict[str, Any]:
@@ -501,13 +765,137 @@ def _akshare_cn_fundamental_context(symbol: str) -> Dict[str, Any]:
         "source_chain": list(bundle.get("source_chain") or []),
         "errors": list(bundle.get("errors") or []),
     }
-    for block in ("growth", "earnings", "institution"):
+    for block in ("valuation", "growth", "earnings", "institution"):
         data = bundle.get(block) if isinstance(bundle.get(block), Mapping) else {}
         context[block] = {
             "status": "partial" if data else "not_supported",
             "data": dict(data),
         }
     return context
+
+
+def _yfinance_public_fundamental_context(symbol: str) -> Dict[str, Any]:
+    """Generic free fallback for non-mainland equities, not a ticker special case."""
+
+    from data_provider.yfinance_fundamental_adapter import YfinanceFundamentalAdapter
+
+    bundle = YfinanceFundamentalAdapter().get_fundamental_bundle(symbol)
+    if not isinstance(bundle, Mapping):
+        return {}
+    context: Dict[str, Any] = {
+        "status": bundle.get("status") or "not_supported",
+        "source_chain": list(bundle.get("source_chain") or []),
+        "errors": list(bundle.get("errors") or []),
+    }
+    for block in ("valuation", "growth", "earnings", "institution"):
+        data = bundle.get(block) if isinstance(bundle.get(block), Mapping) else {}
+        context[block] = {
+            "status": "partial" if data else "not_supported",
+            "data": dict(data),
+        }
+    return context
+
+
+def _fundamental_budget_seconds(symbol: str) -> int:
+    """Offshore public statements need more time than lightweight CN abstracts."""
+
+    return 24 if _is_offshore_equity_symbol(symbol) else 12
+
+
+def _is_offshore_equity_symbol(symbol: str) -> bool:
+    from src.core.trading_calendar import get_market_for_stock
+
+    return get_market_for_stock(str(symbol)) in {"us", "hk", "jp", "kr", "tw"}
+
+
+def _fundamental_periods(payload: Mapping[str, Any]) -> Tuple[str, str]:
+    earnings = payload.get("earnings") if isinstance(payload.get("earnings"), Mapping) else {}
+    data = earnings.get("data") if isinstance(earnings.get("data"), Mapping) else earnings
+    report = data.get("financial_report") if isinstance(data.get("financial_report"), Mapping) else {}
+    return str(report.get("report_date") or ""), str(report.get("comparison_period") or "")
+
+
+def _fundamental_history_comparison_evidence(
+    symbol: str,
+    run_date: str,
+    payload: Mapping[str, Any],
+    *,
+    provider: str,
+    fetched_at: str,
+) -> Dict[str, Any] | None:
+    """Fetch history online, compare matching periods locally and deterministically."""
+
+    earnings = payload.get("earnings") if isinstance(payload.get("earnings"), Mapping) else {}
+    data = earnings.get("data") if isinstance(earnings.get("data"), Mapping) else earnings
+    raw_history = data.get("financial_history") if isinstance(data.get("financial_history"), list) else []
+    history = [dict(row) for row in raw_history if isinstance(row, Mapping) and row.get("report_date")]
+    history.sort(key=lambda row: str(row.get("report_date") or ""), reverse=True)
+    if len(history) < 2:
+        return None
+    latest = history[0]
+    latest_date = str(latest.get("report_date") or "")
+    prior_date = ""
+    try:
+        prior_date = f"{int(latest_date[:4]) - 1:04d}{latest_date[4:]}"
+    except (TypeError, ValueError):
+        pass
+    prior = next((row for row in history[1:] if str(row.get("report_date") or "") == prior_date), None)
+    if prior is None:
+        return None
+    measurements: Dict[str, float] = {"period_count": float(len(history))}
+    comparisons: Dict[str, float] = {}
+    transitions: Dict[str, str] = {}
+    if prior:
+        for field, output in (
+            ("revenue", "revenue_yoy_pct"),
+            ("net_profit_parent", "net_profit_yoy_pct"),
+            ("operating_cash_flow", "operating_cash_flow_yoy_pct"),
+        ):
+            current_value = _number(latest.get(field))
+            prior_value = _number(prior.get(field))
+            if current_value is None or prior_value is None:
+                continue
+            if prior_value > 0 and current_value >= 0:
+                comparisons[output] = round((current_value / prior_value - 1.0) * 100.0, 4)
+            elif prior_value < 0 < current_value:
+                transitions[field] = "turned_positive"
+            elif prior_value < 0 and current_value < 0:
+                transitions[field] = "loss_narrowed" if current_value > prior_value else "loss_widened"
+            elif prior_value > 0 > current_value:
+                transitions[field] = "turned_negative"
+            else:
+                transitions[field] = "not_comparable"
+    if not comparisons and not transitions:
+        return None
+    measurements.update(comparisons)
+    parts = [
+        f"periods={len(history)}",
+        f"latest_report={latest_date}",
+        f"comparison_report={prior_date}",
+    ]
+    parts.extend(f"{key}={_compact_number(value)}" for key, value in comparisons.items())
+    parts.extend(f"{key}_transition={value}" for key, value in transitions.items())
+    return {
+        "id": f"subject:{symbol}:fundamental:history_comparison:{run_date}",
+        "domain": "fundamentals",
+        "symbol": symbol,
+        "subject": symbol,
+        "metric": "fundamental_history_comparison",
+        "value": " ".join(parts),
+        "measurements": measurements,
+        "transitions": transitions,
+        "history": history[:12],
+        "as_of": latest_date or run_date,
+        "report_period": latest_date,
+        "comparison_period": prior_date,
+        "comparison_method": "online_history_local_same_period_comparison",
+        "fetched_at": fetched_at,
+        "provider": provider,
+        "raw_path": f"run_status/{run_date}/subject_evidence.jsonl",
+        "confidence": "medium",
+        "fact_type": "derived_fact",
+        "evidence_scope": "subject_evidence",
+    }
 
 
 def _fundamental_measurements(block: str, data: Mapping[str, Any]) -> Dict[str, float]:
@@ -613,6 +1001,32 @@ def _market_record_count(value: Any) -> int:
     if isinstance(value, Mapping):
         return len(value)
     return 0
+
+
+def _market_sample_records(value: Any, *, limit: int = 20) -> List[Dict[str, Any]]:
+    """Keep a compact normalized sample for local multi-day comparisons."""
+
+    rows: List[Dict[str, Any]] = []
+    if isinstance(value, tuple) and len(value) == 2 and all(isinstance(item, list) for item in value):
+        for side, collection in zip(("top", "bottom"), value):
+            for rank, item in enumerate(collection, start=1):
+                if isinstance(item, Mapping):
+                    row = dict(item)
+                    row["rank_side"] = side
+                    row["rank"] = rank
+                    rows.append(row)
+    else:
+        rows = _records(value)
+    compact: List[Dict[str, Any]] = []
+    for row in rows[: max(1, limit)]:
+        item = {
+            str(key): value
+            for key, value in row.items()
+            if value not in (None, "", [], {}) and isinstance(value, (str, int, float, bool))
+        }
+        if item:
+            compact.append(item)
+    return compact
 
 
 def _records(value: Any) -> List[Dict[str, Any]]:
@@ -764,6 +1178,304 @@ def _universe_price_comparison_evidence(run_date: str, facts: Iterable[Mapping[s
         "fact_type": "derived_fact",
         "evidence_scope": "subject_evidence",
     }
+
+
+def _sector_history_evidence(
+    docs: Path,
+    run_date: str,
+    current_facts: Sequence[Mapping[str, Any]],
+    *,
+    lookback_runs: int = 20,
+) -> Dict[str, Any] | None:
+    """Build sector persistence from locally retained daily online snapshots."""
+
+    snapshots: List[Tuple[str, List[Dict[str, Any]]]] = []
+    current = next(
+        (
+            row
+            for row in current_facts
+            if str(row.get("metric") or "") == "sector_rankings"
+            and isinstance(row.get("records"), list)
+        ),
+        None,
+    )
+    if current:
+        snapshots.append((run_date, [dict(row) for row in current.get("records") or [] if isinstance(row, Mapping)]))
+    run_root = docs / "run_status"
+    if run_root.exists():
+        prior_dates = sorted(
+            (
+                path.name
+                for path in run_root.iterdir()
+                if path.is_dir() and path.name < run_date
+            ),
+            reverse=True,
+        )[: max(0, lookback_runs - 1)]
+        for prior_date in prior_dates:
+            prior_rows = _read_jsonl(run_root / prior_date / "subject_evidence.jsonl")
+            prior = next(
+                (
+                    row
+                    for row in prior_rows
+                    if str(row.get("metric") or "") == "sector_rankings"
+                    and isinstance(row.get("records"), list)
+                ),
+                None,
+            )
+            if prior:
+                snapshots.append(
+                    (prior_date, [dict(row) for row in prior.get("records") or [] if isinstance(row, Mapping)])
+                )
+    if len(snapshots) < 2:
+        return None
+    counts: Dict[str, Dict[str, int]] = {}
+    for _date, rows in snapshots:
+        seen: Set[str] = set()
+        for row in rows:
+            name = str(_first_present(row, "name", "名称", "板块名称", "行业名称") or "").strip()
+            if not name or name in seen:
+                continue
+            seen.add(name)
+            bucket = counts.setdefault(name, {"appearances": 0, "top": 0, "bottom": 0})
+            bucket["appearances"] += 1
+            side = str(row.get("rank_side") or "")
+            if side in {"top", "bottom"}:
+                bucket[side] += 1
+    ranked = sorted(
+        (
+            {"name": name, **stats}
+            for name, stats in counts.items()
+            if stats["appearances"] >= 2
+        ),
+        key=lambda row: (row["appearances"], row["top"] - row["bottom"], row["name"]),
+        reverse=True,
+    )[:12]
+    if not ranked:
+        return None
+    leaders = [row for row in ranked if row["top"] > row["bottom"]][:5]
+    laggards = [row for row in ranked if row["bottom"] > row["top"]][:5]
+    value = (
+        f"local_sector_history days={len(snapshots)}; "
+        f"repeated_leaders={', '.join(row['name'] for row in leaders) or 'none'}; "
+        f"repeated_laggards={', '.join(row['name'] for row in laggards) or 'none'}"
+    )
+    return {
+        "id": f"subject:market:sector_history_comparison:{run_date}",
+        "domain": "news_sentiment",
+        "subject": "market",
+        "market": "cn",
+        "metric": "sector_history_comparison",
+        "value": value,
+        "history": ranked,
+        "observed_dates": [date for date, _rows in snapshots],
+        "as_of": run_date,
+        "provider": "LocalResearchHistory",
+        "raw_path": f"run_status/{run_date}/subject_evidence.jsonl",
+        "confidence": "medium",
+        "fact_type": "derived_fact",
+        "evidence_scope": "subject_evidence",
+        "comparison_method": "local_snapshot_comparison",
+    }
+
+
+def _market_stats_history_evidence(
+    docs: Path,
+    run_date: str,
+    current_facts: Sequence[Mapping[str, Any]],
+    *,
+    lookback_runs: int = 60,
+) -> Dict[str, Any] | None:
+    """Compare locally retained A-share breadth snapshots across daily runs."""
+
+    snapshots: List[Tuple[str, Dict[str, float]]] = []
+
+    def add_snapshot(observed_date: str, facts: Sequence[Mapping[str, Any]]) -> None:
+        row = next(
+            (
+                item for item in facts
+                if str(item.get("metric") or "") == "market_stats"
+                and str(item.get("subject") or "").lower() in {"market", "market_cn"}
+            ),
+            None,
+        )
+        if not row:
+            return
+        measurements = row.get("measurements") if isinstance(row.get("measurements"), Mapping) else {}
+        numeric = {
+            key: value
+            for key in ("up_count", "down_count", "flat_count", "total_amount_100m_cny")
+            if (value := _number(measurements.get(key))) is not None
+        }
+        up = numeric.get("up_count")
+        down = numeric.get("down_count")
+        flat = numeric.get("flat_count", 0.0)
+        total = (up or 0.0) + (down or 0.0) + flat
+        if up is not None and down is not None and total > 0:
+            numeric["advancers_pct"] = round(up / total * 100.0, 2)
+        if numeric:
+            snapshots.append((observed_date, numeric))
+
+    add_snapshot(run_date, current_facts)
+    run_root = docs / "run_status"
+    if run_root.exists():
+        for prior_date in sorted(
+            (path.name for path in run_root.iterdir() if path.is_dir() and path.name < run_date),
+            reverse=True,
+        )[: max(0, lookback_runs - 1)]:
+            add_snapshot(prior_date, _read_jsonl(run_root / prior_date / "subject_evidence.jsonl"))
+    snapshots = sorted({date: values for date, values in snapshots}.items())
+    if len(snapshots) < 2:
+        return None
+
+    latest_date, latest = snapshots[-1]
+    prior_date, prior = snapshots[-2]
+    measurements: Dict[str, float] = {"observation_count": float(len(snapshots))}
+    parts = [f"observations={len(snapshots)}", f"latest={latest_date}", f"previous={prior_date}"]
+    for metric in ("advancers_pct", "total_amount_100m_cny"):
+        current = latest.get(metric)
+        previous = prior.get(metric)
+        if current is None:
+            continue
+        measurements[metric] = current
+        parts.append(f"{metric}={_compact_number(current)}")
+        if previous is not None:
+            delta = current - previous
+            measurements[f"{metric}_delta_previous"] = round(delta, 4)
+            parts.append(f"{metric}_delta_previous={_compact_number(delta)}")
+        values = [row.get(metric) for _date, row in snapshots if row.get(metric) is not None]
+        if len(values) >= 20:
+            percentile = sum(1 for value in values if value <= current) / len(values) * 100.0
+            measurements[f"{metric}_local_run_percentile"] = round(percentile, 2)
+    return {
+        "id": f"subject:market:market_stats_history_comparison:{run_date}",
+        "domain": "price",
+        "subject": "market",
+        "market": "cn",
+        "metric": "market_stats_history_comparison",
+        "value": " ".join(parts),
+        "measurements": measurements,
+        "observed_dates": [date for date, _values in snapshots],
+        "as_of": run_date,
+        "provider": "LocalResearchHistory",
+        "raw_path": f"run_status/{run_date}/subject_evidence.jsonl",
+        "confidence": "medium",
+        "fact_type": "derived_fact",
+        "evidence_scope": "subject_evidence",
+        "comparison_method": "local_snapshot_comparison",
+    }
+
+
+def _valuation_history_evidence(
+    docs: Path,
+    run_date: str,
+    current_facts: Sequence[Mapping[str, Any]],
+    *,
+    lookback_runs: int = 60,
+) -> List[Dict[str, Any]]:
+    """Compare generic current valuation snapshots retained by prior runs.
+
+    This is intentionally a local run-history comparison, not a claimed
+    multi-year market percentile.  Percentiles are emitted only after at least
+    20 dated observations exist for the same symbol and metric.
+    """
+
+    snapshots: List[Tuple[str, Sequence[Mapping[str, Any]]]] = [(run_date, current_facts)]
+    run_root = docs / "run_status"
+    if run_root.exists():
+        prior_dates = sorted(
+            (
+                path.name
+                for path in run_root.iterdir()
+                if path.is_dir() and path.name < run_date
+            ),
+            reverse=True,
+        )[: max(0, lookback_runs - 1)]
+        for prior_date in prior_dates:
+            snapshots.append((prior_date, _read_jsonl(run_root / prior_date / "subject_evidence.jsonl")))
+
+    by_symbol: Dict[str, List[Dict[str, Any]]] = {}
+    for observed_date, facts in snapshots:
+        seen_symbols: Set[str] = set()
+        for fact in facts:
+            if str(fact.get("metric") or "") != "fundamental_valuation":
+                continue
+            symbol = str(fact.get("symbol") or fact.get("subject") or "").strip().upper()
+            if not symbol or symbol in seen_symbols:
+                continue
+            measurements = fact.get("measurements") if isinstance(fact.get("measurements"), Mapping) else {}
+            pe = _first_number(measurements, "trailing_pe", "pe_ttm", "pe_ratio", "pe")
+            pb = _first_number(measurements, "price_to_book", "pb_ratio", "pb")
+            if pe is None and pb is None:
+                continue
+            by_symbol.setdefault(symbol, []).append({
+                "date": observed_date,
+                "as_of": str(fact.get("as_of") or observed_date),
+                "pe": pe,
+                "pb": pb,
+            })
+            seen_symbols.add(symbol)
+
+    output: List[Dict[str, Any]] = []
+    for symbol, observations in by_symbol.items():
+        observations.sort(key=lambda row: row["date"])
+        if len(observations) < 2:
+            continue
+        latest = observations[-1]
+        previous = observations[-2]
+        measurements: Dict[str, float] = {"observation_count": float(len(observations))}
+        parts = [f"observations={len(observations)}", f"latest={latest['date']}", f"previous={previous['date']}"]
+        eligible_metrics: List[str] = []
+        for metric in ("pe", "pb"):
+            latest_value = _number(latest.get(metric))
+            previous_value = _number(previous.get(metric))
+            if latest_value is None:
+                continue
+            measurements[f"latest_{metric}"] = latest_value
+            parts.append(f"latest_{metric}={_compact_number(latest_value)}")
+            if previous_value not in (None, 0):
+                change_pct = (latest_value / abs(previous_value) - 1.0) * 100.0
+                measurements[f"{metric}_change_since_prior_run_pct"] = round(change_pct, 4)
+                parts.append(f"{metric}_change_since_prior_run_pct={_compact_number(change_pct)}")
+            values = [_number(row.get(metric)) for row in observations]
+            clean_values = [value for value in values if value is not None]
+            if len(clean_values) >= 20:
+                rank = sum(1 for value in clean_values if value <= latest_value) / len(clean_values) * 100.0
+                measurements[f"{metric}_local_run_percentile"] = round(rank, 2)
+                parts.append(f"{metric}_local_run_percentile={_compact_number(rank)}")
+                eligible_metrics.append(metric)
+        measurements["valuation_percentile_eligible"] = 1.0 if eligible_metrics else 0.0
+        output.append({
+            "id": f"subject:{symbol}:fundamental:valuation_history:{run_date}",
+            "domain": "fundamentals",
+            "symbol": symbol,
+            "subject": symbol,
+            "metric": "valuation_history_comparison",
+            "value": " ".join(parts),
+            "measurements": measurements,
+            "history": observations,
+            "observed_dates": [row["date"] for row in observations],
+            "sample_count": len(observations),
+            "sample_start": observations[0]["date"],
+            "sample_end": observations[-1]["date"],
+            "percentile_status": "eligible" if eligible_metrics else "insufficient_sample",
+            "eligible_metrics": eligible_metrics,
+            "as_of": str(latest.get("as_of") or run_date),
+            "provider": "LocalResearchHistory",
+            "raw_path": f"run_status/{run_date}/subject_evidence.jsonl",
+            "confidence": "medium",
+            "fact_type": "derived_fact",
+            "evidence_scope": "subject_evidence",
+            "comparison_method": "local_dated_valuation_snapshots",
+        })
+    return output
+
+
+def _first_number(value: Mapping[str, Any], *keys: str) -> float | None:
+    for key in keys:
+        number = _number(value.get(key))
+        if number is not None:
+            return number
+    return None
 
 
 def _latest_row_date(rows: List[Dict[str, Any]]) -> str:

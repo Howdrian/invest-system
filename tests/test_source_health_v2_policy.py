@@ -158,6 +158,32 @@ def test_claim_evidence_supports_verified_or_derived_but_not_discovery_for_core_
     assert discovery_only["claimPolicy"]["mustShowCaveat"] is True
 
 
+def test_position_sizing_requires_claim_supporting_portfolio_evidence():
+    from src.source_health.policy import build_source_health_v2
+
+    facts = [
+        _verified_fact("price", 1),
+        _verified_fact("fundamentals", 2),
+        _verified_fact("macro", 3),
+        {
+            "id": "daily_universe:portfolio_snapshot_status:2099-01-02",
+            "domain": "portfolio",
+            "fact_type": "derived_fact",
+            "provider": "DailyUniverse",
+            "raw_path": "run_status/2099-01-02/daily_universe.json",
+            "as_of": "2099-01-02",
+            "supports_claims": False,
+        },
+    ]
+
+    health = build_source_health_v2({}, evidence_facts=facts)
+
+    claim = health["claimEvidence"]["claims"]["position_sizing"]
+    assert claim["status"] == "partial"
+    assert claim["missingDomains"] == ["portfolio"]
+    assert health["claimPolicy"]["canPositionSizing"] is False
+
+
 def test_position_sizing_is_disabled_when_missing_critical_facts_exceed_threshold():
     from src.source_health.policy import POSITION_SIZING_MISSING_CRITICAL_THRESHOLD, build_source_health_v2
 

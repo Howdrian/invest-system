@@ -7,6 +7,7 @@ from src.daily_department_agents import run_daily_department_agents
 from src.daily_department_llm import (
     DEPARTMENT_SPECS,
     _build_context,
+    _apply_semantic_gate_to_memo,
     _compact_universe_for_spec,
     _compact_evidence_row,
     _department_prompt,
@@ -51,18 +52,26 @@ class FakeDepartmentBackend:
     def __init__(self, *, hallucinate: bool = False):
         self.hallucinate = hallucinate
         self.calls = []
+        self.generation_configs = []
 
     def generate(self, prompt, generation_config, *, system_prompt=None, stream=False, stream_progress_callback=None, response_validator=None, audit_context=None):
         payload = json.loads(prompt)
         agent = payload['agent']
         self.calls.append(agent)
+        self.generation_configs.append(dict(generation_config or {}))
         refs = payload.get('allowedEvidenceRefs') or []
-        evidence_refs = [str(row.get('id')) for row in payload.get('evidence') or [] if row.get('id')]
+        evidence_rows = [row for row in payload.get('evidence') or [] if isinstance(row, dict) and row.get('id')]
+        evidence_refs = [str(row.get('id')) for row in evidence_rows]
         ref = 'missing:evidence' if self.hallucinate else (evidence_refs[0] if evidence_refs else (refs[0] if refs else ''))
+        evidence_value = str(evidence_rows[0].get('value') or '本轮直接证据已更新') if evidence_rows else '本轮直接证据已更新'
+        supported_claim = f'本轮直接证据记录：{evidence_value}。'
         output = {
             'agent': agent,
-            'summary_for_reader': f'{agent} 已基于证据池完成本部门判断：保持分层观察，等待价格、公告和风险信号共振。',
-            'key_claims': ['证据池已被读取', '结论不依赖搜索线索直接升级事实', '当前更适合观察和复核'],
+            'summary_for_reader': f'本部门复核到{supported_claim}在其他直接证据形成一致方向前，本轮维持分层观察。',
+            'key_claims': [
+                {'claim': supported_claim, 'evidence_ids': [ref]},
+                {'claim': '当前证据只支持观察，不足以外推为跨市场一致方向。', 'evidence_ids': [ref]},
+            ],
             'evidence_ids': [ref],
             'counterpoints': ['若证据过时或公告缺失，结论需要下调置信度'],
             'data_gaps': [],
@@ -150,12 +159,13 @@ def test_run_daily_department_agents_writes_raw_cio_and_departments(tmp_path):
 
 def test_run_llm_daily_department_agents_writes_llm_memos_and_runtime_ledger(tmp_path):
     docs, reports, date = _daily_agent_fixture(tmp_path)
+    backend = FakeDepartmentBackend()
 
     result = run_llm_daily_department_agents(
         docs,
         date,
         runtime_reports_dir=reports,
-        backend_factory=lambda: FakeDepartmentBackend(),
+        backend_factory=lambda: backend,
         require_all_llm=True,
     )
 
@@ -175,6 +185,9 @@ def test_run_llm_daily_department_agents_writes_llm_memos_and_runtime_ledger(tmp
     assert result['retryCount'] == 0
     assert result['llmElapsedSeconds'] >= 0
     assert result['tokenUsage']['totalTokens'] == 462
+    # CIO may perform one controlled second pass after the department run.
+    assert len(backend.generation_configs) >= 11
+    assert all(config.get('response_format') == 'json_object' for config in backend.generation_configs)
     cio = json.loads((docs / 'agent_memos' / date / 'market' / '11_cio_report.json').read_text(encoding='utf-8'))
     assert cio['agentRuntime'] == 'LLM'
     assert cio['runtime_kind'] == 'llm_department_agent_v1'
@@ -273,7 +286,7 @@ def test_daily_artifact_prefers_raw_cio_department(tmp_path):
     artifact = build_daily_report_artifact(docs, date)
 
     assert artifact['agentOrigins']['raw'] == 1
-    assert artifact['readerBrief']['finalConclusion'] == '今日结论：CIO 已完成汇总。'
+    assert artifact['readerBrief']['finalConclusion'].rstrip('。') == '今日结论：CIO 已完成汇总'
     assert any(row['agent'] == 'CIOAgent' and row['readerVisible'] for row in artifact['departmentReports'])
 
 
@@ -328,16 +341,27 @@ def test_department_prompt_is_scoped_to_agent_domain(tmp_path):
 
     prompt = json.loads(_department_prompt(macro, context, {}, refs, previous_error=''))
 
-    assert prompt['upstreamStockSummaries'] == []
-    assert 'stock' not in prompt['reportExcerpts']
-    assert prompt['reportExcerpts'] == {}
+    for removed_key in (
+        'providerSummary',
+        'upstreamStockSummaries',
+        'marketSnapshot',
+        'officialEventsSummary',
+        'reportExcerpts',
+        'qualityBar',
+    ):
+        assert removed_key not in prompt
     assert 'MARKET_ONLY_SECRET_CONTEXT' not in json.dumps(prompt, ensure_ascii=False)
     assert 'STOCK_ONLY_SECRET_PRICE_CONTEXT' not in json.dumps(prompt, ensure_ascii=False)
     assert 'subject:600519:quote' not in prompt['allowedEvidenceRefs']
+    assert 'dailyUniverse' not in prompt['allowedEvidenceRefs']
+    assert not any(ref.startswith('kind:') for ref in prompt['allowedEvidenceRefs'])
+    assert all(ref in {row['id'] for row in prompt['evidence']} for ref in prompt['allowedEvidenceRefs'])
     assert set(prompt['sourceHealth']['domains']).issubset({'macro'})
     assert prompt['departmentInputProfile']['inputProfile'] == 'macro'
-    assert '10Y-3M' in prompt['qualityBar']['macroMethod']
-    assert '联邦基金利率' in prompt['qualityBar']['macroMethod']
+    rules = '\n'.join(prompt['analysisRules'])
+    assert '10Y-3M' in rules
+    assert '联邦基金利率' in rules
+    assert prompt['outputContract']['format'] == 'json_object'
 
 
 def test_technical_prompt_requires_actual_structure_not_row_count(tmp_path):
@@ -348,8 +372,10 @@ def test_technical_prompt_requires_actual_structure_not_row_count(tmp_path):
 
     prompt = json.loads(_department_prompt(technical, context, {}, refs, previous_error=''))
 
-    assert 'returned N rows' in prompt['qualityBar']['technicalEvidence']
-    assert '破位' in prompt['qualityBar']['technicalEvidence']
+    rules = '\n'.join(prompt['analysisRules'])
+    assert 'returned N rows' in rules
+    assert '破位' in rules
+    assert '10Y-3M' not in rules
 
 
 def test_cio_prompt_calibrates_systemic_risk_and_intraday_language(tmp_path):
@@ -360,10 +386,75 @@ def test_cio_prompt_calibrates_systemic_risk_and_intraday_language(tmp_path):
 
     prompt = json.loads(_department_prompt(cio, context, {}, refs, previous_error=''))
 
-    assert '至少两类直接证据' in prompt['qualityBar']['systemicRiskCalibration']
-    assert any('红队观点不能因更悲观而自动胜出' in item for item in prompt['rolePlaybook']['mustAnswer'])
-    assert 'session_phase=intraday' in prompt['qualityBar']['temporalDiscipline']
-    assert '当前更符合/基准解释是' in prompt['qualityBar']['decisiveWording']
+    rules = '\n'.join(prompt['analysisRules'])
+    assert '至少两类直接证据' in rules
+    assert '红队不能因更悲观而自动胜出' in rules
+    assert 'session_phase=intraday' in rules
+    assert '当前更符合/基准解释是' in rules
+    assert 'range_position_pct=100' in rules
+    assert '必须消解部门冲突' in rules
+    assert 'originalAnalysisRefs' not in prompt
+    assert 'originalAnalysisSummary' not in prompt
+
+
+def test_department_prompt_does_not_repeat_role_avoid_rules_in_analysis_rules(tmp_path):
+    docs, reports, date = _daily_agent_fixture(tmp_path)
+    context = _build_context(docs, date, reports)
+    sector = next(spec for spec in DEPARTMENT_SPECS if spec.agent == 'SectorAgent')
+    refs = _valid_refs_for_spec(context, sector, {})
+
+    prompt = json.loads(_department_prompt(sector, context, {}, refs, previous_error=''))
+
+    assert prompt['rolePlaybook']['avoid']
+    assert set(prompt['rolePlaybook']['avoid']).isdisjoint(prompt['analysisRules'])
+    assert len(prompt['analysisRules']) == len(set(prompt['analysisRules']))
+
+
+def test_first_wave_prompt_never_receives_unrelated_previous_department_outputs(tmp_path):
+    docs, reports, date = _daily_agent_fixture(tmp_path)
+    context = _build_context(docs, date, reports)
+    technical = next(spec for spec in DEPARTMENT_SPECS if spec.agent == 'TechnicalAgent')
+    previous = {
+        'MacroAgent': {
+            'agent': 'MacroAgent',
+            'summary_for_reader': '不应进入技术部门的宏观结论',
+            'key_claims': ['不应进入技术部门的宏观结论'],
+        },
+    }
+    refs = _valid_refs_for_spec(context, technical, previous)
+
+    prompt = json.loads(_department_prompt(technical, context, previous, refs, previous_error=''))
+
+    assert prompt['previousDepartmentOutputs'] == {}
+    assert '不应进入技术部门' not in json.dumps(prompt, ensure_ascii=False)
+
+
+def test_cio_adjudication_uses_red_team_competing_scenario_when_model_omits_it():
+    from src.daily_department_llm import _complete_cio_adjudication
+
+    memo = {
+        'summary_for_reader': '当前更符合结构分化，维持观察。',
+        'key_claims': ['指数普遍承压，但信用利差未恶化。'],
+        'adjudication': {
+            'baseCase': '结构分化',
+            'judgment': '维持观察',
+            'why': '指数与信用证据更支持结构分化。',
+        },
+    }
+    previous = {
+        'RedTeamAgent': {
+            'challenges': [{
+                'opposingScenario': '若市场宽度和信用同步恶化，可能转为系统性收缩。',
+                'falsifier': '市场宽度持续改善。',
+            }],
+        },
+    }
+
+    _complete_cio_adjudication(memo, previous)
+
+    assert memo['adjudication']['strongestAlternative'].startswith('若市场宽度')
+    assert memo['adjudication']['invalidationTriggers'] == ['市场宽度持续改善。']
+    assert 'strongestAlternative' in memo['adjudicationNormalizedFields']
 
 
 def test_department_evidence_selection_balances_domains_and_symbols():
@@ -625,6 +716,50 @@ def test_cio_context_always_contains_canonical_market_snapshot():
 
     assert 'subject:market:market_stats:2026-07-15' in ids
     assert 'subject:market:main_indices:2026-07-15' in ids
+
+
+def test_market_prompt_prioritizes_each_available_market_index_scope():
+    market = next(spec for spec in DEPARTMENT_SPECS if spec.agent == 'MarketAgent')
+    rows = [
+        {
+            'id': f'subject:{subject}:main_indices:2026-07-17',
+            'domain': 'price',
+            'subject': subject,
+            'market': region,
+            'metric': 'main_indices',
+            'fact_type': 'derived_fact',
+            'value': f'{region} main indices',
+        }
+        for subject, region in (('market', 'cn'), ('market_hk', 'hk'), ('market_us', 'us'))
+    ]
+    selected = _prompt_evidence_for_spec({'evidence': rows}, market, {})
+
+    assert {row['market'] for row in selected} == {'cn', 'hk', 'us'}
+
+
+def test_rejected_detail_claim_cannot_reenter_public_summary_through_all_memo_refs():
+    spec = next(spec for spec in DEPARTMENT_SPECS if spec.agent == 'GeoPolicyAgent')
+    memo = {
+        'summary_for_reader': '美国商务部发布出口限制公告。该限制将直接导致AAPL下跌。',
+        'key_claims': ['美国商务部发布出口限制公告。', '该限制将直接导致AAPL下跌。'],
+        'evidence_ids': ['official:bis:1', 'subject:AAPL:quote'],
+        'claim_evidence': [
+            {'claim': '美国商务部发布出口限制公告。', 'claimType': 'fact', 'subject': 'macro', 'domain': 'filings_events', 'evidence_ids': ['official:bis:1']},
+            {'claim': '该限制将直接导致AAPL下跌。', 'claimType': 'interpretation', 'subject': 'MSFT', 'domain': 'price', 'evidence_ids': ['official:bis:1', 'subject:AAPL:quote']},
+        ],
+        'counterpoints': ['若公司供应链不受限制，价格影响可能很小。'],
+        'next_action': '复核公司公告与供应链暴露。',
+        'data_gaps': [],
+    }
+    evidence = [
+        {'id': 'official:bis:1', 'fact_type': 'verified_fact', 'domain': 'filings_events', 'subject': 'macro', 'provider': 'BIS', 'value': '美国商务部发布出口限制公告', 'source_url': 'https://www.bis.gov/example'},
+        {'id': 'subject:AAPL:quote', 'fact_type': 'derived_fact', 'domain': 'price', 'subject': 'AAPL', 'metric': 'realtime_quote', 'value': 'AAPL change_pct=-1.0', 'raw_path': 'raw.json'},
+    ]
+
+    _apply_semantic_gate_to_memo(memo, spec, evidence)
+
+    assert '将直接导致' not in memo['summary_for_reader']
+    assert '美国商务部发布出口限制公告' in memo['summary_for_reader']
 
 
 def test_structured_claims_keep_claim_level_evidence_mapping():

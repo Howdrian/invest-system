@@ -133,12 +133,59 @@ def build_scenario_adjudication(
     triggers = _text_list(cio.get("nextActions") or cio.get("nextAction") or cio.get("next_action"), limit=3)
 
     if use_model_adjudication:
-        shared = _text_list(model_adjudication.get("sharedFacts"), limit=3) or shared
-        base_case = _text(model_adjudication.get("baseCase")) or base_case
-        alternative = _text(model_adjudication.get("strongestAlternative")) or alternative
-        judgment = _text(model_adjudication.get("judgment")) or judgment
-        why = _text(model_adjudication.get("why")) or why
-        triggers = _text_list(model_adjudication.get("invalidationTriggers"), limit=3) or triggers
+        shared = _adjudication_field_texts(
+            adjudication_audit,
+            "sharedFacts",
+            fallback=model_adjudication.get("sharedFacts"),
+            limit=3,
+        ) or shared
+        # A model adjudication is a scenario editor, not a fresh evidence
+        # source.  Fields softened because of unsupported flow, valuation or
+        # causal language must not outrank the already validated atomic CIO
+        # claims in the public report.
+        model_judgment = _adjudication_field_text(
+            adjudication_audit,
+            "judgment",
+            fallback=model_adjudication.get("judgment"),
+        )
+        # Use the gate's safe text even when the field remains a hypothesis.
+        # A base case is allowed to be an interpretation; it must not silently
+        # inherit unrelated prose from the CIO judgment block.
+        audited_base_case = _adjudication_field_text(
+            adjudication_audit,
+            "baseCase",
+            fallback=model_adjudication.get("baseCase"),
+        )
+        base_case = (
+            audited_base_case
+            if _adjudication_field_is_clean(adjudication_audit, "baseCase")
+            or _adjudication_field_has_safe_text(adjudication_audit, "baseCase")
+            else model_judgment
+        ) or model_judgment or base_case
+        alternative = _adjudication_field_text(
+            adjudication_audit,
+            "strongestAlternative",
+            fallback=model_adjudication.get("strongestAlternative"),
+        ) or alternative
+        if _adjudication_field_status(adjudication_audit, "strongestAlternative") in {"hypothesis", "disputed"}:
+            alternative = _conditional_scenario(alternative)
+        judgment = model_judgment or judgment
+        validated_cio_reasons = _validated_claim_texts(cio, statuses={"supported", "partial"}, limit=2)
+        why = (
+            _adjudication_field_text(
+                adjudication_audit,
+                "why",
+                fallback=model_adjudication.get("why"),
+            )
+            if _adjudication_field_is_clean(adjudication_audit, "why")
+            else "；".join(validated_cio_reasons)
+        ) or why
+        triggers = _adjudication_field_texts(
+            adjudication_audit,
+            "invalidationTriggers",
+            fallback=model_adjudication.get("invalidationTriggers"),
+            limit=3,
+        ) or triggers
 
     return {
         "schema": "scenario_adjudication_v1",
@@ -232,16 +279,20 @@ def _supported_claims(rows: Sequence[Mapping[str, Any]], *, limit: int) -> List[
         if str(row.get("agent") or "") in {"CIOAgent", "DecisionReportAgent", "RedTeamAgent", "RedBlueAgent"}:
             continue
         semantic = row.get("semanticValidation") or row.get("semantic_validation")
+        if not isinstance(semantic, Mapping):
+            continue
         accepted_ids = {
             str(item.get("claimId") or "")
-            for item in (semantic.get("claims") if isinstance(semantic, Mapping) else []) or []
+            for item in semantic.get("claims") or []
             if isinstance(item, Mapping) and str(item.get("status") or "") == "supported"
         }
+        if not accepted_ids:
+            continue
         mappings = row.get("claimEvidence") or row.get("claim_evidence") or []
         for mapping in mappings:
             if not isinstance(mapping, Mapping):
                 continue
-            if accepted_ids and str(mapping.get("claimId") or "") not in accepted_ids:
+            if str(mapping.get("claimId") or "") not in accepted_ids:
                 continue
             text = _text(mapping.get("claim"))
             if text and text not in out:
@@ -253,6 +304,115 @@ def _supported_claims(rows: Sequence[Mapping[str, Any]], *, limit: int) -> List[
 
 def _first_agent(rows: Sequence[Mapping[str, Any]], names: set[str]) -> Mapping[str, Any] | None:
     return next((row for row in rows if str(row.get("agent") or "") in names), None)
+
+
+def _adjudication_field_is_clean(audit: Mapping[str, Any], field: str) -> bool:
+    fields = audit.get("fields") if isinstance(audit, Mapping) else {}
+    rows = fields.get(field) if isinstance(fields, Mapping) else None
+    if not isinstance(rows, list) or not rows:
+        # Backward-compatible artifacts only exposed ``validated``.
+        return True
+    severe = {
+        "capital_flow_language_requires_flow_evidence",
+        "valuation_label_requires_valuation_evidence",
+        "corporate_action_does_not_prove_price_support",
+        "deleveraging_requires_flow_or_leverage_evidence",
+        "strong_causal_language_requires_direct_mechanism_evidence",
+        "causal_attribution_requires_mechanism_evidence",
+        "market_intensity_requires_market_benchmark",
+        "market_stat_not_supported_by_cited_evidence",
+    }
+    return all(
+        isinstance(row, Mapping)
+        and str(row.get("status") or "") in {"supported", "partial"}
+        and not severe.intersection(str(reason) for reason in row.get("reasons") or [])
+        for row in rows
+    )
+
+
+def _adjudication_field_rows(audit: Mapping[str, Any], field: str) -> List[Mapping[str, Any]]:
+    fields = audit.get("fields") if isinstance(audit, Mapping) else {}
+    rows = fields.get(field) if isinstance(fields, Mapping) else None
+    return [row for row in rows or [] if isinstance(row, Mapping)] if isinstance(rows, list) else []
+
+
+def _adjudication_field_texts(
+    audit: Mapping[str, Any],
+    field: str,
+    *,
+    fallback: Any,
+    limit: int,
+) -> List[str]:
+    rows = _adjudication_field_rows(audit, field)
+    values = [
+        _text(row.get("safeText") or row.get("text"))
+        for row in rows
+        if str(row.get("status") or "") != "rejected"
+    ]
+    clean = [value for value in values if value]
+    # Once field-level validation exists it is the trust boundary. Falling back
+    # to the raw model payload when every audited row was rejected would publish
+    # exactly the text the validator removed. Legacy artifacts without rows keep
+    # the old fallback behavior.
+    if rows:
+        return clean[:limit]
+    return _text_list(fallback, limit=limit)
+
+
+def _adjudication_field_text(audit: Mapping[str, Any], field: str, *, fallback: Any) -> str:
+    values = _adjudication_field_texts(audit, field, fallback=fallback, limit=1)
+    return values[0] if values else ""
+
+
+def _adjudication_field_status(audit: Mapping[str, Any], field: str) -> str:
+    rows = _adjudication_field_rows(audit, field)
+    statuses = {str(row.get("status") or "").lower() for row in rows}
+    if "rejected" in statuses:
+        return "rejected"
+    if "disputed" in statuses:
+        return "disputed"
+    if "hypothesis" in statuses:
+        return "hypothesis"
+    if "partial" in statuses:
+        return "partial"
+    return "supported" if "supported" in statuses else ""
+
+
+def _adjudication_field_has_safe_text(audit: Mapping[str, Any], field: str) -> bool:
+    return any(_text(row.get("safeText")) for row in _adjudication_field_rows(audit, field))
+
+
+def _conditional_scenario(value: Any) -> str:
+    text = _text(value)
+    if not text or text.startswith(("若", "如果", "一旦")):
+        return text
+    return f"若后续证据支持这一情景：{text}"
+
+
+def _validated_claim_texts(
+    report: Mapping[str, Any],
+    *,
+    statuses: set[str],
+    limit: int,
+) -> List[str]:
+    semantic = report.get("semanticValidation") or report.get("semantic_validation")
+    status_by_id = {
+        str(row.get("claimId") or ""): str(row.get("status") or "")
+        for row in (semantic.get("claims") if isinstance(semantic, Mapping) else []) or []
+        if isinstance(row, Mapping)
+    }
+    out: List[str] = []
+    for row in report.get("claimEvidence") or report.get("claim_evidence") or []:
+        if not isinstance(row, Mapping):
+            continue
+        if status_by_id.get(str(row.get("claimId") or "")) not in statuses:
+            continue
+        value = _text(row.get("claim"))
+        if value and value not in out:
+            out.append(value)
+            if len(out) >= limit:
+                break
+    return out
 
 
 def _first_text(*values: Any) -> str:
