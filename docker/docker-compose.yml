@@ -35,7 +35,9 @@ x-common: &common
   environment:
     - TZ=Asia/Shanghai
 
-    # Web/API service bind address (must be 0.0.0.0 inside container)
+    # Web/API service bind address (must be 0.0.0.0 inside container).
+    # Set ADMIN_AUTH_ENABLED=true and initialize /app/data with
+    # `docker compose run --rm server python -m src.auth reset_password` first.
     - WEBUI_HOST=0.0.0.0
     # API_PORT 从 .env 文件读取，无需在此硬编码
 

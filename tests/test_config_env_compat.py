@@ -29,6 +29,20 @@ class ConfigEnvCompatibilityTestCase(unittest.TestCase):
 
     @patch("src.config.setup_env")
     @patch.object(Config, "_parse_litellm_yaml", return_value=[])
+    def test_domestic_market_hosts_bypass_macos_system_proxy_without_explicit_proxy(
+        self, _mock_parse_litellm_yaml, _mock_setup_env
+    ):
+        with patch.dict(os.environ, {"STOCK_LIST": "600519"}, clear=True):
+            Config._load_from_env()
+            no_proxy = os.environ.get("NO_PROXY", "")
+
+        self.assertIn("eastmoney.com", no_proxy)
+        self.assertIn("sina.com.cn", no_proxy)
+        self.assertIn("baidu.com", no_proxy)
+        self.assertIn("xueqiu.com", no_proxy)
+
+    @patch("src.config.setup_env")
+    @patch.object(Config, "_parse_litellm_yaml", return_value=[])
     @patch.object(Config, "_parse_stock_email_groups", return_value=[])
     def test_share_image_social_branding_is_optional_and_configurable(
         self, _mock_parse_stock_email_groups, _mock_parse_litellm_yaml, _mock_setup_env

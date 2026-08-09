@@ -49,6 +49,11 @@ google-search-results>=2.4.0  # SerpAPI
 
 # Network requests
 requests>=2.31.0            # HTTP requests
+aiohttp>=3.14.3             # Fix request-smuggling/DoS advisories in transitive LLM stack
+cryptography>=50.0.0        # Fix transitive X.509 name-constraint bypass advisory
+pyOpenSSL>=26.4.0           # Keep the TLS wrapper compatible with cryptography 50
+nltk>=3.10.2                # Fix transitive corpus/archive deserialization advisories
+pyasn1>=0.6.4               # Fix BER/CER/DER decoder DoS advisories in transitive auth stack
 markdown2>=2.4.0            # Markdown to HTML
 imgkit>=1.2.0              # Markdown to image; requires wkhtmltopdf
 fake-useragent>=1.4.0       # Random User-Agent support

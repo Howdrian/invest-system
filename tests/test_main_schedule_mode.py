@@ -191,21 +191,22 @@ class MainScheduleModeTestCase(unittest.TestCase):
         self.assertEqual(effective_region, "jp,kr")
         self.assertFalse(should_skip_all)
 
-    def test_public_webui_bind_warns_when_auth_is_disabled(self) -> None:
-        with patch("src.auth.is_auth_enabled", return_value=False), \
-             patch("main.logger.warning") as warning_log:
-            main._warn_if_public_webui_without_auth("0.0.0.0")
+    def test_public_webui_bind_is_refused_when_auth_is_disabled(self) -> None:
+        with patch("src.auth.is_auth_enabled", return_value=False):
+            with self.assertRaisesRegex(RuntimeError, "Refusing a non-loopback API bind"):
+                main._require_auth_for_non_loopback_bind("0.0.0.0")
 
-        warning_log.assert_called_once()
-        self.assertIn("WEBUI_HOST=%s", warning_log.call_args.args[0])
-        self.assertEqual(warning_log.call_args.args[1], "0.0.0.0")
+    def test_public_webui_bind_is_refused_before_first_password_setup(self) -> None:
+        with patch("src.auth.is_auth_enabled", return_value=True), \
+             patch("src.auth.has_stored_password", return_value=False):
+            with self.assertRaisesRegex(RuntimeError, "without a stored admin password"):
+                main._require_auth_for_non_loopback_bind("0.0.0.0")
 
-    def test_loopback_webui_bind_does_not_warn_when_auth_is_disabled(self) -> None:
-        with patch("src.auth.is_auth_enabled", return_value=False), \
-             patch("main.logger.warning") as warning_log:
-            main._warn_if_public_webui_without_auth("127.0.0.1")
+    def test_loopback_webui_bind_is_allowed_when_auth_is_disabled(self) -> None:
+        with patch("src.auth.is_auth_enabled") as auth_enabled:
+            main._require_auth_for_non_loopback_bind("127.0.0.1")
 
-        warning_log.assert_not_called()
+        auth_enabled.assert_not_called()
 
     def test_web_service_bind_uses_config_when_cli_omits_host_and_port(self) -> None:
         args = self._make_args(host=None, port=None)
@@ -220,7 +221,9 @@ class MainScheduleModeTestCase(unittest.TestCase):
         args = self._make_args(host="0.0.0.0", port=8000)
         config = self._make_config(webui_host="127.0.0.1", webui_port=18000)
 
-        host, port = main._resolve_web_service_bind(args, config)
+        with patch("src.auth.is_auth_enabled", return_value=True), \
+             patch("src.auth.has_stored_password", return_value=True):
+            host, port = main._resolve_web_service_bind(args, config)
 
         self.assertEqual(host, "0.0.0.0")
         self.assertEqual(port, 8000)
@@ -254,6 +257,8 @@ class MainScheduleModeTestCase(unittest.TestCase):
             observed_bind.append((host, port))
 
         with patch.dict(os.environ, {"GITHUB_ACTIONS": "false"}, clear=False), \
+             patch("src.auth.is_auth_enabled", return_value=True), \
+             patch("src.auth.has_stored_password", return_value=True), \
              patch("main.parse_arguments", return_value=args), \
              patch("main.get_config", return_value=config), \
              patch("main.prepare_webui_frontend_assets", return_value=True), \
@@ -264,6 +269,25 @@ class MainScheduleModeTestCase(unittest.TestCase):
 
         self.assertEqual(exit_code, 0)
         self.assertEqual(observed_bind, [("0.0.0.0", 8000)])
+
+    def test_docker_serve_only_refuses_public_bind_without_auth(self) -> None:
+        args = self._make_args(serve_only=True, host="0.0.0.0", port=8000)
+        config = self._make_config(webui_enabled=False)
+
+        with patch.dict(os.environ, {"GITHUB_ACTIONS": "false"}, clear=False), \
+             patch("src.auth.is_auth_enabled", return_value=False), \
+             patch("main.parse_arguments", return_value=args), \
+             patch("main.get_config", return_value=config), \
+             patch("main.prepare_webui_frontend_assets") as prepare_assets, \
+             patch("main.start_api_server") as start_api_server, \
+             patch("main.logger.error") as error_log:
+            exit_code = main.main()
+
+        self.assertEqual(exit_code, 1)
+        prepare_assets.assert_not_called()
+        start_api_server.assert_not_called()
+        error_log.assert_called_once()
+        self.assertIn("Refusing to start FastAPI service", error_log.call_args.args[0])
 
     def test_start_api_server_fails_before_thread_when_port_is_busy(self) -> None:
         config = self._make_config(log_level="INFO")

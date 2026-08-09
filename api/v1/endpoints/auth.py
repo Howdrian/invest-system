@@ -33,6 +33,7 @@ from src.auth import (
 )
 from src.config import Config, setup_env
 from src.core.config_manager import ConfigManager
+from src.network_bind_security import is_request_from_non_loopback_bind
 
 logger = logging.getLogger(__name__)
 
@@ -215,6 +216,18 @@ async def auth_update_settings(request: Request, body: AuthSettingsRequest):
     confirm = (body.password_confirm or "").strip()
     current_password = (body.current_password or "").strip()
 
+    if current_enabled and not target_enabled and is_request_from_non_loopback_bind(request):
+        return JSONResponse(
+            status_code=409,
+            content={
+                "error": "public_bind_auth_required",
+                "message": (
+                    "Cannot disable admin authentication while the API is bound "
+                    "to a non-loopback interface"
+                ),
+            },
+        )
+
     if target_enabled:
         if password or confirm:
             if stored_password_exists:
@@ -262,7 +275,7 @@ async def auth_update_settings(request: Request, body: AuthSettingsRequest):
             cookie_val = request.cookies.get(COOKIE_NAME)
             # if target_enabled is True here, they are requesting to enable or keep auth enabled
             is_valid_session = cookie_val and verify_session(cookie_val)
-            
+
             if not is_valid_session:
                 if not current_password:
                     return JSONResponse(
@@ -356,7 +369,6 @@ async def auth_update_settings(request: Request, body: AuthSettingsRequest):
     resp = JSONResponse(content=_get_auth_status_dict(request))
     resp.delete_cookie(key=COOKIE_NAME, path="/")
     return resp
-
 
 
 @router.post(

@@ -19,5 +19,15 @@ export default defineConfig([
       ecmaVersion: 2020,
       globals: globals.browser,
     },
+    rules: {
+      // ESLint 10 / react-hooks 7 enable these new migration rules in their
+      // recommended presets. Keep the existing lint contract during the
+      // dependency security upgrade; address the behavioral refactors in a
+      // dedicated Web cleanup change.
+      'no-useless-assignment': 'off',
+      'react-hooks/refs': 'off',
+      'react-hooks/set-state-in-effect': 'off',
+      'react-hooks/static-components': 'off',
+    },
   },
 ])

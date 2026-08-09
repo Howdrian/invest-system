@@ -331,8 +331,9 @@ def create_app(static_dir: Optional[Path] = None) -> FastAPI:
             "- 历史记录：查询历史分析报告\n"
             "- 股票数据：获取行情数据\n\n"
             "## 认证方式\n"
-            "支持可选管理员认证：ADMIN_AUTH_ENABLED=true 时，除登录、状态、健康检查和 "
-            "OpenAPI 文档外，/api/v1/* 需要有效管理员会话 Cookie；关闭时不强制认证。"
+            "支持管理员认证：ADMIN_AUTH_ENABLED=true 时，除登录、状态、健康检查和 "
+            "OpenAPI 文档外，/api/v1/* 需要有效管理员会话 Cookie。仅 loopback 可在关闭认证时运行；"
+            "非 loopback 监听必须启用认证并预先初始化管理员密码。"
         ),
         version="1.0.0",
         lifespan=app_lifespan,

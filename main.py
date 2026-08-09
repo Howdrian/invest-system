@@ -80,7 +80,6 @@ from src.services.stock_code_utils import resolve_index_stock_code_for_analysis
 
 logger = logging.getLogger(__name__)
 _RUNTIME_ENV_FILE_KEYS = set()
-_PUBLIC_BIND_HOSTS = frozenset({"0.0.0.0", "::", "[::]", "*"})
 
 
 def _get_active_env_path() -> Path:
@@ -90,30 +89,18 @@ def _get_active_env_path() -> Path:
     return Path(__file__).resolve().parent / ".env"
 
 
-def _is_public_bind_host(host: str) -> bool:
-    return (host or "").strip().lower() in _PUBLIC_BIND_HOSTS
+def _require_auth_for_non_loopback_bind(host: str) -> None:
+    """Refuse unsafe network-visible Web/API binds."""
+    from src.network_bind_security import require_safe_network_bind
 
-
-def _warn_if_public_webui_without_auth(host: str) -> None:
-    if not _is_public_bind_host(host):
-        return
-
-    from src.auth import is_auth_enabled
-
-    if is_auth_enabled():
-        return
-    logger.warning(
-        "WEBUI_HOST=%s binds the Web UI to a public interface while "
-        "ADMIN_AUTH_ENABLED=false. Keep this service behind a trusted network "
-        "boundary or enable admin authentication before exposing it.",
-        host,
-    )
+    require_safe_network_bind(host)
 
 
 def _resolve_web_service_bind(args: argparse.Namespace, config: Config) -> Tuple[str, int]:
     """Resolve the effective Web/API bind address from CLI first, then config."""
     host = args.host if args.host is not None else (config.webui_host or "127.0.0.1")
     port = args.port if args.port is not None else config.webui_port
+    _require_auth_for_non_loopback_bind(host)
     return host, port
 
 
@@ -1116,6 +1103,8 @@ def start_api_server(host: str, port: int, config: Config) -> None:
     import threading
     import uvicorn
 
+    _require_auth_for_non_loopback_bind(host)
+
     probe = socket.socket(socket.AF_INET6 if ":" in host else socket.AF_INET, socket.SOCK_STREAM)
     try:
         probe.bind((host, port))
@@ -1140,6 +1129,9 @@ def start_api_server(host: str, port: int, config: Config) -> None:
     # machines. Importing first keeps the heavy work out of the probe window;
     # genuine import failures still surface immediately to the caller.
     from api.app import app as fastapi_app
+    from src.network_bind_security import configure_app_bind_host
+
+    configure_app_bind_host(fastapi_app, host)
 
     try:
         uvicorn_config = uvicorn.Config(
@@ -1391,8 +1383,11 @@ def main() -> int:
     start_serve = (args.serve or args.serve_only) and os.getenv("GITHUB_ACTIONS") != "true"
 
     if start_serve:
-        args.host, args.port = _resolve_web_service_bind(args, config)
-        _warn_if_public_webui_without_auth(args.host)
+        try:
+            args.host, args.port = _resolve_web_service_bind(args, config)
+        except RuntimeError as exc:
+            logger.error("Refusing to start FastAPI service: %s", exc)
+            return 1
 
     bot_clients_started = False
     if start_serve:

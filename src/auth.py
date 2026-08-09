@@ -67,14 +67,22 @@ def _get_credential_path() -> Path:
 
 
 def _is_auth_enabled_from_env() -> bool:
-    """Read ADMIN_AUTH_ENABLED from .env file."""
+    """Read auth state from the persisted env file, then process environment.
+
+    A value explicitly persisted in ``ENV_FILE``/``.env`` wins so a settings
+    update is not masked by a stale process variable.  Containers that inject
+    configuration without mounting an env file still work via the process-env
+    fallback.
+    """
     _ensure_env_loaded()
     env_file = os.getenv("ENV_FILE")
     env_path = Path(env_file) if env_file else Path(__file__).resolve().parent.parent / ".env"
-    if not env_path.exists():
-        return False
-    values = dotenv_values(env_path)
-    val = (values.get("ADMIN_AUTH_ENABLED") or "").strip().lower()
+    values = dotenv_values(env_path) if env_path.exists() else {}
+    if "ADMIN_AUTH_ENABLED" in values:
+        raw_value = values.get("ADMIN_AUTH_ENABLED")
+    else:
+        raw_value = os.getenv("ADMIN_AUTH_ENABLED")
+    val = (raw_value or "").strip().lower()
     return val in ("true", "1", "yes")
 
 

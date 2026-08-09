@@ -2058,6 +2058,11 @@ class SystemConfigService:
             value = item["value"]
             field_schema = get_field_definition(key, value)
             normalized_value = self._normalize_value_for_storage(value, field_schema)
+            # ``_collect_issues`` only admits an exact no-op for read-only
+            # fields. Never forward such fields to ConfigManager, even if the
+            # file changes between validation and persistence.
+            if not bool(field_schema.get("is_editable", True)):
+                continue
             submitted_keys.add(key)
             updates.append((key, normalized_value))
             if bool(field_schema.get("is_sensitive", False)):
@@ -2385,12 +2390,50 @@ class SystemConfigService:
             if is_sensitive and value == mask_token and saved_config_map.get(key):
                 continue
 
+            normalized_value = self._normalize_value_for_storage(value, field_schema)
+            if not bool(field_schema.get("is_editable", True)):
+                if self._is_unchanged_non_editable_value(
+                    key=key,
+                    normalized_value=normalized_value,
+                    saved_config_map=saved_config_map,
+                    field_schema=field_schema,
+                ):
+                    # Full .env export/import roundtrips include this key. Ignore
+                    # an exact no-op without reopening the generic settings path.
+                    continue
+                issues.append(
+                    {
+                        "key": key,
+                        "code": "field_not_editable",
+                        "message": "This setting can only be changed through its dedicated endpoint",
+                        "severity": "error",
+                        "expected": saved_config_map.get(key, "dedicated endpoint"),
+                        "actual": value,
+                    }
+                )
+                continue
+
             updated_map[key] = value
             effective_map[key] = value
             issues.extend(self._validate_value(key=key, value=value, field_schema=field_schema))
 
         issues.extend(self._validate_cross_field(effective_map=effective_map, updated_keys=set(updated_map.keys())))
         return issues
+
+    @classmethod
+    def _is_unchanged_non_editable_value(
+        cls,
+        *,
+        key: str,
+        normalized_value: str,
+        saved_config_map: Dict[str, str],
+        field_schema: Dict[str, Any],
+    ) -> bool:
+        """Allow exported read-only fields only when they are exact no-ops."""
+        if bool(field_schema.get("is_editable", True)) or key not in saved_config_map:
+            return False
+        saved_value = cls._normalize_value_for_storage(saved_config_map[key], field_schema)
+        return normalized_value == saved_value
 
     @classmethod
     def _is_generation_backend_status_key(cls, key: str) -> bool:

@@ -88,7 +88,21 @@ def _screening_unavailable_diagnostics() -> Dict[str, str]:
 class ScreeningOpportunitiesApiTestCase(unittest.TestCase):
     def setUp(self) -> None:
         Config.reset_instance()
-        self.env_patch = patch.dict(os.environ, {"SCREENING_DATA_DIR": ""}, clear=False)
+        self.env_patch = patch.dict(
+            os.environ,
+            {
+                "SCREENING_DATA_DIR": "",
+                "BOCHA_API_KEYS": "",
+                "TAVILY_API_KEY": "",
+                "TAVILY_API_KEYS": "",
+                "ANSPIRE_API_KEYS": "",
+                "BRAVE_API_KEYS": "",
+                "SERPAPI_API_KEYS": "",
+                "MINIMAX_API_KEYS": "",
+                "SEARXNG_BASE_URLS": "",
+            },
+            clear=False,
+        )
         self.env_patch.start()
 
     def tearDown(self) -> None:

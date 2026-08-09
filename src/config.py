@@ -1397,36 +1397,36 @@ class Config:
         setup_env()
 
         # === 智能代理配置 (关键修复) ===
-        # 如果配置了代理，自动设置 NO_PROXY 以排除国内数据源，避免行情获取失败
+        # macOS requests/urllib can inherit System Settings proxies even when
+        # HTTP_PROXY is absent from the process.  Always publish NO_PROXY for
+        # domestic market-data hosts; explicit proxy variables are synchronized
+        # below only when configured.
+        domestic_domains = [
+            'eastmoney.com',   # 东方财富 (Efinance/Akshare)
+            'sina.com.cn',     # 新浪财经 (Akshare)
+            '163.com',         # 网易财经 (Akshare)
+            'tushare.pro',     # Tushare
+            'baostock.com',    # Baostock
+            'baidu.com',       # 百度股市通估值
+            'xueqiu.com',      # 雪球热度
+            'qq.com',          # 腾讯行情
+            'gtimg.cn',        # 腾讯行情静态域
+            'sse.com.cn',      # 上交所
+            'szse.cn',         # 深交所
+            'csindex.com.cn',  # 中证指数
+            'cninfo.com.cn',   # 巨潮资讯
+            'localhost',
+            '127.0.0.1'
+        ]
+        current_no_proxy = os.getenv('NO_PROXY') or os.getenv('no_proxy') or ''
+        existing_domains = [item.strip() for item in current_no_proxy.split(',') if item.strip()]
+        final_no_proxy = ','.join(dict.fromkeys([*existing_domains, *domestic_domains]))
+        os.environ['NO_PROXY'] = final_no_proxy
+        os.environ['no_proxy'] = final_no_proxy
+
+        # 如果配置了显式代理，同步大小写变量；国内数据源仍走上面的直连名单。
         http_proxy = os.getenv('HTTP_PROXY') or os.getenv('http_proxy')
         if http_proxy:
-            # 国内金融数据源域名列表
-            domestic_domains = [
-                'eastmoney.com',   # 东方财富 (Efinance/Akshare)
-                'sina.com.cn',     # 新浪财经 (Akshare)
-                '163.com',         # 网易财经 (Akshare)
-                'tushare.pro',     # Tushare
-                'baostock.com',    # Baostock
-                'sse.com.cn',      # 上交所
-                'szse.cn',         # 深交所
-                'csindex.com.cn',  # 中证指数
-                'cninfo.com.cn',   # 巨潮资讯
-                'localhost',
-                '127.0.0.1'
-            ]
-
-            # 获取现有的 no_proxy
-            current_no_proxy = os.getenv('NO_PROXY') or os.getenv('no_proxy') or ''
-            existing_domains = current_no_proxy.split(',') if current_no_proxy else []
-
-            # 合并去重
-            final_domains = list(set(existing_domains + domestic_domains))
-            final_no_proxy = ','.join(filter(None, final_domains))
-
-            # 设置环境变量 (requests/urllib3/aiohttp 都会遵守此设置)
-            os.environ['NO_PROXY'] = final_no_proxy
-            os.environ['no_proxy'] = final_no_proxy
-
             # 确保 HTTP_PROXY 也被正确设置（以防仅在 .env 中定义但未导出）
             os.environ['HTTP_PROXY'] = http_proxy
             os.environ['http_proxy'] = http_proxy

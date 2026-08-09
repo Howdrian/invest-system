@@ -1779,6 +1779,70 @@ class SystemConfigServiceTestCase(unittest.TestCase):
                 reload_now=False,
             )
 
+    def test_validate_rejects_auth_toggle_through_generic_config(self) -> None:
+        self._rewrite_env(
+            "STOCK_LIST=600519,000001",
+            "ADMIN_AUTH_ENABLED=true",
+        )
+
+        payload = self.service.validate(
+            items=[{"key": "ADMIN_AUTH_ENABLED", "value": "false"}],
+        )
+
+        self.assertFalse(payload["valid"])
+        self.assertEqual(payload["issues"][0]["code"], "field_not_editable")
+
+    def test_update_rejects_auth_toggle_through_generic_config_without_writing(self) -> None:
+        self._rewrite_env(
+            "STOCK_LIST=600519,000001",
+            "ADMIN_AUTH_ENABLED=true",
+        )
+        original_content = self.env_path.read_text(encoding="utf-8")
+
+        with self.assertRaises(ConfigValidationError) as caught:
+            self.service.update(
+                config_version=self.manager.get_config_version(),
+                items=[{"key": "ADMIN_AUTH_ENABLED", "value": "false"}],
+                reload_now=False,
+            )
+
+        self.assertEqual(caught.exception.issues[0]["code"], "field_not_editable")
+        self.assertEqual(self.env_path.read_text(encoding="utf-8"), original_content)
+
+    def test_import_rejects_changed_auth_toggle_without_writing(self) -> None:
+        self._rewrite_env(
+            "STOCK_LIST=600519,000001",
+            "ADMIN_AUTH_ENABLED=true",
+        )
+        original_content = self.env_path.read_text(encoding="utf-8")
+
+        with self.assertRaises(ConfigValidationError) as caught:
+            self.service.import_env(
+                config_version=self.manager.get_config_version(),
+                content="ADMIN_AUTH_ENABLED=false\n",
+                reload_now=False,
+            )
+
+        self.assertEqual(caught.exception.issues[0]["code"], "field_not_editable")
+        self.assertEqual(self.env_path.read_text(encoding="utf-8"), original_content)
+
+    def test_import_roundtrip_ignores_unchanged_auth_toggle(self) -> None:
+        self._rewrite_env(
+            "STOCK_LIST=600519,000001",
+            "ADMIN_AUTH_ENABLED=true",
+        )
+        exported = self.service.export_env()["content"]
+
+        payload = self.service.import_env(
+            config_version=self.manager.get_config_version(),
+            content=exported,
+            reload_now=False,
+        )
+
+        self.assertTrue(payload["success"])
+        self.assertNotIn("ADMIN_AUTH_ENABLED", payload["updated_keys"])
+        self.assertEqual(self.manager.read_config_map()["ADMIN_AUTH_ENABLED"], "true")
+
     def test_update_preserves_masked_secret(self) -> None:
         old_version = self.manager.get_config_version()
         response = self.service.update(

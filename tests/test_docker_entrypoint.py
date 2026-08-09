@@ -24,6 +24,21 @@ def test_dockerfile_uses_entrypoint_to_drop_privileges() -> None:
     assert "USER dsa" not in dockerfile
 
 
+def test_docker_healthcheck_fails_closed_for_api_mode() -> None:
+    dockerfile = (REPO_ROOT / "docker" / "Dockerfile").read_text(encoding="utf-8")
+    healthcheck = (REPO_ROOT / "docker" / "healthcheck.sh").read_text(encoding="utf-8")
+
+    subprocess.run(
+        ["sh", "-n", str(REPO_ROOT / "docker" / "healthcheck.sh")],
+        check=True,
+    )
+    assert 'CMD ["/usr/local/bin/docker-healthcheck.sh"]' in dockerfile
+    assert "curl -fsS" in healthcheck
+    assert "kill -0 1" in healthcheck
+    assert "sys.exit(0)" not in dockerfile
+    assert "exit 0" not in healthcheck
+
+
 def test_dockerfile_bundles_builtin_screening_engine() -> None:
     dockerfile = (REPO_ROOT / "docker" / "Dockerfile").read_text(encoding="utf-8")
     requirements = (REPO_ROOT / "requirements.txt").read_text(encoding="utf-8")

@@ -215,18 +215,10 @@ class IntelligenceServiceTestCase(unittest.TestCase):
         bad = self.service.create_source({"name": "bad-feed", "url": "https://bad.example.com/rss.xml", "scope_type": "market"})
 
         def fake_get(url, **kwargs):
-            self.assertNotIn("trust_env", kwargs)
-            self.assertEqual(kwargs.get("proxies"), {"http": None, "https": None})
             if "bad" in url:
                 raise RuntimeError("network token=secret should not leak")
             return self._mock_response()
-        # This case verifies batch fail-open behavior and request isolation. URL/DNS
-        # validation has dedicated coverage below; keeping it out of this test also
-        # avoids coupling the aggregation contract to process-global DNS patching.
-        with patch.object(self.service, "_validate_url"), patch(
-            "src.services.intelligence_service.requests.get",
-            side_effect=fake_get,
-        ):
+        with patch.object(self.service, "_get_with_validated_dns", side_effect=fake_get):
             result = self.service.fetch_enabled_sources()
         self.assertEqual(result["source_count"], 2)
         self.assertEqual(result["saved_count"], 2)
@@ -235,6 +227,27 @@ class IntelligenceServiceTestCase(unittest.TestCase):
         self.assertEqual(failures[0]["source_id"], bad["id"])
         self.assertNotIn("token=secret", failures[0]["error"])
         self.assertNotIn("secret", failures[0]["error"])
+
+    def test_validated_dns_request_explicitly_disables_environment_proxies(self) -> None:
+        response = self._mock_response()
+        seen_proxies = []
+
+        def fake_get(_url, **kwargs):
+            seen_proxies.append(dict(kwargs.get("proxies") or {}))
+            kwargs["proxies"]["no"] = "mutated-by-requests"
+            return response
+
+        with patch("src.services.intelligence_service.requests.get", side_effect=fake_get) as mocked_get:
+            result = self.service._get_with_validated_dns("https://feeds.example.com/rss.xml", timeout=3)
+            self.service._get_with_validated_dns("https://feeds.example.com/rss.xml", timeout=3)
+
+        self.assertIs(result, response)
+        kwargs = mocked_get.call_args.kwargs
+        self.assertNotIn("trust_env", kwargs)
+        self.assertEqual(seen_proxies, [
+            {"http": None, "https": None},
+            {"http": None, "https": None},
+        ])
 
     def test_fetch_enabled_sources_paginates_all_enabled_sources(self) -> None:
         for index in range(150):

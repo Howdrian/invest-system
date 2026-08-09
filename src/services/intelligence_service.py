@@ -568,7 +568,9 @@ class IntelligenceService:
             socket.getaddrinfo = guarded_getaddrinfo
             try:
                 request_kwargs = dict(kwargs)
-                request_kwargs.setdefault("proxies", _DISABLE_REQUEST_PROXIES)
+                # requests may mutate the proxies mapping while merging NO_PROXY.
+                # Pass a fresh copy so one fetch cannot poison later requests/tests.
+                request_kwargs.setdefault("proxies", dict(_DISABLE_REQUEST_PROXIES))
                 return requests.get(raw_url, **request_kwargs)
             finally:
                 socket.getaddrinfo = original_getaddrinfo

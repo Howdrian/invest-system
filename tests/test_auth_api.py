@@ -227,6 +227,55 @@ class AuthApiTestCase(unittest.TestCase):
 
         self.assertEqual(response.status_code, 401)
 
+    def test_raw_public_scope_fails_closed_when_auth_is_disabled(self) -> None:
+        scope = {
+            "type": "http",
+            "method": "GET",
+            "path": "/api/health",
+            "headers": [],
+            "query_string": b"",
+            "scheme": "http",
+            "client": ("192.0.2.10", 1234),
+            "server": ("0.0.0.0", 8000),
+            "root_path": "",
+        }
+        request = Request(scope)
+        middleware = AuthMiddleware(app=MagicMock())
+        call_next = AsyncMock(return_value=Response(status_code=200))
+
+        with patch("api.middlewares.auth.is_auth_enabled", return_value=False):
+            response = asyncio.run(middleware.dispatch(request, call_next))
+
+        self.assertEqual(response.status_code, 503)
+        self.assertIn(b'"error":"public_bind_auth_required"', response.body)
+        call_next.assert_not_awaited()
+
+    def test_public_app_state_fails_closed_before_first_password_setup(self) -> None:
+        app = SimpleNamespace(state=SimpleNamespace(dsa_bind_host="0.0.0.0"))
+        scope = {
+            "type": "http",
+            "method": "POST",
+            "path": "/api/v1/auth/login",
+            "headers": [],
+            "query_string": b"",
+            "scheme": "http",
+            "client": ("127.0.0.1", 1234),
+            "server": ("testserver", 80),
+            "root_path": "",
+            "app": app,
+        }
+        request = Request(scope)
+        middleware = AuthMiddleware(app=MagicMock())
+        call_next = AsyncMock(return_value=Response(status_code=200))
+
+        with patch("api.middlewares.auth.is_auth_enabled", return_value=True), \
+             patch("api.middlewares.auth.has_stored_password", return_value=False):
+            response = asyncio.run(middleware.dispatch(request, call_next))
+
+        self.assertEqual(response.status_code, 503)
+        self.assertIn(b'"error":"public_bind_password_required"', response.body)
+        call_next.assert_not_awaited()
+
     def test_logout_requires_session_when_auth_enabled(self) -> None:
         scope = {
             "type": "http",
@@ -426,6 +475,34 @@ class AuthApiTestCase(unittest.TestCase):
         self.assertIn(b'"error":"current_required"', response.body)
         self.assertIn("ADMIN_AUTH_ENABLED=true", self.env_path.read_text(encoding="utf-8"))
 
+    def test_auth_settings_cannot_disable_auth_while_publicly_bound(self) -> None:
+        with patch.object(auth, "_is_auth_enabled_from_env", side_effect=self._read_auth_enabled_from_env):
+            auth.set_initial_password("passwd6")
+            scope = {
+                "type": "http",
+                "method": "POST",
+                "path": "/api/v1/auth/settings",
+                "headers": [],
+                "query_string": b"",
+                "scheme": "http",
+                "client": ("192.0.2.10", 1234),
+                "server": ("0.0.0.0", 8000),
+                "root_path": "",
+            }
+            response = asyncio.run(
+                auth_endpoint.auth_update_settings(
+                    Request(scope),
+                    auth_endpoint.AuthSettingsRequest(
+                        authEnabled=False,
+                        currentPassword="passwd6",
+                    ),
+                )
+            )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertIn(b'"error":"public_bind_auth_required"', response.body)
+        self.assertIn("ADMIN_AUTH_ENABLED=true", self.env_path.read_text(encoding="utf-8"))
+
     def test_auth_settings_toggle_fails_when_secret_rotation_fails(self) -> None:
         with patch.object(auth, "_is_auth_enabled_from_env", side_effect=self._read_auth_enabled_from_env):
             auth.set_initial_password("passwd6")
@@ -573,7 +650,7 @@ class AuthApiTestCase(unittest.TestCase):
         with patch.object(auth, "_is_auth_enabled_from_env", side_effect=self._read_auth_enabled_from_env):
             # 1. Setup an existing password, auth is currently disabled
             auth.set_initial_password("passwd6")
-            
+
             # 2. Simulate the race condition:
             # The middleware let the request through because auth was supposedly False.
             # But just before the handler runs, another thread enables auth.
@@ -581,7 +658,7 @@ class AuthApiTestCase(unittest.TestCase):
                 "STOCK_LIST=600519\nGEMINI_API_KEY=test\nADMIN_AUTH_ENABLED=true\n",
                 encoding="utf-8",
             )
-            auth.refresh_auth_state() # simulate the flip to True
+            auth.refresh_auth_state()  # simulate the flip to True
 
             # 3. The attacker tries to re-enable auth without a password or valid cookie
             response = asyncio.run(
@@ -759,6 +836,24 @@ class AuthDisableViaRealASGITestCase(unittest.TestCase):
         self.assertEqual(resp.status_code, 400, resp.text)
         self.assertEqual(resp.json().get("error"), "current_required")
         # Auth must remain enabled because the request was rejected.
+        self.assertIn("ADMIN_AUTH_ENABLED=true", self.env_path.read_text(encoding="utf-8"))
+
+    def test_disable_via_real_public_asgi_bind_returns_conflict_without_writing(self):
+        """A live public listener cannot be switched into unauthenticated mode."""
+        from src.network_bind_security import configure_app_bind_host
+
+        configure_app_bind_host(self.client.app, "0.0.0.0")
+        try:
+            self._login_for_session()
+            resp = self.client.post(
+                "/api/v1/auth/settings",
+                json={"authEnabled": False, "currentPassword": "passwd6"},
+            )
+        finally:
+            configure_app_bind_host(self.client.app, "127.0.0.1")
+
+        self.assertEqual(resp.status_code, 409, resp.text)
+        self.assertEqual(resp.json().get("error"), "public_bind_auth_required")
         self.assertIn("ADMIN_AUTH_ENABLED=true", self.env_path.read_text(encoding="utf-8"))
 
     def test_disable_via_real_asgi_with_valid_session_and_correct_current_password_succeeds(self):
