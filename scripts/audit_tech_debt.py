@@ -81,7 +81,7 @@ def dirty_class(path: str) -> str:
         return "tests"
     if path.startswith("apps/dsa-web/"):
         return "web reader"
-    if path.startswith(("src/source_health/", "src/macro/")) or path in {"src/market_cycle.py", "src/report_artifact.py", "src/report_view_model.py", "src/render_report_html.py", "src/render_homepage.py", "src/pages_publication.py", "src/report_markdown.py", "src/report_policy.py", "src/core/run_context.py"}:
+    if path.startswith(("src/source_health/", "src/macro/")) or path in {"src/report_artifact.py", "src/report_view_model.py", "src/render_report_html.py", "src/render_homepage.py", "src/pages_publication.py", "src/report_markdown.py", "src/report_policy.py", "src/core/run_context.py"}:
         return "report/source-health pipeline"
     if path.startswith("scripts/"):
         return "scripts/gates"
@@ -114,14 +114,11 @@ def scan_import_cycles(py_files: list[Path]) -> list[list[str]]:
             elif isinstance(node, ast.ImportFrom) and node.module:
                 targets = [node.module]
             for target in targets:
-                matches = [
-                    candidate
-                    for candidate in modules
-                    if candidate == target or candidate.startswith(target + ".") or target.startswith(candidate + ".")
-                ]
-                if not matches:
+                candidate = target
+                while candidate and candidate not in modules:
+                    candidate = candidate.rpartition(".")[0]
+                if not candidate:
                     continue
-                candidate = sorted(matches, key=len, reverse=True)[0]
                 if candidate != module and candidate.split(".")[0] in {"src", "api", "data_provider", "bot", "scripts"}:
                     edge[module].add(candidate)
     index = 0
@@ -160,6 +157,32 @@ def scan_import_cycles(py_files: list[Path]) -> list[list[str]]:
     return cycles
 
 
+def definition_branch_count(node: ast.AST) -> int:
+    """Count branches owned by one definition without rescanning nested defs."""
+    branch_types = (
+        ast.If,
+        ast.For,
+        ast.While,
+        ast.Try,
+        ast.With,
+        ast.Match,
+        ast.BoolOp,
+        ast.IfExp,
+        ast.ExceptHandler,
+        ast.comprehension,
+    )
+    count = 0
+    stack = list(ast.iter_child_nodes(node))
+    while stack:
+        child = stack.pop()
+        if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)):
+            continue
+        if isinstance(child, branch_types):
+            count += 1
+        stack.extend(ast.iter_child_nodes(child))
+    return count
+
+
 def scan() -> dict[str, Any]:
     files = iter_code_files()
     stats: list[tuple[str, str, int]] = []
@@ -177,7 +200,7 @@ def scan() -> dict[str, Any]:
         for lineno, line in enumerate(lines, 1):
             if re.search(r"\b(TODO|FIXME|HACK|XXX|临时|待补|后续|pending)\b", line, re.I):
                 todos.append((rel, lineno, line.strip()[:180]))
-        if path.suffix == ".py":
+        if path.suffix == ".py" and not rel.startswith("tests/"):
             py_files.append(path)
             try:
                 tree = ast.parse(text, filename=rel)
@@ -187,7 +210,7 @@ def scan() -> dict[str, Any]:
                 if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
                     end = getattr(node, "end_lineno", None) or node.lineno
                     length = end - node.lineno + 1
-                    branch = sum(isinstance(n, (ast.If, ast.For, ast.While, ast.Try, ast.With, ast.Match, ast.BoolOp, ast.IfExp, ast.ExceptHandler, ast.comprehension)) for n in ast.walk(node))
+                    branch = 0 if isinstance(node, ast.ClassDef) else definition_branch_count(node)
                     if length >= 80 or branch >= 18:
                         complex_defs.append((rel, node.lineno, type(node).__name__, node.name, length, branch))
 
