@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import re
 from typing import Any
-from urllib.parse import parse_qsl, urlsplit
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 
 _REDACTED = "[REDACTED]"
@@ -72,6 +72,76 @@ _TOKEN_LIKE_PATTERN = re.compile(
     r"\b(?:sk-[a-z0-9_\-]{16,}|xox[baprs]-[a-z0-9\-]{16,}|gh[pousr]_[a-z0-9_]{20,})\b",
     re.IGNORECASE,
 )
+_PUBLIC_URL_SENSITIVE_KEYS = {
+    "auth",
+    "authkey",
+    "code",
+    "credential",
+    "credentials",
+    "key",
+    "pass",
+    "passwd",
+    "password",
+    "session",
+    "sessionid",
+    "sig",
+    "signature",
+    "x_amz_credential",
+    "x_amz_security_token",
+    "x_amz_signature",
+}
+
+
+def sanitize_public_http_url(value: Any) -> str:
+    """Return a credential-free HTTP(S) URL suitable for a public hyperlink.
+
+    Reader pages are public artifacts.  Source URLs can come from providers and
+    may contain request credentials even when the evidence text itself is safe.
+    Remove URL userinfo, sensitive query parameters, and fragments before
+    rendering.  Known webhook URLs and token-shaped path values are rejected.
+    """
+
+    text = str(value or "").strip()
+    if not text or re.search(r"[\s\x00-\x1f\x7f]", text):
+        return ""
+    try:
+        parsed = urlsplit(text)
+        port = parsed.port
+    except (TypeError, ValueError):
+        return ""
+    scheme = parsed.scheme.lower()
+    hostname = parsed.hostname
+    if scheme not in {"http", "https"} or not hostname:
+        return ""
+    if _is_webhook_url(hostname, parsed.path) or _TOKEN_LIKE_PATTERN.search(parsed.path):
+        return ""
+
+    safe_query: list[tuple[str, str]] = []
+    try:
+        query_items = parse_qsl(parsed.query, keep_blank_values=True)
+    except ValueError:
+        query_items = []
+    for key, item_value in query_items:
+        normalized_key = "_".join(_mapping_key_parts(str(key or "")))
+        if _is_sensitive_mapping_key(key) or normalized_key in _PUBLIC_URL_SENSITIVE_KEYS:
+            continue
+        if _TOKEN_LIKE_PATTERN.search(str(key)) or _TOKEN_LIKE_PATTERN.search(str(item_value)):
+            continue
+        safe_query.append((key, item_value))
+
+    normalized_host = hostname.lower()
+    if ":" in normalized_host and not normalized_host.startswith("["):
+        normalized_host = f"[{normalized_host}]"
+    netloc = normalized_host if port is None else f"{normalized_host}:{port}"
+    return urlunsplit(
+        (
+            scheme,
+            netloc,
+            parsed.path or "",
+            urlencode(safe_query, doseq=True),
+            "",
+        )
+    )
 
 
 def sanitize_diagnostic_text(text: Any, *, max_length: int = 300) -> str:

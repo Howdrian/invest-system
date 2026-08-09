@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import date
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -144,9 +145,8 @@ def _load_file_report_artifact_by_id(artifact_id: str, reports_dir: Path | None 
     value = str(artifact_id or "").strip()
     if not value or not reports_dir.exists():
         return None
-    candidates = [reports_dir / f"{value}.artifact.json"]
-    if value.startswith("daily:"):
-        candidates.append(reports_dir / f"{value.split(':', 1)[1]}.artifact.json")
+    artifact_date = _daily_artifact_date(value)
+    candidates = [reports_dir / f"{artifact_date}.artifact.json"] if artifact_date else []
     for candidate in candidates:
         artifact = _read_file_artifact(candidate)
         if artifact is not None:
@@ -156,6 +156,19 @@ def _load_file_report_artifact_by_id(artifact_id: str, reports_dir: Path | None 
         if artifact is not None and str(artifact.get("artifactId") or "") == value:
             return artifact
     return None
+
+
+def _daily_artifact_date(artifact_id: str) -> str | None:
+    """Return a canonical daily date without allowing path-like identifiers."""
+
+    value = str(artifact_id or "").strip()
+    if value.startswith("daily:"):
+        value = value.split(":", 1)[1]
+    try:
+        parsed = date.fromisoformat(value)
+    except ValueError:
+        return None
+    return value if parsed.isoformat() == value else None
 
 
 def _read_file_artifact(path: Path) -> Dict[str, Any] | None:
@@ -171,7 +184,7 @@ def _read_file_artifact(path: Path) -> Dict[str, Any] | None:
     ok, errors = validate_report_artifact(payload)
     if not ok:
         logger.warning("Invalid report artifact %s: %s", path, errors)
-        payload.setdefault("quality", {})["validationErrors"] = errors
+        return None
     return payload
 
 

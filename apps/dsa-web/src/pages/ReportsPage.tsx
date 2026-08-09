@@ -62,24 +62,37 @@ const ReportsPage: React.FC = () => {
 
   return (
     <AppPage className="space-y-5">
-      <header className="space-y-2">
-        <span className="label-uppercase">Reports</span>
-        <h1 className="text-2xl font-semibold text-foreground">统一报告</h1>
-        <p className="max-w-3xl text-sm leading-6 text-secondary-text">
-          Web/App 只读取同一份报告数据；默认给读者看结论、依据、风险和下一步，高级诊断单独打开。
-        </p>
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 pb-3">
+        <div>
+          <span className="label-uppercase">Research</span>
+          <h1 className="mt-1 text-xl font-semibold text-foreground">投研报告</h1>
+        </div>
         {artifact ? (
-          <div className="flex flex-wrap gap-2 text-sm">
+          <nav className="flex flex-wrap gap-2 text-sm" aria-label="报告视图">
             <Link className="btn-secondary" to={`/reports/${artifact.runDate}`}>读者版</Link>
             <Link className="btn-secondary" to={`/reports/${artifact.runDate}/diagnostics`}>高级诊断</Link>
-          </div>
+          </nav>
         ) : null}
       </header>
       {isLoading ? <Loading label="正在加载最新报告" /> : null}
+      {isSelecting ? <Loading label="正在切换报告" /> : null}
+      {error ? <ApiErrorAlert error={error} /> : null}
+      {!isLoading && !error && !artifact ? (
+        <EmptyState title="暂无报告" description="还没有可读取的报告数据包。" />
+      ) : null}
+      {artifact ? (
+        diagnosticsRoute ? (
+          <ReportArtifactDiagnosticsView key={`${artifact.artifactId}-diagnostics`} artifact={artifact} />
+        ) : (
+          <ReportArtifactView key={`${artifact.artifactId}-reader`} artifact={artifact} />
+        )
+      ) : null}
       {!isLoading && artifacts.length ? (
-        <section className="rounded-2xl border border-border/60 bg-card/60 p-3">
-          <div className="mb-2 text-sm font-medium text-foreground">历史报告</div>
-          <div className="flex flex-wrap gap-2">
+        <details className="rounded-xl border border-border/60 bg-card/40 px-3 py-1">
+          <summary className="flex min-h-11 cursor-pointer items-center justify-between py-2 text-sm font-medium text-foreground">
+            <span>历史报告</span><span className="text-xs text-info">查看近 {artifacts.length} 期</span>
+          </summary>
+          <div className="flex flex-wrap gap-2 border-t border-border/50 py-3">
             {artifacts.map((item) => (
               <button
                 key={item.artifactId}
@@ -92,19 +105,7 @@ const ReportsPage: React.FC = () => {
               </button>
             ))}
           </div>
-        </section>
-      ) : null}
-      {isSelecting ? <Loading label="正在切换报告" /> : null}
-      {error ? <ApiErrorAlert error={error} /> : null}
-      {!isLoading && !error && !artifact ? (
-        <EmptyState title="暂无报告" description="还没有可读取的报告数据包。" />
-      ) : null}
-      {artifact ? (
-        diagnosticsRoute ? (
-          <ReportArtifactDiagnosticsView key={`${artifact.artifactId}-diagnostics`} artifact={artifact} />
-        ) : (
-          <ReportArtifactView key={`${artifact.artifactId}-reader`} artifact={artifact} />
-        )
+        </details>
       ) : null}
     </AppPage>
   );

@@ -1,8 +1,11 @@
 import hashlib
 import importlib.util
 import json
+import os
 import sys
 from pathlib import Path
+
+import pytest
 
 
 def _load_module():
@@ -15,9 +18,9 @@ def _load_module():
     return module
 
 
-
 def _sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
 
 def _write(path: Path, text: str = "ok") -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -85,6 +88,34 @@ def _minimum_bundle(docs: Path, date: str, *, fatal: bool = True, raw_count: int
         ],
         "provenance": {"origin": "invest-system.static", "sourceFiles": [], "generatedBy": "test"},
         "runMatrix": {"runId": run_matrix["runId"], "runDate": date},
+        "evidenceItems": [{"id": "fixture:1"}],
+        "departmentReports": [{"evidenceIds": ["fixture:1"]}],
+        "readerV3": {
+            "schema": "reader_v3_v1",
+            "runDate": date,
+            "hero": {
+                "action": "不操作",
+                "status": "多市场观察简报",
+                "confidence": "低可信",
+                "oneLine": "阻断",
+                "maxLimitation": "数据不足",
+                "marketStance": "市场状态待确认",
+                "portfolioAction": "未接入真实持仓，不生成组合动作",
+                "validity": "时点简报",
+                "dataCoverage": "数据不足",
+            },
+            "marketMatrix": [],
+            "stockMatrix": [],
+            "adjudication": {},
+            "reliability": {
+                "headlineSafe": True,
+                "headlineEvidenceSupported": True,
+                "headlineStatus": "supported",
+            },
+            "reportSections": [],
+            "departmentCards": [],
+            "evidenceSummary": {},
+        },
         "snapshotRefs": {
             "providerLedgerPath": f"run_status/{date}/provider_runs.jsonl",
             "evidenceLedgerPath": f"run_status/{date}/evidence_ledger.jsonl",
@@ -132,7 +163,6 @@ def test_validate_pages_bundle_flags_fatal_watch_wording(tmp_path):
     assert any("watch" in err or "score 50" in err for err in result.fatal_gate_errors)
 
 
-
 def test_validate_pages_bundle_flags_forbidden_reader_phrases(tmp_path):
     mod = _load_module()
     date = "2026-06-19"
@@ -156,6 +186,7 @@ def test_validate_pages_bundle_allows_css_percent_closing_brace(tmp_path):
 
     assert not any("%}" in err for err in result.semantic_errors)
 
+
 def test_validate_pages_bundle_flags_broken_links_and_bad_encoding(tmp_path):
     mod = _load_module()
     date = "2026-06-19"
@@ -168,6 +199,46 @@ def test_validate_pages_bundle_flags_broken_links_and_bad_encoding(tmp_path):
     assert result.broken_links
     assert result.bad_encoding_files
     assert "governed run has no RAW_AGENT memos" in result.fatal_gate_errors
+
+
+def test_validate_pages_bundle_rejects_link_outside_bundle(tmp_path):
+    mod = _load_module()
+    date = "2026-06-19"
+    _minimum_bundle(tmp_path, date)
+    outside = tmp_path.parent / "outside.html"
+    _write(outside, "outside")
+    _write(tmp_path / f"reports/{date}.html", "<a href='../../outside.html'>escape</a> 阻断")
+
+    result = mod.validate_pages_bundle(date, tmp_path)
+
+    assert result.ok is False
+    assert result.broken_links == [
+        f"reports/{date}.html -> ../../outside.html"
+    ]
+
+
+def test_validate_pages_bundle_rejects_symlink_link_outside_bundle(tmp_path):
+    mod = _load_module()
+    date = "2026-06-19"
+    _minimum_bundle(tmp_path, date)
+    outside = tmp_path.parent / "outside-linked.html"
+    _write(outside, "outside")
+    linked = tmp_path / "linked.html"
+    os.symlink(outside, linked)
+    _write(tmp_path / f"reports/{date}.html", "<a href='../linked.html'>escape</a> 阻断")
+
+    result = mod.validate_pages_bundle(date, tmp_path)
+
+    assert result.ok is False
+    assert result.broken_links == [f"reports/{date}.html -> ../linked.html"]
+
+
+@pytest.mark.parametrize("run_date", ["../../outside", "20260619", "2026-02-30"])
+def test_validate_pages_bundle_rejects_invalid_run_date(tmp_path, run_date):
+    mod = _load_module()
+
+    with pytest.raises(ValueError, match="run_date"):
+        mod.validate_pages_bundle(run_date, tmp_path)
 
 
 def test_validate_pages_bundle_flags_blocked_trade_action_phrases(tmp_path):

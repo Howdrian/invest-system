@@ -4,6 +4,9 @@ import { AlertTriangle } from 'lucide-react';
 import type {
   ReportArtifactDecision,
   ReportArtifactProviderMatrixRow,
+  ReportArtifactReaderV3,
+  ReportArtifactReaderV3DepartmentCard,
+  ReportArtifactReaderV2EvidenceSample,
   ReportArtifactSourceHealthDomain,
   ReportArtifactV1,
 } from '../../types/analysis';
@@ -34,6 +37,7 @@ const decisionActionLabel: Record<ReportArtifactDecision['action'], string> = {
 
 function readerDateTime(value?: string | null, timeOnly = false): string {
   if (!value) return '未标';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
   const options: Intl.DateTimeFormatOptions = timeOnly
@@ -48,6 +52,13 @@ function readerDateTime(value?: string | null, timeOnly = false): string {
         timeZone: 'Asia/Shanghai',
       };
   return new Intl.DateTimeFormat('zh-CN', options).format(parsed).replaceAll('/', '-');
+}
+
+function readerDataAsOf(value?: string | null): string {
+  if (!value) return '未标';
+  return /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? value
+    : `${readerDateTime(value)}（北京时间）`;
 }
 
 function diagnosticsText(value?: string | null): string {
@@ -104,7 +115,7 @@ function diagnosticsText(value?: string | null): string {
     [/operation_advice=/g, '操作建议：'],
     [/governed/gi, '深评'],
     [/\bhigh\b/g, '高'],
-    [/\bmedium\b/g, '中'],
+    [/\bmedium\b/g, '中等'],
     [/\blow\b/g, '低'],
   ];
   return replacements.reduce((text, [pattern, replacement]) => text.replace(pattern, replacement), value);
@@ -113,13 +124,6 @@ function diagnosticsText(value?: string | null): string {
 function modeText(artifact: ReportArtifactV1): string {
   const mode = artifact.analysisMode || artifact.sourceHealthV2?.overallMode || 'OBSERVE_ONLY';
   return modeLabel[mode] || '仅市场观察';
-}
-
-function confidenceText(score?: number): string {
-  if (typeof score !== 'number') return '可信度未标';
-  if (score >= 0.85) return '高可信';
-  if (score >= 0.6) return '中等可信';
-  return '低可信';
 }
 
 function actionText(decision?: ReportArtifactDecision): string {
@@ -198,22 +202,195 @@ function shortList(items?: string[], limit = 3): string[] {
   return [...new Set((items || []).map(displayText).filter(Boolean))].slice(0, limit);
 }
 
-const EvidenceSampleList: React.FC<{ items?: Array<{ id?: string; label?: string; provider?: string; factType?: string; sourceUrl?: string }> }> = ({ items }) => {
+function signedPct(value?: number): string {
+  return typeof value === 'number' ? `${value >= 0 ? '+' : ''}${value.toFixed(2)}%` : '待更新';
+}
+
+function readerPrice(value?: number, currency?: string): string {
+  return typeof value === 'number' ? `${value.toFixed(2)} ${currency || ''}`.trim() : '待更新';
+}
+
+function evidenceSourceName(item: ReportArtifactReaderV2EvidenceSample): string {
+  const sourceName = displayText(item.sourceName);
+  if (sourceName) return sourceName;
+
+  const provider = displayText(item.provider);
+  const sourceUrl = validSourceUrl(item.sourceUrl);
+  if (sourceUrl) {
+    const host = new URL(sourceUrl).hostname.toLowerCase();
+    if (hostnameMatches(host, 'sec.gov')) return 'SEC 官方披露';
+    if (hostnameMatches(host, 'cninfo.com.cn')) return '巨潮资讯官方公告';
+    if (hostnameMatches(host, 'hkex.com.hk')) return '港交所官方披露';
+  }
+  const providerLabels: Record<string, string> = {
+    akshare: 'AKShare',
+    aksharefetcher: 'AKShare',
+    cninfo: '巨潮资讯',
+    cninfofetcher: '巨潮资讯',
+    eastmoney: '东方财富',
+    eastmoneyfetcher: '东方财富',
+    sec: 'SEC EDGAR',
+    secedgar: 'SEC EDGAR',
+    yfinance: 'Yahoo Finance',
+    yfinancefetcher: 'Yahoo Finance',
+  };
+  if (providerLabels[provider.toLowerCase()]) return providerLabels[provider.toLowerCase()];
+
+  if (/(?:Data)?(?:Fetcher|Provider|Adapter|Client|Service)$/i.test(provider)) return '公开数据源';
+  return provider || '来源';
+}
+
+const TOKEN_LIKE_URL_VALUE = /(?:sk-[a-z0-9_-]{16,}|xox[baprs]-[a-z0-9-]{16,}|gh[pousr]_[a-z0-9_]{20,})/i;
+const SENSITIVE_URL_KEYS = new Set([
+  'auth', 'authkey', 'code', 'credential', 'credentials', 'key', 'pass',
+  'passwd', 'password', 'session', 'sessionid', 'sig', 'signature',
+  'xamzcredential', 'xamzsecuritytoken', 'xamzsignature',
+]);
+
+function hostnameMatches(hostname: string, domain: string): boolean {
+  const host = hostname.toLowerCase().replace(/\.$/, '');
+  return host === domain || host.endsWith(`.${domain}`);
+}
+
+function isSensitiveUrlKey(key: string): boolean {
+  const compact = key.toLowerCase().replace(/[^a-z0-9]/g, '');
+  return SENSITIVE_URL_KEYS.has(compact)
+    || /authorization|cookie|password|secret|sendkey|token(?!s)|webhook/.test(compact)
+    || /(?:api|license|private)key/.test(compact);
+}
+
+function isWebhookUrl(url: URL): boolean {
+  const host = url.hostname.toLowerCase();
+  const path = url.pathname.toLowerCase();
+  return (hostnameMatches(host, 'hooks.slack.com') && path.startsWith('/services/'))
+    || ((hostnameMatches(host, 'discord.com') || hostnameMatches(host, 'discordapp.com')) && path.startsWith('/api/webhooks/'))
+    || (hostnameMatches(host, 'open.feishu.cn') && path.includes('/open-apis/bot/') && path.includes('/hook/'))
+    || (hostnameMatches(host, 'oapi.dingtalk.com') && path.startsWith('/robot/send'))
+    || (hostnameMatches(host, 'qyapi.weixin.qq.com') && path.startsWith('/cgi-bin/webhook/send'));
+}
+
+function validSourceUrl(value?: string): string | null {
+  const text = value?.trim();
+  if (!text || Array.from(text).some((char) => /\s/.test(char) || char.charCodeAt(0) <= 31 || char.charCodeAt(0) === 127)) return null;
+  try {
+    const url = new URL(text);
+    if ((url.protocol !== 'http:' && url.protocol !== 'https:') || !url.hostname) return null;
+    let decodedPath = url.pathname;
+    try { decodedPath = decodeURIComponent(url.pathname); } catch { /* retain encoded path */ }
+    if (isWebhookUrl(url) || TOKEN_LIKE_URL_VALUE.test(decodedPath)) return null;
+
+    url.username = '';
+    url.password = '';
+    url.hash = '';
+    const keysToDelete: string[] = [];
+    url.searchParams.forEach((itemValue, key) => {
+      if (isSensitiveUrlKey(key) || TOKEN_LIKE_URL_VALUE.test(key) || TOKEN_LIKE_URL_VALUE.test(itemValue)) {
+        keysToDelete.push(key);
+      }
+    });
+    keysToDelete.forEach((key) => url.searchParams.delete(key));
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+function evidenceCopy(item: ReportArtifactReaderV2EvidenceSample): string {
+  const label = displayText(item.label);
+  if (
+    !label
+    || /(?:raw[_\s-]+(?:rows|payload)|\brows\s*[:=]|[_-]payload\b|\bpayload\s*[:=])/i.test(label)
+    || /(?:^|\s)[a-z][a-z0-9_]{2,}\s*=/i.test(label)
+  ) return '';
+  return label;
+}
+
+const EvidenceSampleList: React.FC<{ items?: ReportArtifactReaderV2EvidenceSample[] }> = ({ items }) => {
   const rows = (items || []).slice(0, 4);
   if (!rows.length) return <div className="text-xs text-muted-text">未提供证据样例。</div>;
   return (
     <ul className="list-disc space-y-1 pl-5 text-xs text-secondary-text">
-      {rows.map((item) => (
-        <li key={item.id || item.label}>
-          <span className="font-medium text-foreground">{displayText(item.provider || '证据')}</span>
-          {item.factType ? <span className="text-muted-text"> · {displayText(item.factType)}</span> : null}
-          <span>：{displayText(item.label || item.id || '')}</span>
-          {item.sourceUrl ? <a className="ml-1 text-info hover:underline" href={item.sourceUrl} target="_blank" rel="noreferrer">来源</a> : null}
-        </li>
-      ))}
+      {rows.map((item, index) => {
+        const sourceName = evidenceSourceName(item);
+        const sourceUrl = validSourceUrl(item.sourceUrl);
+        const metadata = [displayText(item.factType), displayText(item.asOf)].filter(Boolean);
+        const copy = evidenceCopy(item);
+        return (
+          <li key={item.id || `${sourceName}-${index}`}>
+            {sourceUrl ? (
+              <a className="font-medium text-info hover:underline" href={sourceUrl} target="_blank" rel="noreferrer">{sourceName}</a>
+            ) : <span className="font-medium text-foreground">{sourceName}</span>}
+            {metadata.length ? <span className="text-muted-text"> · {metadata.join(' · ')}</span> : null}
+            {copy ? <span className="mt-0.5 block leading-5 text-secondary-text">{copy}</span> : null}
+          </li>
+        );
+      })}
     </ul>
   );
 };
+
+const AdjudicationPanel: React.FC<{
+  adjudication?: ReportArtifactReaderV3['adjudication'];
+  fallback: string;
+}> = ({ adjudication, fallback }) => {
+  if (!adjudication) return null;
+  const sharedFacts = shortList(adjudication.sharedFacts, 3);
+  const invalidationTriggers = shortList(adjudication.invalidationTriggers, 3);
+  return (
+    <section className="border-b border-border/70 pb-9" data-testid="adjudication-panel">
+      <div className="text-[11px] font-semibold tracking-[0.16em] text-info">情景裁决</div>
+      <h2 className="mt-1 text-xl font-semibold text-foreground">基准情景与竞争情景</h2>
+      <div className="mt-5 grid gap-4 lg:grid-cols-2">
+        <div className="border-l-2 border-info/60 bg-background/25 p-5">
+          <div className="text-sm font-medium text-foreground">基准情景</div>
+          <p className="mt-2 text-sm leading-6 text-secondary-text">{displayText(adjudication.baseCase || '尚未形成。')}</p>
+        </div>
+        <div className="border-l-2 border-warning/60 bg-background/25 p-5">
+          <div className="text-sm font-medium text-foreground">最强竞争情景</div>
+          <p className="mt-2 text-sm leading-6 text-secondary-text">{displayText(adjudication.strongestAlternative || '暂无形成证据链的竞争情景。')}</p>
+        </div>
+      </div>
+      <div className="mt-5 border-l-4 border-info bg-info/5 px-5 py-4">
+        <div className="text-sm font-medium text-foreground">CIO 当前裁决</div>
+        <p className="mt-1 text-sm leading-6 text-secondary-text">{displayText(adjudication.judgment || fallback)}</p>
+        {adjudication.why ? <p className="mt-2 text-xs leading-5 text-muted-text">为什么：{displayText(adjudication.why)}</p> : null}
+      </div>
+      <details className="mt-4 rounded-xl border border-border/60 px-4 py-1">
+        <summary className="flex min-h-11 cursor-pointer items-center justify-between py-2 text-sm font-medium text-foreground">
+          <span>共同事实与翻转信号</span><span className="text-xs text-info">展开</span>
+        </summary>
+        <div className="grid gap-5 border-t border-border/50 py-4 lg:grid-cols-2">
+          <div><div className="text-sm font-medium text-foreground">双方共同事实</div><ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-secondary-text">{sharedFacts.map((item) => <li key={item}>{item}</li>)}</ul></div>
+          <div><div className="text-sm font-medium text-foreground">推翻当前裁决的信号</div><ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-secondary-text">{invalidationTriggers.map((item) => <li key={item}>{item}</li>)}</ul></div>
+        </div>
+      </details>
+    </section>
+  );
+};
+
+const DepartmentDisclosure: React.FC<{ report: ReportArtifactReaderV3DepartmentCard }> = ({ report }) => (
+  <details className="report-department min-w-0 rounded-xl border border-border/60 bg-background/40 text-sm">
+    <summary className="min-h-11 cursor-pointer list-none px-3 py-3 [&::-webkit-details-marker]:hidden">
+      <span className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+        <span className="font-medium text-foreground">{displayText(report.label || report.agent || '分析部门')}</span>
+        <span className="flex items-center gap-2">
+          {report.confidence ? <Badge variant={report.confidence === 'high' ? 'success' : report.confidence === 'low' ? 'warning' : 'info'}>{({ high: '高可信', medium: '中等可信', low: '低可信' } as Record<string, string>)[report.confidence] || displayText(report.confidence)}</Badge> : null}
+          <span className="text-xs text-info">查看依据</span>
+        </span>
+      </span>
+      <span className="report-department-summary mt-1 block min-w-0 leading-6 text-secondary-text">{displayText(report.conclusion || '本部门未给出可读结论。')}</span>
+    </summary>
+    <div className="space-y-3 border-t border-border/50 px-3 py-3 text-xs text-secondary-text">
+      {shortList(report.nextActions || (report.nextAction ? [report.nextAction] : []), 3).length ? <div><div className="font-medium text-foreground">下一步</div><ul className="list-disc pl-5">{shortList(report.nextActions || (report.nextAction ? [report.nextAction] : []), 3).map((item) => <li key={item}>{item}</li>)}</ul></div> : null}
+      {shortList(report.keyClaims, 4).length ? <div><div className="font-medium text-foreground">依据</div><ul className="list-disc pl-5">{shortList(report.keyClaims, 4).map((item) => <li key={item}>{item}</li>)}</ul></div> : null}
+      {report.challengedClaims?.length ? <div><div className="font-medium text-warning">已识别的争议结论</div><div className="mt-1 space-y-2">{report.challengedClaims.slice(0, 3).map((item, index) => <div key={`${item.claim || 'challenge'}-${index}`} className="rounded-lg border border-warning/30 bg-warning/5 p-2"><div>{displayText(item.claim || '')}</div><div className="mt-1 text-warning">{displayText(item.status || '存在有效反证')}</div>{item.opposingScenario ? <div className="mt-1">反方情景：{displayText(item.opposingScenario)}</div> : null}{item.falsifier ? <div className="mt-1 text-muted-text">如何验证：{displayText(item.falsifier)}</div> : null}</div>)}</div></div> : null}
+      {shortList(report.counterpoints, 3).length ? <div><div className="font-medium text-foreground">反证</div><ul className="list-disc pl-5">{shortList(report.counterpoints, 3).map((item) => <li key={item}>{item}</li>)}</ul></div> : null}
+      {shortList(report.dataGaps, 2).length ? <div><div className="font-medium text-foreground">还需要确认</div><ul className="list-disc pl-5">{shortList(report.dataGaps, 2).map((item) => <li key={item}>{item}</li>)}</ul></div> : null}
+      {shortList(report.supportSignals, 3).length ? <div><div className="font-medium text-foreground">支撑信号</div><ul className="list-disc pl-5">{shortList(report.supportSignals, 3).map((item) => <li key={item}>{item}</li>)}</ul></div> : null}
+      <div><div className="font-medium text-foreground">证据样例</div><EvidenceSampleList items={report.evidenceSamples} /></div>
+    </div>
+  </details>
+);
 
 export const ReportArtifactView: React.FC<ReportArtifactViewProps> = ({ artifact }) => {
   const reader = artifact.readerV3;
@@ -221,175 +398,253 @@ export const ReportArtifactView: React.FC<ReportArtifactViewProps> = ({ artifact
   const departmentGapItems = reader?.evidenceSummary?.departmentGapItems ?? 0;
   const hero = reader?.hero;
   const fallbackAction = actionText(artifact.decision);
-  const fallbackConfidence = confidenceText(artifact.sourceHealthV2?.overallScore);
   const title = `${reader?.runDate || artifact.runDate} 投研日报`;
   const timing = reader?.timing;
-  const action = displayText(hero?.action || fallbackAction);
-  const confidence = displayText(hero?.confidence || fallbackConfidence);
-  const status = displayText(hero?.status || modeText(artifact));
+  const marketStance = displayText(hero?.marketStance || hero?.status || modeText(artifact));
+  const portfolioAction = displayText(hero?.portfolioAction || hero?.action || fallbackAction);
+  const validity = displayText(hero?.validity)
+    || (timing?.dataAsOf ? `截至 ${readerDataAsOf(timing.dataAsOf)}` : '时效未标');
+  const dataCoverage = displayText(hero?.dataCoverage || reader?.assessment?.dataCoverage || hero?.coverage || modeText(artifact));
+  const confidence = displayText(hero?.confidence || reader?.reliability?.label || '可信度未标');
   const oneLine = displayText(hero?.oneLine || artifact.summary.finalConclusion || artifact.summary.oneLine);
   const maxLimitation = displayText(hero?.maxLimitation || caveatText(artifact) || '仍需人工复核，不自动执行交易。');
-  const coverage = displayText(hero?.coverage);
   const keyReasons = shortList(reader?.keyReasons || artifact.readerBrief?.why, 3);
   const counterpoints = shortList(reader?.counterpoints || artifact.readerBrief?.risks, 3);
   const nextSteps = shortList(reader?.nextSteps || artifact.readerBrief?.nextSteps || artifact.summary.nextSteps, 3);
   const marketGeo = shortList(reader?.marketGeo, 3);
   const adjudication = reader?.adjudication;
-  const sharedFacts = shortList(adjudication?.sharedFacts, 3);
-  const invalidationTriggers = shortList(adjudication?.invalidationTriggers, 3);
   const reliabilityWarnings = shortList(reader?.reliability?.warnings, 3);
   const departments = reader?.departmentCards || [];
+  const featuredDepartmentNames = new Set(['CIO 报告', '风险部门', '市场部门', '持仓复核部门']);
+  const featuredDepartments = departments.filter((report) => featuredDepartmentNames.has(report.label || report.agent || '')).slice(0, 4);
+  const otherDepartments = departments.filter((report) => !featuredDepartments.includes(report));
+  const marketMatrix = reader?.marketMatrix || [];
+  const stockMatrix = reader?.stockMatrix || [];
+  const coreEvidence = Array.from(
+    new Map(
+      departments
+        .flatMap((report) => report.evidenceSamples || [])
+        .map((item) => [item.id || `${item.sourceName || item.provider}-${item.asOf}-${item.label}`, item]),
+    ).values(),
+  ).slice(0, 6);
 
   return (
-    <article className="report-reader min-w-0 max-w-full space-y-5" data-testid="report-artifact-view">
-      <Card variant="gradient" padding="lg">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="min-w-0 space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant={action === '不操作' ? 'warning' : 'info'}>{action}</Badge>
-              <Badge variant="info">数据覆盖：{status}</Badge>
-              <Badge variant={confidence.includes('高') ? 'success' : confidence.includes('低') ? 'warning' : 'info'}>结论可信度：{confidence}</Badge>
-            </div>
-            <h1 className="text-2xl font-semibold text-foreground">{title}</h1>
-            <p className="text-xs text-muted-text">
-              报告日期 {timing?.reportDate || artifact.runDate}
-              {' · '}综合数据截至 {readerDateTime(timing?.dataAsOf)}（北京时间）
-              {' · '}生成于 {readerDateTime(timing?.generatedAt || artifact.generatedAt, true)}
-            </p>
-            {coverage ? <p className="text-xs text-muted-text">{coverage}</p> : null}
-            <p className="text-base leading-7 text-secondary-text">{oneLine}</p>
-          </div>
-          <div className="rounded-2xl border border-border/60 bg-background/45 px-4 py-3 text-sm text-secondary-text">
-            <div className="font-medium text-foreground">最大限制</div>
-            <div className="mt-1 max-w-xs leading-6">{maxLimitation}</div>
-          </div>
+    <article className="report-reader mx-auto min-w-0 max-w-7xl space-y-10 pb-10" data-testid="report-artifact-view">
+      <header className="border-b border-border/70 pb-8 pt-2">
+        <div className="flex flex-wrap items-center justify-between gap-3 text-[11px] font-medium uppercase tracking-[0.16em] text-muted-text">
+          <span>{displayText(hero?.status || '每日投研')}</span>
+          <span>{timing?.reportDate || artifact.runDate}</span>
         </div>
-      </Card>
+        <h1 className="mt-6 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">{title}</h1>
+        <p className="mt-5 max-w-5xl text-xl font-medium leading-9 text-foreground">{oneLine}</p>
+        <dl className="mt-6 grid gap-5 border-y border-border/70 py-5 sm:grid-cols-2">
+          {[
+            ['研究立场', marketStance],
+            ['组合动作', portfolioAction],
+          ].map(([label, value]) => (
+            <div key={label}>
+              <dt className="text-xs font-medium text-muted-text">{label}</dt>
+              <dd className="mt-1 text-base font-semibold leading-7 text-foreground">{value}</dd>
+            </div>
+          ))}
+        </dl>
+        <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-xs text-muted-text">
+          <span><b className="font-medium text-foreground">可信度</b> {confidence}</span>
+          <span><b className="font-medium text-foreground">时效</b> {validity}</span>
+          <span><b className="font-medium text-foreground">覆盖</b> {dataCoverage}</span>
+        </div>
+        <p className="mt-3 text-xs leading-5 text-muted-text">
+          综合数据截至 {readerDataAsOf(timing?.dataAsOf)}
+          {' · '}生成于 {readerDateTime(timing?.generatedAt || artifact.generatedAt, true)}
+        </p>
+        <div className="mt-5 flex max-w-5xl gap-3 text-sm leading-6 text-secondary-text">
+          <span className="shrink-0 font-medium text-foreground">研究边界</span>
+          <span>{maxLimitation}</span>
+        </div>
+      </header>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card title="核心理由" className="border border-border/60 bg-card/72">
-          {keyReasons.length ? (
-            <ul className="list-disc space-y-2 pl-5 text-sm text-secondary-text">{keyReasons.map((item) => <li key={item}>{item}</li>)}</ul>
-          ) : <div className="text-sm text-muted-text">未提供核心理由。</div>}
-        </Card>
-        <Card title="最大反证 / 风险" className="border border-border/60 bg-card/72">
-          {counterpoints.length ? (
-            <ul className="list-disc space-y-2 pl-5 text-sm text-secondary-text">{counterpoints.map((item) => <li key={item}>{item}</li>)}</ul>
-          ) : <div className="text-sm text-muted-text">未提供反证。</div>}
-        </Card>
-        <Card title="下一步" className="border border-border/60 bg-card/72">
-          {nextSteps.length ? (
-            <ul className="list-disc space-y-2 pl-5 text-sm text-secondary-text">{nextSteps.map((item) => <li key={item}>{item}</li>)}</ul>
-          ) : <div className="text-sm text-muted-text">等待下一次刷新。</div>}
-        </Card>
-      </div>
+      <section className="grid gap-8 border-b border-border/70 pb-9 lg:grid-cols-3">
+        {[
+          ['核心理由', '研究依据', keyReasons, '未提供核心理由。'],
+          ['最大反证 / 风险', '反向验证', counterpoints, '未提供反证。'],
+          ['下一步', '后续观察', nextSteps, '等待下一次刷新。'],
+        ].map(([heading, eyebrow, items, empty]) => (
+          <div key={heading as string} className="lg:border-l lg:border-border/70 lg:first:border-l-0 lg:first:pl-0 lg:pl-8">
+            <div className="text-[11px] font-semibold tracking-[0.16em] text-info">{eyebrow as string}</div>
+            <h2 className="mt-1 text-xl font-semibold text-foreground">{heading as string}</h2>
+            {(items as string[]).length ? (
+              <ul className="mt-4 list-disc space-y-2 pl-5 text-sm leading-6 text-secondary-text">
+                {(items as string[]).map((item) => <li key={item}>{item}</li>)}
+              </ul>
+            ) : <p className="mt-4 text-sm text-muted-text">{empty as string}</p>}
+          </div>
+        ))}
+      </section>
 
-      {adjudication ? (
-        <Card title="基准情景、竞争情景与 CIO 裁决" className="border border-border/60 bg-card/72">
-          {sharedFacts.length ? (
-            <div className="mb-4">
-              <div className="text-sm font-medium text-foreground">双方共同事实</div>
-              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-secondary-text">
-                {sharedFacts.map((item) => <li key={item}>{item}</li>)}
-              </ul>
-            </div>
-          ) : null}
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div className="rounded-xl bg-background/35 p-4">
-              <div className="text-sm font-medium text-foreground">基准情景</div>
-              <p className="mt-2 text-sm leading-6 text-secondary-text">{displayText(adjudication.baseCase || '尚未形成。')}</p>
-            </div>
-            <div className="rounded-xl bg-background/35 p-4">
-              <div className="text-sm font-medium text-foreground">最强竞争情景</div>
-              <p className="mt-2 text-sm leading-6 text-secondary-text">{displayText(adjudication.strongestAlternative || '暂无形成证据链的竞争情景。')}</p>
-            </div>
+      {coreEvidence.length ? (
+        <details className="-mt-7 border-b border-border/70 pb-5 text-sm" data-testid="core-evidence-drawer">
+          <summary className="flex min-h-11 cursor-pointer items-center justify-between py-2 font-medium text-foreground">
+            <span>查看核心证据</span><span className="text-xs text-info">来源与时间</span>
+          </summary>
+          <div className="border-t border-border/50 pt-4"><EvidenceSampleList items={coreEvidence} /></div>
+        </details>
+      ) : null}
+
+      <AdjudicationPanel adjudication={adjudication} fallback={oneLine} />
+
+      {marketMatrix.length ? (
+        <section className="border-b border-border/70 pb-9">
+          <div className="text-[11px] font-semibold tracking-[0.16em] text-info">市场范围</div>
+          <h2 className="mt-1 text-xl font-semibold text-foreground">市场范围与样本表现</h2>
+          <div className="mt-5 grid gap-3 md:hidden" data-testid="market-mobile-cards">
+            {marketMatrix.map((row, index) => (
+              <article key={`${row.market}-${row.scopeLabel}-${index}`} className="rounded-xl border border-border/70 bg-background/30 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="font-semibold text-foreground">{displayText(row.scopeLabel || row.market || '市场')}</h3>
+                    <div className="mt-1 text-xs text-info">{row.scopeType === 'market' ? '市场数据' : '观察样本'}</div>
+                  </div>
+                  <span className="text-right text-sm font-medium text-secondary-text">{displayText(row.state || '待观察')}</span>
+                </div>
+                <p className="mt-4 text-sm leading-6 text-secondary-text">{displayText(row.headline || '未提供')}</p>
+                {row.scopeNote ? <p className="mt-2 text-xs leading-5 text-muted-text">{displayText(row.scopeNote)}</p> : null}
+              </article>
+            ))}
           </div>
-          <div className="mt-4 border-l-2 border-info pl-4">
-            <div className="text-sm font-medium text-foreground">CIO 当前裁决</div>
-            <p className="mt-1 text-sm leading-6 text-secondary-text">{displayText(adjudication.judgment || oneLine)}</p>
-            {adjudication.why ? <p className="mt-2 text-xs leading-5 text-muted-text">为什么：{displayText(adjudication.why)}</p> : null}
+          <div className="mt-5 hidden overflow-x-auto md:block" data-testid="market-desktop-table">
+            <table className="w-full min-w-[760px] text-left text-sm" aria-label="市场范围桌面表格">
+              <thead className="text-xs text-muted-text"><tr><th className="pb-3">范围</th><th className="pb-3">状态</th><th className="pb-3">关键表现</th><th className="pb-3">如何解读</th></tr></thead>
+              <tbody>
+                {marketMatrix.map((row, index) => (
+                  <tr key={`${row.market}-${row.scopeLabel}-${index}`} className="border-t border-border/60 align-top">
+                    <td className="py-4 pr-5 font-medium text-foreground">{displayText(row.scopeLabel || row.market || '市场')}<div className="mt-1 text-xs font-normal text-info">{row.scopeType === 'market' ? '市场数据' : '观察样本'}</div></td>
+                    <td className="py-4 pr-5 text-secondary-text">{displayText(row.state || '待观察')}</td>
+                    <td className="py-4 pr-5 text-secondary-text">{displayText(row.headline || '未提供')}</td>
+                    <td className="py-4 text-muted-text">{displayText(row.scopeNote || '')}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-          {invalidationTriggers.length ? (
-            <div className="mt-4">
-              <div className="text-sm font-medium text-foreground">推翻当前裁决的信号</div>
-              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-secondary-text">
-                {invalidationTriggers.map((item) => <li key={item}>{item}</li>)}
-              </ul>
-            </div>
-          ) : null}
-        </Card>
+        </section>
+      ) : null}
+
+      {stockMatrix.length ? (
+        <section className="border-b border-border/70 pb-9">
+          <div className="text-[11px] font-semibold tracking-[0.16em] text-info">标的跟踪</div>
+          <h2 className="mt-1 text-xl font-semibold text-foreground">重点标的跟踪</h2>
+          <p className="mt-2 text-sm text-muted-text">价格与指标来自同轮证据；定位是研究观察，不代表自动交易指令。</p>
+          <div className="mt-5 grid gap-3 md:hidden" data-testid="stock-mobile-cards">
+            {stockMatrix.map((row, index) => (
+              <article key={`${row.symbol}-${index}`} className="rounded-xl border border-border/70 bg-background/30 p-4" data-testid={`stock-mobile-card-${row.symbol || index}`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-xs text-muted-text">标的</div>
+                    <h3 className="mt-1 font-semibold text-foreground">{displayText(row.name || row.symbol || '标的')}</h3>
+                    {row.symbol ? <div className="mt-0.5 text-xs text-muted-text">{row.symbol}</div> : null}
+                  </div>
+                  <span className="rounded-full bg-info/10 px-2.5 py-1 text-xs font-medium text-info">{displayText(row.stance || '观察')}</span>
+                </div>
+                <dl className="mt-4 grid gap-4 text-sm">
+                  <div>
+                    <dt className="text-xs text-muted-text">价格</dt>
+                    <dd className="mt-1 font-medium text-foreground">{readerPrice(row.lastPrice, row.currency)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted-text">1 / 20 日表现</dt>
+                    <dd className="mt-1 text-secondary-text">1日 {signedPct(row.return1dPct)} · 20日 {signedPct(row.return20dPct)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted-text">趋势 / 观察位</dt>
+                    <dd className="mt-1 leading-6 text-secondary-text">{displayText(row.trend || '趋势待确认')}{row.watchLevels ? ` · ${displayText(row.watchLevels)}` : ''}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted-text">基本面</dt>
+                    <dd className="mt-1 leading-6 text-secondary-text">{displayText(row.fundamental || '结构化基本面待补强')}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted-text">估值</dt>
+                    <dd className="mt-1 leading-6 text-secondary-text">{displayText(row.valuation || '当前估值与历史样本待补')}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted-text">官方事件</dt>
+                    <dd className="mt-1 leading-6 text-secondary-text">
+                      {validSourceUrl(row.eventUrl) ? <a className="text-info hover:underline" href={validSourceUrl(row.eventUrl) || undefined} target="_blank" rel="noreferrer">{displayText(row.latestEvent || '官方事件')}</a> : displayText(row.latestEvent || '暂无近期官方事件摘要')}
+                      {row.eventDate ? <span className="ml-2 text-xs text-muted-text">{row.eventDate}</span> : null}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted-text">定位</dt>
+                    <dd className="mt-1 text-secondary-text">{displayText(row.stance || '观察')}</dd>
+                  </div>
+                </dl>
+              </article>
+            ))}
+          </div>
+          <div className="mt-5 hidden overflow-x-auto md:block" data-testid="stock-desktop-table">
+            <table className="w-full min-w-[1280px] text-left text-sm" aria-label="重点标的桌面表格">
+              <thead className="text-xs text-muted-text"><tr><th className="pb-3">标的</th><th className="pb-3">价格 / 表现</th><th className="pb-3">趋势 / 观察位</th><th className="pb-3">基本面</th><th className="pb-3">估值</th><th className="pb-3">最新官方事件</th><th className="pb-3">定位</th></tr></thead>
+              <tbody>
+                {stockMatrix.map((row, index) => (
+                  <tr key={`${row.symbol}-${index}`} className="border-t border-border/60 align-top">
+                    <td className="py-4 pr-5"><div className="font-medium text-foreground">{displayText(row.name || row.symbol || '标的')}</div><div className="text-xs text-muted-text">{row.symbol}</div></td>
+                    <td className="py-4 pr-5 text-secondary-text">{readerPrice(row.lastPrice, row.currency)}<div className="mt-1 text-xs text-muted-text">1日 {signedPct(row.return1dPct)} / 20日 {signedPct(row.return20dPct)}</div></td>
+                    <td className="py-4 pr-5 text-secondary-text">{displayText(row.trend || '趋势待确认')}<div className="mt-1 max-w-xs text-xs text-muted-text">{displayText(row.watchLevels || '')}</div></td>
+                    <td className="max-w-xs py-4 pr-5 leading-6 text-secondary-text">{displayText(row.fundamental || '结构化基本面待补强')}</td>
+                    <td className="max-w-xs py-4 pr-5 leading-6 text-secondary-text">{displayText(row.valuation || '当前估值与历史样本待补')}</td>
+                    <td className="max-w-xs py-4 pr-5 leading-6 text-secondary-text">{validSourceUrl(row.eventUrl) ? <a className="text-info hover:underline" href={validSourceUrl(row.eventUrl) || undefined} target="_blank" rel="noreferrer">{displayText(row.latestEvent || '官方事件')}</a> : displayText(row.latestEvent || '暂无近期官方事件摘要')}<div className="text-xs text-muted-text">{row.eventDate}</div></td>
+                    <td className="py-4"><span className="rounded-full bg-info/10 px-2.5 py-1 text-xs font-medium text-info">{displayText(row.stance || '观察')}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
       ) : null}
 
       {marketGeo.length ? (
-        <Card title="市场与地缘" className="border border-border/60 bg-card/72">
+        <section className="border-b border-border/70 pb-9">
+          <div className="text-[11px] font-semibold tracking-[0.16em] text-info">宏观与地缘</div>
+          <h2 className="mt-1 text-xl font-semibold text-foreground">市场与地缘</h2>
           <ul className="list-disc space-y-2 pl-5 text-sm text-secondary-text">{marketGeo.map((item) => <li key={item}>{item}</li>)}</ul>
-        </Card>
+        </section>
       ) : null}
 
-      <Card title="部门摘要" className="min-w-0 border border-border/60 bg-card/72">
+      <section className="min-w-0 border-b border-border/70 pb-9">
+        <div className="text-[11px] font-semibold tracking-[0.16em] text-info">部门观点</div>
+        <h2 className="mt-1 text-xl font-semibold text-foreground">部门研究摘要</h2>
         <p className="mb-4 text-sm text-muted-text">摘要直接可见；依据、反证、待确认项和证据默认折叠。</p>
         {departments.length ? (
           <div className="grid min-w-0 gap-2">
-            {departments.slice(0, 12).map((report) => (
-              <details key={`${report.agent || report.label}`} className="report-department min-w-0 rounded-xl border border-border/60 bg-background/40 text-sm">
-                <summary className="cursor-pointer list-none px-3 py-3 [&::-webkit-details-marker]:hidden">
-                  <span className="flex min-w-0 flex-wrap items-center justify-between gap-2">
-                    <span className="font-medium text-foreground">{displayText(report.label || report.agent || '分析部门')}</span>
-                    {report.confidence ? <Badge variant={report.confidence === 'high' ? 'success' : report.confidence === 'low' ? 'warning' : 'info'}>{displayText(report.confidence)}</Badge> : null}
-                  </span>
-                  <span className="report-department-summary mt-1 block min-w-0 leading-6 text-secondary-text">{displayText(report.conclusion || '本部门未给出可读结论。')}</span>
+            {featuredDepartments.map((report) => <DepartmentDisclosure key={`${report.agent || report.label}`} report={report} />)}
+            {otherDepartments.length ? (
+              <details className="mt-2 rounded-xl border border-border/60 px-3 py-1">
+                <summary className="flex min-h-11 cursor-pointer items-center justify-between py-2 font-medium text-foreground">
+                  <span>其余 {otherDepartments.length} 个研究部门</span><span className="text-xs text-info">展开全部</span>
                 </summary>
-                <div className="space-y-3 border-t border-border/50 px-3 py-3 text-xs text-secondary-text">
-                    {shortList(report.nextActions || (report.nextAction ? [report.nextAction] : []), 3).length ? (
-                      <div>
-                        <div className="font-medium text-foreground">下一步</div>
-                        <ul className="list-disc pl-5">
-                          {shortList(report.nextActions || (report.nextAction ? [report.nextAction] : []), 3).map((item) => <li key={item}>{item}</li>)}
-                        </ul>
-                      </div>
-                    ) : null}
-                    {shortList(report.keyClaims, 4).length ? <div><div className="font-medium text-foreground">依据</div><ul className="list-disc pl-5">{shortList(report.keyClaims, 4).map((item) => <li key={item}>{item}</li>)}</ul></div> : null}
-                    {report.challengedClaims?.length ? (
-                      <div>
-                        <div className="font-medium text-warning">已识别的争议结论</div>
-                        <div className="mt-1 space-y-2">
-                          {report.challengedClaims.slice(0, 3).map((item, index) => (
-                            <div key={`${item.claim || 'challenge'}-${index}`} className="rounded-lg border border-warning/30 bg-warning/5 p-2">
-                              <div>{displayText(item.claim || '')}</div>
-                              <div className="mt-1 text-warning">{displayText(item.status || '存在有效反证')}</div>
-                              {item.opposingScenario ? <div className="mt-1">反方情景：{displayText(item.opposingScenario)}</div> : null}
-                              {item.falsifier ? <div className="mt-1 text-muted-text">如何验证：{displayText(item.falsifier)}</div> : null}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ) : null}
-                    {shortList(report.counterpoints, 3).length ? <div><div className="font-medium text-foreground">反证</div><ul className="list-disc pl-5">{shortList(report.counterpoints, 3).map((item) => <li key={item}>{item}</li>)}</ul></div> : null}
-                    {shortList(report.dataGaps, 2).length ? <div><div className="font-medium text-foreground">还需要确认</div><ul className="list-disc pl-5">{shortList(report.dataGaps, 2).map((item) => <li key={item}>{item}</li>)}</ul></div> : null}
-                    {shortList(report.supportSignals, 3).length ? <div><div className="font-medium text-foreground">支撑信号</div><ul className="list-disc pl-5">{shortList(report.supportSignals, 3).map((item) => <li key={item}>{item}</li>)}</ul></div> : null}
-                    <div><div className="font-medium text-foreground">证据样例</div><EvidenceSampleList items={report.evidenceSamples} /></div>
+                <div className="grid gap-2 border-t border-border/50 py-3">
+                  {otherDepartments.map((report) => <DepartmentDisclosure key={`${report.agent || report.label}`} report={report} />)}
                 </div>
               </details>
-            ))}
+            ) : null}
           </div>
         ) : <div className="text-sm text-muted-text">本轮未记录到分部门结论。</div>}
-      </Card>
+      </section>
 
-      <Card title="证据摘要" className="border border-border/60 bg-card/72">
-        <p className="mb-3 text-sm leading-7 text-secondary-text">{displayText(reader?.dataConfidence || '本轮数据可用于投研复核，仍需人工判断。')}</p>
-        <div className="grid gap-3 text-sm text-secondary-text sm:grid-cols-2 lg:grid-cols-4">
-          <div>已验证：<span className="text-foreground">{stats?.verifiedFacts ?? 0}</span></div>
-          <div>推导：<span className="text-foreground">{stats?.derivedFacts ?? 0}</span></div>
-          <div>发现线索：<span className="text-foreground">{stats?.discoveryItems ?? 0}</span></div>
-          <div>关键证据缺口：<span className="text-foreground">{stats?.missingCriticalFacts ?? 0}</span></div>
-          <div>部门待确认：<span className="text-foreground">{departmentGapItems}</span></div>
+      <details className="border-y border-border/70 py-1 text-sm">
+        <summary className="cursor-pointer py-3 font-medium text-muted-text">数据与方法说明</summary>
+        <div className="pb-4">
+          <p className="mb-3 leading-7 text-secondary-text">{displayText(reader?.dataConfidence || '本轮数据可用于投研复核，仍需人工判断。')}</p>
+          <div className="grid gap-3 text-secondary-text sm:grid-cols-2 lg:grid-cols-5">
+            <div>已验证：<span className="text-foreground">{stats?.verifiedFacts ?? 0}</span></div>
+            <div>推导：<span className="text-foreground">{stats?.derivedFacts ?? 0}</span></div>
+            <div>发现线索：<span className="text-foreground">{stats?.discoveryItems ?? 0}</span></div>
+            <div>关键证据缺口：<span className="text-foreground">{stats?.missingCriticalFacts ?? 0}</span></div>
+            <div>部门待确认：<span className="text-foreground">{departmentGapItems}</span></div>
+          </div>
+          {reliabilityWarnings.length ? <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-warning">{reliabilityWarnings.map((item) => <li key={item}>{item}</li>)}</ul> : null}
         </div>
-        {reliabilityWarnings.length ? (
-          <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-warning">
-            {reliabilityWarnings.map((item) => <li key={item}>{item}</li>)}
-          </ul>
-        ) : null}
-      </Card>
+      </details>
     </article>
   );
 };

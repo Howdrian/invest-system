@@ -7,9 +7,27 @@ and validators can share it instead of each guessing required paths.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 import shutil
 from typing import Iterable, List
+
+
+_STAGING_MARKER = ".pages_staging"
+
+
+def validate_pages_run_date(run_date: str) -> str:
+    """Return a canonical ISO calendar date or reject unsafe date strings."""
+
+    if not isinstance(run_date, str):
+        raise ValueError("run_date must be a YYYY-MM-DD string")
+    try:
+        parsed = date.fromisoformat(run_date)
+    except ValueError as exc:
+        raise ValueError("run_date must be a valid YYYY-MM-DD date") from exc
+    if parsed.isoformat() != run_date:
+        raise ValueError("run_date must use canonical YYYY-MM-DD format")
+    return run_date
 
 
 @dataclass(frozen=True)
@@ -17,6 +35,10 @@ class PagesPublicationManifest:
     docs_dir: Path
     run_date: str
     has_governed_rows: bool = False
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "docs_dir", Path(self.docs_dir))
+        validate_pages_run_date(self.run_date)
 
     @property
     def compact_date(self) -> str:
@@ -53,6 +75,26 @@ class PagesPublicationManifest:
                 self.docs_dir / "governed_results.json",
             ])
         return files
+
+    def public_files(self) -> List[Path]:
+        """Reader-only assets safe to copy to a public static site.
+
+        Raw artifacts, diagnostics, agent memos and run ledgers stay in the
+        maintenance workspace.  They are validated before staging, but are not
+        part of the public Pages bundle.
+        """
+
+        return [
+            self.docs_dir / "index.html",
+            self.docs_dir / "reports" / f"{self.run_date}.html",
+            *[
+                self.docs_dir / "reports" / self.run_date / f"{slug}.html"
+                for slug in (
+                    "macro", "geo", "market", "sectors", "candidates",
+                    "news", "stocks", "portfolio", "risk",
+                )
+            ],
+        ]
 
     def entry_html(self) -> Iterable[Path]:
         candidates = [
@@ -100,17 +142,60 @@ class PagesPublicationManifest:
             candidates.append(self.docs_dir / f"report_{self.compact_date}.html")
         return _existing_unique(candidates)
 
+    def public_html(self) -> Iterable[Path]:
+        return _existing_unique(self.public_files())
 
-def build_pages_publication_manifest(docs_dir: str | Path, run_date: str, governed_rows: list[dict] | None = None) -> PagesPublicationManifest:
+
+def build_pages_publication_manifest(
+    docs_dir: str | Path,
+    run_date: str,
+    governed_rows: list[dict] | None = None,
+) -> PagesPublicationManifest:
     return PagesPublicationManifest(Path(docs_dir), run_date, bool(governed_rows))
 
 
-def stage_pages_bundle(source_dir: str | Path, staging_dir: str | Path, run_date: str, governed_rows: list[dict] | None = None) -> dict:
-    return _copy_pages_bundle(Path(source_dir), Path(staging_dir), run_date, governed_rows, ".pages_staging")
+def stage_pages_bundle(
+    source_dir: str | Path,
+    staging_dir: str | Path,
+    run_date: str,
+    governed_rows: list[dict] | None = None,
+) -> dict:
+    validate_pages_run_date(run_date)
+    source, target = _resolve_copy_roots(source_dir, staging_dir)
+    # Staging is disposable build output. Recreate it so stale raw files from a
+    # prior run can never become part of the uploaded Pages artifact. Never
+    # delete a caller-selected directory unless a prior staging run marked it.
+    if target.exists():
+        marker = _safe_child(target, Path(_STAGING_MARKER), label="staging marker")
+        if marker.is_symlink() or not marker.is_file():
+            raise ValueError(
+                f"refusing to clean unmarked staging directory: {target}"
+            )
+        try:
+            validate_pages_run_date(marker.read_text(encoding="utf-8").strip())
+        except (OSError, ValueError) as exc:
+            raise ValueError(
+                f"refusing to clean staging directory with invalid marker: {target}"
+            ) from exc
+        shutil.rmtree(target)
+    return _copy_pages_bundle(source, target, run_date, governed_rows, _STAGING_MARKER)
 
 
-def publish_pages_bundle(staging_dir: str | Path, docs_dir: str | Path, run_date: str, governed_rows: list[dict] | None = None) -> dict:
-    return _copy_pages_bundle(Path(staging_dir), Path(docs_dir), run_date, governed_rows, ".last_pages_publish")
+def publish_pages_bundle(
+    staging_dir: str | Path,
+    docs_dir: str | Path,
+    run_date: str,
+    governed_rows: list[dict] | None = None,
+) -> dict:
+    validate_pages_run_date(run_date)
+    source, target = _resolve_copy_roots(staging_dir, docs_dir)
+    return _copy_pages_bundle(
+        source,
+        target,
+        run_date,
+        governed_rows,
+        ".last_pages_publish",
+    )
 
 
 def _copy_pages_bundle(
@@ -123,15 +208,23 @@ def _copy_pages_bundle(
     copied: list[str] = []
     missing: list[str] = []
     for rel in _public_bundle_paths(source_dir, run_date, governed_rows):
-        src = source_dir / rel
-        dst = target_dir / rel
+        rel_path = _validate_relative_path(Path(rel))
+        src = _safe_child(source_dir, rel_path, label="source asset")
+        dst = _safe_child(target_dir, rel_path, label="target asset")
         if not src.exists() or not src.is_file():
             missing.append(rel)
             continue
         dst.parent.mkdir(parents=True, exist_ok=True)
+        # Re-check after directory creation so a pre-existing symlink can never
+        # redirect the write outside the publication root.
+        dst = _safe_child(target_dir, rel_path, label="target asset")
         shutil.copy2(src, dst)
         copied.append(rel)
-    marker = target_dir / marker_name
+    marker = _safe_child(
+        target_dir,
+        _validate_relative_path(Path(marker_name)),
+        label="publication marker",
+    )
     marker.parent.mkdir(parents=True, exist_ok=True)
     marker.write_text(f"{run_date}\n", encoding="utf-8")
     return {"schema": "pages_bundle_copy_v1", "runDate": run_date, "copied": copied, "missing": missing}
@@ -139,19 +232,86 @@ def _copy_pages_bundle(
 
 def _public_bundle_paths(source_dir: Path, run_date: str, governed_rows: list[dict] | None = None) -> list[str]:
     manifest = build_pages_publication_manifest(source_dir, run_date, governed_rows)
-    paths = {path.relative_to(source_dir).as_posix() for path in manifest.required_files() if path.exists()}
-    for folder in (
-        source_dir / "agent_memos" / run_date,
-        source_dir / "market_cycle" / run_date,
-        source_dir / "market_heat",
-        source_dir / "official_events",
-        source_dir / "run_status" / run_date,
-    ):
-        if folder.exists():
-            for path in folder.rglob("*"):
-                if path.is_file():
-                    paths.add(path.relative_to(source_dir).as_posix())
+    paths: list[str] = []
+    for path in manifest.public_files():
+        rel = _validate_relative_path(path.relative_to(source_dir))
+        # Preserve missing entries so direct callers receive an auditable
+        # manifest instead of silently treating an incomplete bundle as clean.
+        _safe_child(source_dir, rel, label="source asset")
+        paths.append(rel.as_posix())
     return sorted(paths)
+
+
+def _resolve_copy_roots(
+    source_dir: str | Path,
+    target_dir: str | Path,
+) -> tuple[Path, Path]:
+    source = _resolve_safe_root(source_dir, label="source", must_exist=True)
+    target = _resolve_safe_root(target_dir, label="target", must_exist=False)
+    if _is_within(source, target) or _is_within(target, source):
+        raise ValueError(
+            f"source and target publication roots must not overlap: {source} / {target}"
+        )
+    return source, target
+
+
+def _resolve_safe_root(
+    value: str | Path,
+    *,
+    label: str,
+    must_exist: bool,
+) -> Path:
+    raw = Path(value).expanduser().absolute()
+    _reject_symlink_components(raw, label=label)
+    resolved = raw.resolve(strict=False)
+    if resolved == Path(resolved.anchor):
+        raise ValueError(f"{label} publication root cannot be a filesystem root")
+    if must_exist and (not resolved.exists() or not resolved.is_dir()):
+        raise ValueError(f"{label} publication root is not a directory: {resolved}")
+    if resolved.exists() and not resolved.is_dir():
+        raise ValueError(f"{label} publication root is not a directory: {resolved}")
+    return resolved
+
+
+def _validate_relative_path(path: Path) -> Path:
+    if path.is_absolute() or not path.parts or any(part in {"", ".", ".."} for part in path.parts):
+        raise ValueError(f"unsafe publication path: {path}")
+    return path
+
+
+def _safe_child(root: Path, rel: Path, *, label: str) -> Path:
+    rel = _validate_relative_path(rel)
+    candidate = root / rel
+    _reject_symlink_components(candidate, label=label, stop_at=root)
+    resolved = candidate.resolve(strict=False)
+    if not _is_within(resolved, root):
+        raise ValueError(f"{label} escapes publication root: {rel}")
+    return resolved
+
+
+def _reject_symlink_components(
+    path: Path,
+    *,
+    label: str,
+    stop_at: Path | None = None,
+) -> None:
+    current = path
+    while True:
+        if current.is_symlink():
+            raise ValueError(f"{label} path contains a symlink: {current}")
+        if stop_at is not None and current == stop_at:
+            return
+        if current.parent == current:
+            return
+        current = current.parent
+
+
+def _is_within(path: Path, root: Path) -> bool:
+    try:
+        path.relative_to(root)
+    except ValueError:
+        return False
+    return True
 
 
 def _existing_unique(candidates: Iterable[Path]) -> Iterable[Path]:

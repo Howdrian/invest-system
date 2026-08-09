@@ -20,7 +20,10 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from src.pages_publication import build_pages_publication_manifest
+from src.pages_publication import (
+    build_pages_publication_manifest,
+    validate_pages_run_date,
+)
 from src.report_policy import is_blocked_governed_row
 from src.source_health.run_matrix import validate_snapshot_chain
 
@@ -56,8 +59,6 @@ class PagesBundleValidation:
             "missing_files": self.missing_files,
             "legacy_public_files": self.legacy_public_files,
         }
-
-
 
 
 BLOCKED_TRADE_ACTION_PHRASES = [
@@ -123,6 +124,7 @@ def _check_reader_semantics(docs_dir: Path, run_date: str, governed_rows: list[d
             errors.append(f"{rel} contains template block")
     return errors
 
+
 def _read_json(path: Path) -> Any:
     if not path.exists():
         return None
@@ -164,6 +166,14 @@ def _check_link(path: Path, href: str) -> Path | None:
     return (path.parent / clean).resolve()
 
 
+def _is_within_bundle(path: Path, bundle_root: Path) -> bool:
+    try:
+        path.relative_to(bundle_root)
+    except ValueError:
+        return False
+    return True
+
+
 def _origin_counts(agent_dir: Path) -> dict[str, int]:
     counts: dict[str, int] = {"RAW_AGENT": 0, "DERIVED_FROM_ARTIFACT": 0, "MISSING": 0}
     if not agent_dir.exists():
@@ -176,7 +186,14 @@ def _origin_counts(agent_dir: Path) -> dict[str, int]:
     return counts
 
 
-def validate_pages_bundle(run_date: str, docs_dir: Path) -> PagesBundleValidation:
+def validate_pages_bundle(
+    run_date: str,
+    docs_dir: Path,
+    *,
+    public_only: bool = False,
+) -> PagesBundleValidation:
+    validate_pages_run_date(run_date)
+    docs_dir = Path(docs_dir).expanduser().resolve(strict=False)
     rows = _governed_rows(docs_dir, run_date)
     result = PagesBundleValidation(ok=False, run_date=run_date)
     legacy_dir = docs_dir / "invest-brain"
@@ -187,11 +204,13 @@ def validate_pages_bundle(run_date: str, docs_dir: Path) -> PagesBundleValidatio
             if path.is_file()
         ]
 
-    required = _required_files(docs_dir, run_date, rows)
+    manifest = build_pages_publication_manifest(docs_dir, run_date, rows)
+    required = manifest.public_files() if public_only else _required_files(docs_dir, run_date, rows)
     result.required_files_checked = len(required)
     result.missing_files = [str(p.relative_to(docs_dir)) for p in required if not p.exists()]
 
-    for path in _iter_entry_html(docs_dir, run_date, rows):
+    entry_html = manifest.public_html() if public_only else _iter_entry_html(docs_dir, run_date, rows)
+    for path in entry_html:
         text = path.read_text(encoding="utf-8", errors="replace")
         if "\ufffd" in text or "ï¿½" in text:
             result.bad_encoding_files.append(str(path.relative_to(docs_dir)))
@@ -200,14 +219,27 @@ def validate_pages_bundle(run_date: str, docs_dir: Path) -> PagesBundleValidatio
             if target is None:
                 continue
             result.links_checked += 1
-            if not target.exists():
+            if not _is_within_bundle(target, docs_dir) or not target.exists():
                 result.broken_links.append(f"{path.relative_to(docs_dir)} -> {href}")
 
-    result.agent_origin_counts = _origin_counts(docs_dir / "agent_memos" / run_date)
-    result.semantic_errors = _check_reader_semantics(docs_dir, run_date, rows)
+    result.agent_origin_counts = (
+        {} if public_only else _origin_counts(docs_dir / "agent_memos" / run_date)
+    )
+    if public_only:
+        result.semantic_errors = []
+        for path in manifest.public_html():
+            text = path.read_text(encoding="utf-8", errors="replace")
+            rel = path.relative_to(docs_dir)
+            for phrase in FORBIDDEN_READER_PHRASES:
+                if phrase in text:
+                    result.semantic_errors.append(
+                        f"{rel} contains forbidden reader phrase: {phrase}"
+                    )
+    else:
+        result.semantic_errors = _check_reader_semantics(docs_dir, run_date, rows)
     artifact_path = docs_dir / "reports" / f"{run_date}.artifact.json"
     artifact_payload = _read_json(artifact_path)
-    if artifact_payload is not None:
+    if artifact_payload is not None and not public_only:
         try:
             from src.report_artifact import validate_report_artifact
 
@@ -218,7 +250,7 @@ def validate_pages_bundle(run_date: str, docs_dir: Path) -> PagesBundleValidatio
         except Exception as exc:
             result.semantic_errors.append(f"reports/{run_date}.artifact.json validation failed: {exc}")
 
-    fatal_rows = [row for row in rows if _is_fatal(row)]
+    fatal_rows = [] if public_only else [row for row in rows if _is_fatal(row)]
     if fatal_rows:
         compact = run_date.replace("-", "")
         report_text = ""
@@ -254,13 +286,18 @@ def validate_pages_bundle(run_date: str, docs_dir: Path) -> PagesBundleValidatio
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Validate static Pages report bundle")
-    parser.add_argument("--date", required=True)
+    parser.add_argument("--date", required=True, type=validate_pages_run_date)
     parser.add_argument("--docs-dir", default="docs")
     parser.add_argument("--output", default="")
     parser.add_argument("--fail-on-error", action="store_true")
+    parser.add_argument("--public-only", action="store_true")
     args = parser.parse_args(argv)
 
-    result = validate_pages_bundle(args.date, Path(args.docs_dir))
+    result = validate_pages_bundle(
+        args.date,
+        Path(args.docs_dir),
+        public_only=args.public_only,
+    )
     payload = result.to_dict()
     text = json.dumps(payload, ensure_ascii=False, indent=2)
     print(text)

@@ -185,6 +185,50 @@ a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
 </style>"""
 
 
+def _reader_list(items: Any, *, limit: int = 3) -> str:
+    rows = [str(item).strip() for item in (items or []) if str(item).strip()][:limit]
+    return "".join(f"<li>{_esc(item)}</li>" for item in rows) or "<li class='muted'>本轮未提供。</li>"
+
+
+def _render_reader_homepage(artifact: Dict[str, Any], today: str, generated_at: str) -> str:
+    reader = artifact.get("readerV3") if isinstance(artifact.get("readerV3"), dict) else {}
+    hero = reader.get("hero") if isinstance(reader.get("hero"), dict) else {}
+    return f"""<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{_esc(today)} 投研日报</title>{CSS}<style>
+body{{max-width:980px;padding-top:3rem}}.reader-home{{padding:1rem 0 2rem;border-bottom:1px solid var(--border)}}
+.reader-home h1{{max-width:820px;margin:.8rem 0 1rem;color:#f0f6fc;font-size:clamp(2rem,6vw,3.25rem);line-height:1.2}}
+.reader-home .lead{{max-width:860px;font-size:1.25rem;line-height:1.75;color:#f0f6fc}}
+.home-facts{{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.6rem 0}}
+.home-fact{{padding:1rem 0;border-top:1px solid var(--border)}}.home-fact span{{display:block;color:var(--muted);font-size:.75rem}}
+.home-fact strong{{display:block;margin-top:.35rem;font-size:1rem;color:#f0f6fc}}
+.brief-grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:1.4rem;margin:2rem 0}}
+.brief-grid section{{border-left:2px solid var(--border);padding-left:1rem}}.brief-grid h2{{margin:0 0 .6rem;color:#f0f6fc}}
+.brief-grid ul{{padding-left:1.1rem}}.report-cta{{display:inline-block;margin-top:1rem;padding:.75rem 1.1rem;border-radius:10px;background:var(--accent);color:#07111f;font-weight:700}}
+@media(max-width:720px){{.home-facts,.brief-grid{{grid-template-columns:1fr}}.brief-grid section{{border-left:0;border-top:1px solid var(--border);padding:1rem 0 0}}}}
+</style></head>
+<body>
+<header class="reader-home">
+  <p class="muted">{_esc(str(hero.get('status') or '每日投研'))} · {_esc(today)}</p>
+  <h1>今日总判断</h1>
+  <p class="lead">{_esc(str(hero.get('oneLine') or '本轮未生成总判断。'))}</p>
+  <div class="home-facts">
+    <div class="home-fact"><span>研究立场</span><strong>{_esc(str(hero.get('marketStance') or '待确认'))}</strong></div>
+    <div class="home-fact"><span>组合动作</span><strong>{_esc(str(hero.get('portfolioAction') or '待确认'))}</strong></div>
+  </div>
+  <p class="muted">可信度：{_esc(str(hero.get('confidence') or '未标'))} · 时效：{_esc(str(hero.get('validity') or '未标'))} · 页面生成：{_esc(generated_at)} 北京时</p>
+  <a class="report-cta" href="./reports/{_esc(today)}.html">阅读完整报告</a>
+</header>
+<main class="brief-grid">
+  <section><h2>核心理由</h2><ul>{_reader_list(reader.get('keyReasons'))}</ul></section>
+  <section><h2>最大反证 / 风险</h2><ul>{_reader_list(reader.get('counterpoints'))}</ul></section>
+  <section><h2>下一步</h2><ul>{_reader_list(reader.get('nextSteps'))}</ul></section>
+</main>
+<p class="muted">本报告用于研究复核，不自动执行交易。</p>
+</body></html>"""
+
+
 def _parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Render GitHub Pages homepage from report artifacts")
     parser.add_argument("--date", default="", help="Run date YYYY-MM-DD")
@@ -219,6 +263,13 @@ def main(argv: Optional[List[str]] = None) -> int:
     health = _read_json(_path("13_source_health.json")) or {}
     screening = _read_json(_path("09_screening_funnel.json")) or {}
     artifact = _read_json(docs_dir / "reports" / f"{today}.artifact.json") or {}
+    generated_at = datetime.now(BEIJING).strftime("%Y-%m-%d %H:%M")
+    if isinstance(artifact.get("readerV3"), dict):
+        html = _render_reader_homepage(artifact, today, generated_at)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(html, encoding="utf-8")
+        print(f"✅ render_homepage: {len(html)} bytes, reader homepage rendered", file=sys.stderr)
+        return 0
     governed = _load_today_governed_results(today, reports_dir=reports_dir, docs_dir=docs_dir)
 
     regime = strategy.get("regime", "UNKNOWN")

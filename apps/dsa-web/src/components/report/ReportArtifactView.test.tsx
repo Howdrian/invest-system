@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import type { ReportArtifactV1 } from '../../types/analysis';
 import { ReportArtifactDiagnosticsView, ReportArtifactView } from './ReportArtifactView';
@@ -123,15 +123,27 @@ const artifact: ReportArtifactV1 = {
       generatedAt: '2026-06-19T09:00:00Z',
     },
     hero: {
-      action: '不操作',
-      status: '有限复盘',
-      confidence: '低可信，带限制',
+      marketStance: '中性偏谨慎',
+      portfolioAction: '保持现金，不新增仓位',
+      validity: '截至下个交易日开盘前',
+      dataCoverage: 'A股主要指数完整；美股为观察样本',
+      action: '旧动作（不应显示）',
+      status: '多市场观察简报',
+      confidence: '中等可信',
       oneLine: '证据不足，暂不操作。',
       maxLimitation: '公告和基本面证据仍需补齐。',
+      coverage: '旧覆盖（不应显示）',
     },
     keyReasons: ['行情可读；基本面证据不足。', '公告事实需要回跳 CNINFO。'],
     counterpoints: ['若公告确认利好，当前结论需要重评。'],
     nextSteps: ['补公告原文。', '复核估值假设。'],
+    marketMatrix: [
+      { market: 'CN', scopeLabel: 'A股市场', scopeType: 'market', state: '主要指数承压', headline: '上证指数 -1.85%', scopeNote: '基于宽基指数。' },
+      { market: 'US', scopeLabel: '美股观察样本', scopeType: 'sample', state: '观察样本走强', headline: 'Apple +1.76%（1日）', scopeNote: '不代表美股整体。' },
+    ],
+    stockMatrix: [
+      { symbol: '600519', name: '贵州茅台', market: 'CN', stance: '观察', lastPrice: 1258.99, currency: 'CNY', return1dPct: 0.63, return20dPct: 3.88, trend: '短中期趋势向上', fundamental: '营收同比 +6.34%', valuation: 'PE(TTM) 21.20；历史分位样本不足', latestEvent: '年度权益分派公告', eventDate: '2026-06-21', eventUrl: 'https://example.test/cninfo.pdf', watchLevels: '5日线 1228.18 / 20日线 1200.81' },
+    ],
     adjudication: {
       sharedFacts: ['行情数据可读，公告事实需回跳原文。'],
       baseCase: '在证据补齐前维持观察。',
@@ -156,7 +168,7 @@ const artifact: ReportArtifactV1 = {
         bullets: ['风险偏好一般。'],
         counterpoints: ['成交确认不足。'],
         nextActions: ['继续观察市场宽度。'],
-        evidenceSamples: [{ id: 'cninfo:600519:1', label: '年度报告公告', provider: 'CNINFO', factType: '已验证事实', sourceUrl: 'https://example.test/cninfo.pdf' }],
+        evidenceSamples: [{ id: 'cninfo:600519:1', label: 'raw rows: annual_report_payload', sourceName: '巨潮资讯', provider: 'CninfoFetcher', factType: '已验证事实', asOf: '2026-06-19', sourceUrl: 'https://example.test/cninfo.pdf' }],
       },
       {
         key: 'macro_geo',
@@ -181,7 +193,10 @@ const artifact: ReportArtifactV1 = {
         nextAction: '补公告原文。',
         confidence: 'low',
         supportSignals: ['已纳入公告来源。'],
-        evidenceSamples: [{ id: 'cninfo:600519:1', label: '年度报告公告', provider: 'CNINFO', factType: '已验证事实', sourceUrl: 'https://example.test/cninfo.pdf' }],
+        evidenceSamples: [
+          { id: 'cninfo:600519:1', label: 'raw rows: annual_report_payload', sourceName: '巨潮资讯', provider: 'CninfoFetcher', factType: '已验证事实', asOf: '2026-06-19', sourceUrl: 'https://example.test/cninfo.pdf' },
+          { id: 'yf:600519:1', label: 'raw rows: price_payload', provider: 'YfinanceFetcher', factType: '行情事实', asOf: '2026-06-19', sourceUrl: 'javascript:alert(1)' },
+        ],
       },
       {
         agent: '基本面部门',
@@ -217,27 +232,51 @@ const artifact: ReportArtifactV1 = {
 };
 
 describe('ReportArtifactView', () => {
+  it('does not invent a clock time for date-only evidence', () => {
+    const dateOnly = structuredClone(artifact);
+    if (dateOnly.readerV3?.timing) dateOnly.readerV3.timing.dataAsOf = '2026-06-19';
+
+    render(<ReportArtifactView artifact={dateOnly} />);
+
+    expect(screen.getByText(/综合数据截至 2026-06-19 · 生成于 17:00/)).toBeInTheDocument();
+    expect(screen.queryByText(/综合数据截至 2026-06-19 08:00/)).not.toBeInTheDocument();
+  });
+
   it('renders product reader by default and hides engineering fields', () => {
     render(<ReportArtifactView artifact={artifact} />);
 
     expect(screen.getByRole('heading', { name: '2026-06-19 投研日报' })).toBeInTheDocument();
-    expect(screen.getByText('数据覆盖：有限复盘')).toBeInTheDocument();
-    expect(screen.getAllByText('不操作').length).toBeGreaterThan(0);
+    expect(screen.getByText('研究立场')).toBeInTheDocument();
+    expect(screen.getByText('中性偏谨慎')).toBeInTheDocument();
+    expect(screen.getByText('组合动作')).toBeInTheDocument();
+    expect(screen.getByText('保持现金，不新增仓位')).toBeInTheDocument();
+    expect(screen.getByText('时效')).toBeInTheDocument();
+    expect(screen.getByText('截至下个交易日开盘前')).toBeInTheDocument();
+    expect(screen.getByText('覆盖')).toBeInTheDocument();
+    expect(screen.getByText('A股主要指数完整；美股为观察样本')).toBeInTheDocument();
+    expect(screen.getByText('可信度')).toBeInTheDocument();
+    expect(screen.getAllByText('中等可信').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('多市场观察简报')).toBeInTheDocument();
     expect(screen.getByText(/综合数据截至 2026-06-19 16:30（北京时间） · 生成于 17:00/)).toBeInTheDocument();
-    expect(screen.getByText('结论可信度：低可信，带限制')).toBeInTheDocument();
     expect(screen.getAllByText('证据不足，暂不操作。').length).toBeGreaterThan(0);
-    expect(screen.getByText('最大限制')).toBeInTheDocument();
+    expect(screen.getByText('研究边界')).toBeInTheDocument();
     expect(screen.getByText('核心理由')).toBeInTheDocument();
+    expect(screen.getByText('查看核心证据')).toBeInTheDocument();
     expect(screen.getByText('最大反证 / 风险')).toBeInTheDocument();
-    expect(screen.getByText('基准情景、竞争情景与 CIO 裁决')).toBeInTheDocument();
+    expect(screen.getByText('基准情景与竞争情景')).toBeInTheDocument();
     expect(screen.getByText('基准情景')).toBeInTheDocument();
     expect(screen.getByText('最强竞争情景')).toBeInTheDocument();
     expect(screen.getByText('CIO 当前裁决')).toBeInTheDocument();
     expect(screen.queryByText('报告主线')).not.toBeInTheDocument();
     expect(screen.queryByText('分部门分析')).not.toBeInTheDocument();
     expect(screen.queryByText('部门卷宗')).not.toBeInTheDocument();
-    expect(screen.getByText('部门摘要')).toBeInTheDocument();
-    expect(screen.getByText('证据摘要')).toBeInTheDocument();
+    expect(screen.getByText('市场范围与样本表现')).toBeInTheDocument();
+    expect(screen.getByText('重点标的跟踪')).toBeInTheDocument();
+    expect(screen.getAllByText('美股观察样本').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('贵州茅台').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('PE(TTM) 21.20；历史分位样本不足').length).toBeGreaterThan(0);
+    expect(screen.getByText('部门研究摘要')).toBeInTheDocument();
+    expect(screen.getByText('数据与方法说明')).toBeInTheDocument();
     expect(screen.getByText('CIO 报告')).toBeInTheDocument();
     expect(screen.getByText('基本面部门')).toBeInTheDocument();
     expect(screen.getByText('已识别的争议结论')).toBeInTheDocument();
@@ -280,6 +319,111 @@ describe('ReportArtifactView', () => {
     expect(body).not.toContain('quantity');
     expect(body).not.toContain('market_value');
     expect(body).not.toContain('cost_basis');
+    expect(body).not.toContain('旧动作（不应显示）');
+    expect(body).not.toContain('旧覆盖（不应显示）');
+    expect(body).not.toContain('CninfoFetcher');
+    expect(body).not.toContain('YfinanceFetcher');
+    expect(body).not.toContain('raw rows');
+    expect(body).not.toContain('EVIDENCE');
+    expect(body).not.toContain('CHALLENGE');
+    expect(body).not.toContain('WATCH');
+    expect(body).not.toContain('MARKET SCOPE');
+    expect(body).not.toContain('SECURITY MONITOR');
+    expect(body).not.toContain('SCENARIO ADJUDICATION');
+    expect(body).not.toContain('MACRO & GEOPOLITICS');
+    expect(body).not.toContain('DEPARTMENT NOTES');
+  });
+
+  it('keeps desktop tables and provides complete mobile cards below md', () => {
+    render(<ReportArtifactView artifact={artifact} />);
+
+    expect(screen.getByTestId('market-desktop-table')).toHaveClass('hidden', 'md:block');
+    expect(screen.getByTestId('stock-desktop-table')).toHaveClass('hidden', 'md:block');
+
+    const marketCards = screen.getByTestId('market-mobile-cards');
+    expect(marketCards).toHaveClass('md:hidden');
+    expect(within(marketCards).getByText('A股市场')).toBeInTheDocument();
+    expect(within(marketCards).getByText('美股观察样本')).toBeInTheDocument();
+    expect(within(marketCards).getByText('不代表美股整体。')).toBeInTheDocument();
+
+    const stockCards = screen.getByTestId('stock-mobile-cards');
+    expect(stockCards).toHaveClass('md:hidden');
+    const stockCard = screen.getByTestId('stock-mobile-card-600519');
+    expect(within(stockCard).getByText('标的')).toBeInTheDocument();
+    expect(within(stockCard).getByText('贵州茅台')).toBeInTheDocument();
+    expect(within(stockCard).getByText('价格')).toBeInTheDocument();
+    expect(within(stockCard).getByText('1258.99 CNY')).toBeInTheDocument();
+    expect(within(stockCard).getByText('1 / 20 日表现')).toBeInTheDocument();
+    expect(within(stockCard).getByText('1日 +0.63% · 20日 +3.88%')).toBeInTheDocument();
+    expect(within(stockCard).getByText('趋势 / 观察位')).toBeInTheDocument();
+    expect(within(stockCard).getByText(/短中期趋势向上 · 5日线 1228.18/)).toBeInTheDocument();
+    expect(within(stockCard).getByText('基本面')).toBeInTheDocument();
+    expect(within(stockCard).getByText('营收同比 +6.34%')).toBeInTheDocument();
+    expect(within(stockCard).getByText('官方事件')).toBeInTheDocument();
+    expect(within(stockCard).getByRole('link', { name: '年度权益分派公告' })).toHaveAttribute('href', 'https://example.test/cninfo.pdf');
+    expect(within(stockCard).getByText('定位')).toBeInTheDocument();
+    expect(within(stockCard).getAllByText('观察').length).toBeGreaterThan(0);
+  });
+
+  it('shows only reader-safe evidence metadata and links valid source URLs', () => {
+    render(<ReportArtifactView artifact={artifact} />);
+
+    const cioDetails = screen.getByText('CIO 报告').closest('details');
+    expect(cioDetails).not.toBeNull();
+    const evidence = within(cioDetails as HTMLElement);
+    expect(evidence.getByText('巨潮资讯')).toBeInTheDocument();
+    expect(evidence.getByText('Yahoo Finance')).toBeInTheDocument();
+    expect(evidence.getByText(/已验证事实 · 2026-06-19/)).toBeInTheDocument();
+    expect(evidence.getByText(/行情事实 · 2026-06-19/)).toBeInTheDocument();
+    expect((cioDetails as HTMLElement).querySelector('a[href="https://example.test/cninfo.pdf"]')).toHaveTextContent('巨潮资讯');
+    expect((cioDetails as HTMLElement).querySelector('a[href^="javascript:"]')).toBeNull();
+    expect(cioDetails).not.toHaveTextContent('CninfoFetcher');
+    expect(cioDetails).not.toHaveTextContent('YfinanceFetcher');
+    expect(cioDetails).not.toHaveTextContent('raw rows');
+    expect(cioDetails).not.toHaveTextContent('annual_report_payload');
+    expect(cioDetails).not.toHaveTextContent('price_payload');
+  });
+
+  it('removes credentials from legacy evidence and event URLs before rendering', () => {
+    const unsafe = structuredClone(artifact);
+    const canary = 'CANARY_READER_URL_SECRET_123456';
+    const unsafeUrl = `https://user:${canary}@example.test/report?page=2&api_key=${canary}#token=${canary}`;
+    const card = unsafe.readerV3?.departmentCards?.[0];
+    const stock = unsafe.readerV3?.stockMatrix?.[0];
+    if (card?.evidenceSamples?.[0]) {
+      card.evidenceSamples[0].sourceName = '';
+      card.evidenceSamples[0].provider = '';
+      card.evidenceSamples[0].sourceUrl = unsafeUrl;
+    }
+    if (stock) {
+      stock.latestEvent = '敏感事件';
+      stock.eventUrl = unsafeUrl;
+    }
+
+    render(<ReportArtifactView artifact={unsafe} />);
+
+    screen.getAllByRole('link', { name: '来源' }).forEach((link) => {
+      expect(link).toHaveAttribute('href', 'https://example.test/report?page=2');
+    });
+    screen.getAllByRole('link', { name: '敏感事件' }).forEach((link) => {
+      expect(link).toHaveAttribute('href', 'https://example.test/report?page=2');
+    });
+    expect(document.body.innerHTML).not.toContain(canary);
+  });
+
+  it('does not label lookalike evidence hosts as official domains', () => {
+    const lookalike = structuredClone(artifact);
+    const sample = lookalike.readerV3?.departmentCards?.[0]?.evidenceSamples?.[0];
+    if (sample) {
+      sample.sourceName = '';
+      sample.provider = '';
+      sample.sourceUrl = 'https://cninfo.evil.example/report';
+    }
+
+    render(<ReportArtifactView artifact={lookalike} />);
+
+    expect(screen.getAllByRole('link', { name: '来源' }).length).toBeGreaterThan(0);
+    expect(screen.queryByRole('link', { name: '巨潮资讯官方公告' })).not.toBeInTheDocument();
   });
 
   it('keeps diagnostics out of the default reader', () => {

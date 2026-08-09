@@ -119,19 +119,21 @@ def test_render_report_html_builds_human_report_center_and_html_pages(tmp_path, 
     artifact = json.loads(artifact_json.read_text(encoding="utf-8"))
     assert artifact["artifactType"] == "daily"
     assert artifact["quality"]["completeness"] == "partial"
-    assert artifact["sourceHealth"]["decisionImpact"] == "数据源降级，可观察，不可作为满血交易依据"
+    assert artifact["sourceHealth"]["decisionImpact"] == "可形成有限复盘；细分结论需结合待确认项。"
     center_html = center.read_text(encoding="utf-8")
     assert "今日总判断" in center_html
     assert "报告阅读入口" not in center_html
-    assert "有限复盘" in center_html
-    assert "部门摘要" in center_html
+    assert "多市场观察简报" in center_html
+    assert '<span class="pill">投研日报</span>' not in center_html
+    assert "<small>本轮状态</small>" not in center_html
+    assert "部门研究摘要" in center_html
     assert "分部门分析" not in center_html
     assert "部门卷宗" not in center_html
     assert "各板块结论与下一步" not in center_html
     assert "核心理由" in center_html
-    assert "最大限制" in center_html
+    assert "研究边界" in center_html
     assert "下一步" in center_html
-    assert center_html.count(">Diagnostics</a>") == 1
+    assert center_html.count(">Diagnostics</a>") == 0
     assert "ReportArtifact" not in center_html
     assert "sourceHealthV2" not in center_html
     assert "providerMatrix" not in center_html
@@ -213,10 +215,42 @@ def test_report_center_keeps_one_collapsed_department_summary_and_one_diagnostic
                 "confidence": "可用，含待确认情景",
                 "oneLine": "市场处于观察窗口。",
                 "maxLimitation": "仍需人工复核。",
+                "marketStance": "A 股偏弱，海外样本仅作观察。",
+                "portfolioAction": "保持防御，不新增风险暴露。",
+                "validity": "下一交易日开盘前有效。",
+                "dataCoverage": "A股核心指数 + 4 个跨市场样本。",
             },
             "keyReasons": ["市场宽度尚未确认。"],
             "counterpoints": ["若成交恢复，结论需要重评。"],
             "nextSteps": ["继续观察。"],
+            "marketMatrix": [
+                {
+                    "market": "US",
+                    "scopeLabel": "美股观察样本",
+                    "scopeType": "sample",
+                    "state": "观察样本走强",
+                    "headline": "Apple +1.76%（1日）",
+                    "scopeNote": "仅代表本轮观察标的，不代表美股整体。",
+                }
+            ],
+            "stockMatrix": [
+                {
+                    "symbol": "AAPL",
+                    "name": "Apple Inc.",
+                    "lastPrice": 333.26,
+                    "currency": "USD",
+                    "return1dPct": 1.76,
+                    "return20dPct": 11.37,
+                    "trend": "短中期趋势向上",
+                    "fundamental": "营收同比 +16.60%",
+                    "valuation": "PE(TTM) 31.20；历史分位样本不足",
+                    "latestEvent": "SEC 10-Q",
+                    "eventDate": "2026-05-01",
+                    "eventUrl": "https://sec.example/aapl",
+                    "stance": "趋势跟踪",
+                    "watchLevels": "5日线 321.65 / 20日线 303.63",
+                }
+            ],
             "reportSections": [
                 {"key": "market", "title": "市场状态", "body": "市场处于观察窗口。"},
             ],
@@ -236,6 +270,15 @@ def test_report_center_keeps_one_collapsed_department_summary_and_one_diagnostic
                         }
                     ],
                     "nextAction": "继续观察。",
+                    "evidenceSamples": [
+                        {
+                            "label": "rows=12; symbol=AAPL; close=333.26; raw_payload=hidden",
+                            "provider": "InternalQuoteProvider",
+                            "factType": "verified_fact",
+                            "publishedAt": "2026-07-10T02:00:00Z",
+                            "sourceUrl": "https://www.sec.gov/Archives/example",
+                        }
+                    ],
                 },
                 {
                     "agent": "FundamentalAgent",
@@ -261,11 +304,47 @@ def test_report_center_keeps_one_collapsed_department_summary_and_one_diagnostic
     assert "综合数据截至 2026-07-10 10:30（北京时间）" in html
     assert "生成于 10:37" in html
     assert "2026-07-10T02:30:00Z" not in html
-    assert "部门摘要" in html
+    assert "部门研究摘要" in html
     assert "<details class='department-card'>" in html
     assert "-webkit-line-clamp:2" in html
     assert "<summary>" in html
     assert "市场处于观察窗口。" in html
+    assert "市场范围与样本表现" in html
+    assert "美股观察样本" in html
+    assert "不代表美股整体" in html
+    assert "重点标的跟踪" in html
+    assert "Apple Inc." in html
+    assert "PE(TTM) 31.20；历史分位样本不足" in html
+    assert "研究立场" in html
+    assert "A 股偏弱，海外样本仅作观察。" in html
+    assert "组合动作" in html
+    assert "保持防御，不新增风险暴露。" in html
+    assert "可信度" in html
+    assert "可用，含待确认情景" in html
+    assert "时效" in html
+    assert "下一交易日开盘前有效。" in html
+    assert "覆盖" in html
+    assert "A股核心指数 + 4 个跨市场样本。" in html
+    assert "<div class='table-wrap reader-matrix-table'>" in html
+    assert "<div class='reader-matrix-cards'>" in html
+    assert "<article class='matrix-card'>" in html
+    assert "<article class='matrix-card stock-matrix-card'>" in html
+    assert "@media(max-width:700px){.reader-matrix-table{display:none}.reader-matrix-cards{display:grid" in html
+    assert "SEC 官方披露" in html
+    assert "已验证事实" in html
+    assert "发布时间 2026-07-10 10:00（北京时间）" in html
+    assert "href='https://www.sec.gov/Archives/example'" in html
+    for eyebrow in (
+        "MARKET SCOPE",
+        "SECURITY MONITOR",
+        "EVIDENCE",
+        "CHALLENGE",
+        "WATCH",
+        "SCENARIO ADJUDICATION",
+        "MACRO & GEOPOLITICS",
+        "DEPARTMENT NOTES",
+    ):
+        assert f">{eyebrow}<" not in html
     assert "已识别的争议结论" in html
     assert "存在有效反证，未作为确定依据" in html
     assert "可用，含待确认情景" in html
@@ -273,7 +352,7 @@ def test_report_center_keeps_one_collapsed_department_summary_and_one_diagnostic
     assert "分部门分析" not in html
     assert "部门卷宗" not in html
     assert "各板块结论与下一步" not in html
-    assert html.count(">Diagnostics</a>") == 1
+    assert html.count(">Diagnostics</a>") == 0
     assert ">行业 / 风格</a>" in html
     assert ">候选观察</a>" in html
     for field in (
@@ -287,6 +366,17 @@ def test_report_center_keeps_one_collapsed_department_summary_and_one_diagnostic
         "cost_basis",
     ):
         assert field not in html
+    engineering_fields = (
+        "providerMatrix",
+        "sourceHealthV2",
+        "claimPolicy",
+        "artifactId",
+        "record_count",
+        "rows=",
+        "raw_payload",
+        "InternalQuoteProvider",
+    )
+    assert sum(html.count(field) for field in engineering_fields) == 0
 
 
 def test_daily_workflow_generates_html_report_center_through_shared_runner():
@@ -301,6 +391,7 @@ def test_daily_workflow_generates_html_report_center_through_shared_runner():
     assert "src/render_report_html.py" in runner
     assert "src/render_homepage.py" in runner
     assert "python scripts/publish_pages_bundle.py" in workflow
+    assert 'SYMBOLS="${SYMBOLS:-600519,000001,AAPL,HK00700}"' not in runner
     assert "docs/reports/$TODAY.html" in workflow
     assert "report_${TODAY_COMPACT}.html" in workflow
     assert runner.index("scripts/write_source_health_ledgers.py") < runner.index("src/render_report_html.py")
@@ -340,13 +431,12 @@ def test_report_center_includes_agent_memo_dashboard_sections(tmp_path, monkeypa
     assert "sourceHealthV2" not in center_html
     assert "providerMatrix" not in center_html
     assert "claimPolicy" not in center_html
-    assert "CIO 总结" in center_html
     assert "核心理由" in center_html
-    assert "CIO 总结" in center_html
+    assert "多市场观察简报" in center_html
     assert "下一步" in center_html
     assert "分报告下钻" in center_html
     assert "../reports/2026-06-17/macro.html" in center_html
-    assert center_html.count(">Diagnostics</a>") == 1
+    assert center_html.count(">Diagnostics</a>") == 0
 
 
 def test_render_agent_memo_html_hides_engineering_fields_in_main_reading(tmp_path, monkeypatch):
@@ -502,3 +592,47 @@ def test_department_decision_card_does_not_repeat_identical_conclusion_as_infere
 
     assert html.count("地缘风险需要继续跟踪。") == 1
     assert "；；" not in html
+
+
+def test_reader_datetime_does_not_invent_time_for_date_only_value():
+    from src.render_report_html import _reader_datetime
+
+    assert _reader_datetime("2026-07-17") == "2026-07-17"
+
+
+def test_public_reader_source_urls_strip_credentials_before_rendering():
+    from src.render_report_html import _evidence_sample_bullets, _valid_http_url
+
+    canary = "CANARY_PUBLIC_SECRET_9f2a7"
+    raw_url = (
+        f"https://reader:{canary}@EXAMPLE.test/news"
+        f"?lang=zh&api_key={canary}&key={canary}&signature={canary}"
+        f"&X-Amz-Credential={canary}&page=2#access_token={canary}"
+    )
+
+    sanitized = _valid_http_url(raw_url)
+    html = _evidence_sample_bullets(
+        [
+            {
+                "provider": "ExampleProvider",
+                "factType": "verified_fact",
+                "sourceUrl": raw_url,
+            }
+        ]
+    )
+
+    assert sanitized == "https://example.test/news?lang=zh&page=2"
+    assert "https://example.test/news?lang=zh&amp;page=2" in html
+    assert canary not in html
+    assert "api_key" not in html
+    assert "signature" not in html
+    assert "X-Amz-Credential" not in html
+    assert "access_token" not in html
+    assert "reader:" not in html
+
+
+def test_public_reader_source_url_rejects_webhooks_and_token_shaped_paths():
+    from src.render_report_html import _valid_http_url
+
+    assert _valid_http_url("https://hooks.slack.com/services/T000/B000/secret") == ""
+    assert _valid_http_url("https://example.test/source/sk-abcdefghijklmnop") == ""

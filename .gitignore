@@ -107,3 +107,4 @@ docs/specs/
 
 # local generated artifact archive
 /.local_archive/
+.gstack/

@@ -276,8 +276,10 @@ export interface ReportArtifactDepartmentInput {
 export interface ReportArtifactReaderV2EvidenceSample {
   id?: string;
   label?: string;
+  sourceName?: string;
   provider?: string;
   factType?: string;
+  asOf?: string;
   sourceUrl?: string;
 }
 
@@ -320,6 +322,10 @@ export interface ReportArtifactReaderV2 {
 }
 
 export interface ReportArtifactReaderV3Hero {
+  marketStance?: string;
+  portfolioAction?: string;
+  validity?: string;
+  dataCoverage?: string;
   action?: string;
   status?: string;
   confidence?: string;
@@ -358,6 +364,38 @@ export interface ReportArtifactReaderV3Section {
   evidenceSamples?: ReportArtifactReaderV2EvidenceSample[];
 }
 
+export interface ReportArtifactReaderV3MarketRow {
+  market?: string;
+  scopeLabel?: string;
+  scopeType?: 'market' | 'sample' | string;
+  state?: string;
+  headline?: string;
+  scopeNote?: string;
+  breadthAvailable?: boolean;
+  asOf?: string;
+  evidenceIds?: string[];
+}
+
+export interface ReportArtifactReaderV3StockRow {
+  symbol?: string;
+  name?: string;
+  market?: 'CN' | 'HK' | 'US' | string;
+  stance?: string;
+  lastPrice?: number;
+  currency?: string;
+  return1dPct?: number;
+  return20dPct?: number;
+  trend?: string;
+  fundamental?: string;
+  valuation?: string;
+  latestEvent?: string;
+  eventDate?: string;
+  eventUrl?: string;
+  watchLevels?: string;
+  asOf?: string;
+  evidenceIds?: string[];
+}
+
 export interface ReportArtifactReaderV3 {
   schema?: string;
   runDate?: string;
@@ -374,6 +412,8 @@ export interface ReportArtifactReaderV3 {
   keyReasons?: string[];
   counterpoints?: string[];
   nextSteps?: string[];
+  marketMatrix?: ReportArtifactReaderV3MarketRow[];
+  stockMatrix?: ReportArtifactReaderV3StockRow[];
   marketGeo?: string[];
   adjudication?: {
     sharedFacts?: string[];
@@ -393,6 +433,9 @@ export interface ReportArtifactReaderV3 {
   reliability?: {
     label?: string;
     headlineSafe?: boolean;
+    headlineDisplayable?: boolean;
+    headlineEvidenceSupported?: boolean;
+    headlineStatus?: string;
     warnings?: string[];
     supportedClaims?: number;
     hypothesisClaims?: number;
