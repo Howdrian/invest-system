@@ -95,7 +95,7 @@ def test_heavy_ci_jobs_are_path_filtered_and_backend_tests_are_sharded() -> None
     assert "pytest-xdist" not in requirements
     assert "PYTEST_WORKERS" not in ci_gate
     assert "pytest-split" not in requirements
-    assert 'python scripts/ci_test_shard.py' in ci_gate
+    assert '"$PYTHON_BIN" scripts/ci_test_shard.py' in ci_gate
     assert '--first-shard-overhead "${PYTEST_FIRST_SHARD_OVERHEAD:-0}"' in ci_gate
     assert '.github/ci-test-durations.json' in ci_gate
     assert '--durations=30' in ci_gate

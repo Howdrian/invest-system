@@ -18,6 +18,7 @@ def test_report_step_receives_daily_universe_data_and_llm_config() -> None:
         "STOCK_LIST:",
         "PORTFOLIO_HOLDINGS:",
         "TUSHARE_TOKEN:",
+        "TUSHARE_HTTP_URL:",
         "FRED_API_KEY:",
         "SEC_USER_AGENT:",
         "TAVILY_API_KEY:",
