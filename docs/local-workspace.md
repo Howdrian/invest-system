@@ -4,37 +4,26 @@
 
 ## Current local path
 
-`/Users/hac/AI-Studio/投研/invest-system-release-candidate`
+`/Users/hac/AI-Studio/投研/invest-system-upstream-sync-20260812`
 
-This repo is the active release-candidate line for the investment research system. It starts from `upstream/main@55946536`, preserves the original product surface, and adds the Reports product line in reviewable commits.
+这是当前 upstream 同步后的发布候选工作树，分支为 `codex/reports-v1-upstream-sync`。验收代码 SHA `4f12aac5ebae` 基于 `upstream/main@3b98aa1d779a`，点时为 ahead 15 / behind 0。原 `/Users/hac/AI-Studio/投研/invest-system-release-candidate` 保留为同步前的干净参考线，不再是本次最终代码入口。
 
-The product diff has completed manual review and was split into local commits. The code snapshot before the documentation commit is `97c4d035dab9`; the committed worktree is clean and the final structural audit reports `dirtyEntries=0`. Generated daily artifacts and local dependencies remain ignored and are not part of the source snapshot.
-
-The current upstream tip is `3b98aa1d779a`. The branch is 9 commits ahead and 60 commits behind upstream; the upstream delta since the integration base spans 394 files. Do not describe the candidate as matching latest upstream until a clean integration and parity rerun complete. See [CURRENT_STATE](CURRENT_STATE.md) and [Upstream Parity Audit](UPSTREAM_PARITY_AUDIT.md).
-
-The live GitHub Pages site is still legacy `main/docs`. On 2026-08-12, sampled raw artifact, RAW_AGENT memo, and source-health JSON URLs were still HTTP 200. Local Reader-only staging is therefore not evidence that the public site has been cleaned.
-
-The former implementation and integration worktrees were compacted into `/Users/hac/AI-Studio/投研/_legacy/invest-system-worktree-archives/20260717` and removed from the live workspace. This repo has a standalone `.git` directory and does not depend on the retired worktrees.
+本地 parity、测试和 Git 提交不等于云端发布。线上 Pages 仍是旧 `main/docs`；2026-08-12 三条维护原文 URL 仍 HTTP 200。
 
 ## Boundary
 
-- Runtime source: current repo code plus generated local artifacts.
-- Reports product line: `/reports`, `/api/v1/reports/*`, `src/source_health/`, `src/research_core/`, department Agent runtime, Reader and Diagnostics.
-- Original product lines remain active: chat, portfolio, screening, decision signals, alerts, usage, settings, scheduler and data providers.
-- Daily outputs under `docs/reports/`, `docs/run_status/`, `docs/agent_memos/`, `docs/market_cycle/`, `docs/daily/` and `docs/index.html` are generated artifacts. They are ignored in source review and regenerated locally or in Actions.
-- Local and GitHub Actions report generation both enter through `scripts/run_research_daily_local.sh`; Pages publication is a separate final step.
-- Long-term docs remain under `docs/*.md`.
-- Old `invest-brain` stays reference-only outside public docs; `docs/invest-brain/**` must not be exposed.
+- Runtime source：当前 repo 代码；历史 2026-07-17 运行产物仍位于旧 release-candidate 的 ignored docs 目录。
+- Reports：`/reports`、`/api/v1/reports/*`、Evidence/SourceHealth、11 Agent、Reader/Diagnostics。
+- 原产品面继续保留：chat、portfolio、screening、decision signals、alerts、usage、settings、scheduler 和 providers。
+- `docs/reports/`、`docs/run_status/`、`docs/agent_memos/`、`docs/market_cycle/`、`docs/daily/`、`docs/index.html` 是生成物，不进源码 review。
+- 完整 artifact/Diagnostics/memo/ledger 只在维护面；公开 Pages 只发布 Reader HTML allowlist。
+- `.env`、DB、logs、cache、真实凭据不提交。
 
 ## Git
 
-Use this repo's Git state:
-
 ```bash
-git -C /Users/hac/AI-Studio/投研/invest-system-release-candidate status --short
-git -C /Users/hac/AI-Studio/投研/invest-system-release-candidate rev-list --left-right --count HEAD...upstream/main
+git -C /Users/hac/AI-Studio/投研/invest-system-upstream-sync-20260812 status --short
+git -C /Users/hac/AI-Studio/投研/invest-system-upstream-sync-20260812 rev-list --left-right --count HEAD...upstream/main
 ```
 
-Do not commit `.env`, DB, logs, caches, or generated daily report bundles.
-
-Before a cloud release, integrate upstream in a separate clean branch/worktree and rerun the full parity matrix. Do not merge the 60-commit drift into a dirty tree, and do not treat old-main CI or local Pages staging as candidate cloud acceptance.
+发布前先 `git fetch --all --prune`，确认相对记录的 upstream SHA 无新增漂移，再运行 parity matrix。不要把本地 Pages staging、旧 main Network Smoke 或 DMG framework build 当成候选云验收。

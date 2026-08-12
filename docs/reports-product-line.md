@@ -76,7 +76,7 @@ LLM 长运行发生瞬时网络故障时，可在输入未变化的前提下显�
 ## 本地生成
 
 ```bash
-cd /Users/hac/AI-Studio/投研/invest-system-release-candidate
+cd /Users/hac/AI-Studio/投研/invest-system-upstream-sync-20260812
 scripts/run_research_daily_local.sh --date YYYY-MM-DD --runtime llm --symbols "600519,000001,AAPL,HK00700"
 ```
 
@@ -105,7 +105,7 @@ http://localhost:8000/reports
 
 ## 验收
 
-本地必须通过：后端 gate、Pages validator、API smoke、Web test/lint/build、semantic quality audit、AI asset check、`git diff --check` 和运行产物 secret scan。2026-08-12 最终代码快照验收：后端 `4871 passed, 4 deselected, 416 subtests`，Web `977 passed / 2 skipped`；Pages source 为 21 个必需文件 / 30 个链接 / 0 broken，公开 staging 只含 11 个 Reader HTML / 19 个链接，工程字段与维护路径扫描为 0。该验收不包含新 LLM 日报、Docker image、Desktop/Playwright 或云端发布。
+本地必须通过：后端 gate、Pages validator、API smoke、Web test/lint/build、semantic quality audit、AI asset check、`git diff --check` 和运行产物 secret scan。2026-08-12 最终代码快照验收：后端 `6174 passed, 4 deselected, 501 subtests`，Web 最终 `1108 passed / 2 skipped`；Pages source 为 21 个必需文件 / 30 个链接 / 0 broken，公开 staging 只含 11 个 Reader HTML / 19 个链接，工程字段与维护路径扫描为 0。Desktop 50 tests、DMG 打包框架和依赖审计已通过；该验收仍不包含新 LLM 日报、完整 Desktop backend bundle/跨平台签名、成功 Docker image 或云端发布。
 
 ## 云端发布边界
 
@@ -124,7 +124,7 @@ Pages staging 只复制公开 Reader 资产：`index.html`、汇总报告和分�
 - Pages bundle validator 通过；
 - 失败时只在 Actions job log 输出已脱敏摘要，不上传完整 logs/artifacts，也不得部署 Pages；若未来需要远程诊断包，必须先迁移到访问受限的私有存储。
 
-本机 Vertex ADC 不会自动存在于 GitHub-hosted runner。当前云端先使用 Repository Secret `GEMINI_API_KEY`，模型策略 `best` 会优先 smoke Gemini 3.5 Flash，再回退到已配置的 Gemini 模型；规则 Agent 不作为云端成功 fallback。
+本机 Vertex ADC 不会自动存在于 GitHub-hosted runner。candidate workflow 支持通过 Repository Secret `GEMINI_API_KEY` 运行；模型策略 `best` 会优先 smoke Gemini 3.5 Flash，再回退到已配置的 Gemini 模型，规则 Agent 不作为云端成功 fallback。实际云端 provider 尚未验证。
 
 首次发布前还要把仓库 Pages build source 从 legacy `main/docs` 切换成 `GitHub Actions`。该设置属于云端状态，必须在代码提交后再切换并手动触发验证。
 

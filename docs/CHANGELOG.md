@@ -25,12 +25,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - [改进] 通知推送与完整 Markdown/微信报告不再重复附加“AI 决策信号”摘要，DecisionSignal 的存储、告警和 Web AI 建议页保持不变。
 - [改进] TickFlow 新增基于申万一级行业池的行业涨跌排行 fallback，并将基本面/市场结构单能力默认超时由 3 秒调整为 8 秒。
 - [修复] 公开 Daily Universe 不自动展开私有 `PORTFOLIO_HOLDINGS`；无真实 snapshot 的符号清单不能支持仓位结论。
-- [修复] Axios、React Router、ESLint / TypeScript ESLint、aiohttp、cryptography、NLTK 与 pyasn1 安全升级；当前本地 npm/pip 审计均为 0 known vulnerabilities。
+- [修复] Axios、React Router、ESLint / TypeScript ESLint、aiohttp、cryptography、NLTK 与 pyasn1 安全升级；Desktop 同步升级 Electron `39.8.10`、electron-builder `26.15.3`、electron-updater `6.8.9` 并收窄依赖 override；当前 Web/Desktop npm 与 Python 本地审计均为 0 known vulnerabilities。
+- [修复] Reports lightweight LLM 配置与主 Config 统一为 `YAML > Channels > legacy`，保留 Responses API Router 路由并对显式无效配置 fail-closed；Daily Reports step 同步 LLM、Stock List、Tushare、TickFlow 与 Longbridge 配置，原子落盘 YAML。
+- [修复] OpenAPI 文档改为从 runtime 确定性生成并固定 FastAPI/Pydantic/Starlette schema toolchain；静态产物现覆盖 116 paths、193 schemas 和三条 Reports API。
+- [修复] 完成点时代码级 upstream provider parity：保留 4/5 位裸港股路由、Tencent 最终兜底、港股全市场缓存、Longbridge keyword args 与 YFinance PE/PB；Longbridge 真实凭据 live smoke 未在本轮执行。
 - [chore] 退役无法导入且未进入活动 runner 的 `src/market_cycle.py`，保留 `scripts/build_pages_compat_bundle.py` 作为兼容入口。
 - [chore] 技术债扫描按定义线性统计复杂度，避免嵌套 AST 重复遍历导致全仓扫描长期无输出。
 - [文档] 补充 macOS 未签名、未公证 DMG 被 Gatekeeper 拦截时的架构选择、安全排查与官方安装包临时放行步骤。
-- [文档] 2026-08-12 更新 CURRENT_STATE、upstream parity、技术债和部署认证说明；最新 upstream 为 `3b98aa1d`，当前 ahead 9 / behind 60；线上 legacy Pages 三条维护路径仍为 HTTP 200，云端发布继续 NO-GO。
-- [测试] 最终本地回归：后端 `4871 passed, 4 deselected, 416 subtests`；Web `977 passed / 2 skipped`；Pages source 21/30、Reader staging 11/19、semantic、AI assets、Markdown links、依赖审计和 diff gate 全部通过，未执行云端发布。
+- [文档] 2026-08-12 更新 CURRENT_STATE、upstream parity、技术债和工作区路由；验收代码对 `upstream/main@3b98aa1d` 为 ahead 15 / behind 0；线上 legacy Pages 三条维护路径仍为 HTTP 200，云端发布继续 NO-GO。
+- [测试] 最终本地回归：后端 `6174 passed, 4 deselected, 501 subtests`；Web `1108 passed / 2 skipped`；Desktop 50/50、provider 109、Pages source 21/30、Reader staging 11/19、semantic、AI assets、OpenAPI、依赖审计和 diff gate 通过；Docker compose 通过，image build 首次超时、第二次慢速后中止，未执行云端发布。
 <!-- 新条目格式：- [类型] 描述（类型取值：新功能/改进/修复/文档/测试/chore）-->
 <!-- 每条独立一行追加到本段末尾，无需分类标题，合并时冲突最小 -->
 - [改进] AIHubMix 注册与引流链接统一使用 inferera.com，改善中国大陆网络直连体验。

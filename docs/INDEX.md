@@ -22,7 +22,7 @@
 
 | 文档 | 内容 |
 | --- | --- |
-| [当前状态](CURRENT_STATE.md) | 当前分支、报告、验证、upstream 漂移、云端边界和下一步；作为活跃发布候选线的进展真相源 |
+| [当前状态](CURRENT_STATE.md) | 当前分支、报告、验证、点时 upstream parity、云端边界和下一步；作为活跃发布候选线的进展真相源 |
 | [README](../README.md) | 项目定位、核心能力、快速开始、推送效果 |
 | [小白客户端安装与配置](beginner-client-setup.md) | 面向不会代码用户的客户端下载、Anspire Open / AIHubMix 模型配置、新闻源配置和常见问题 |
 | [完整配置与部署指南](full-guide.md) | 环境准备、运行方式、配置说明、部署路径和常见问题 |
@@ -52,7 +52,7 @@
 | [分析上下文包契约、运行态消费与可见性](analysis-context-pack.md) | AnalysisContextPack 首版范围、字段质量状态、P1/P2 内部契约、P3 Prompt 摘要消费、P4 历史/API/Web 低敏可见性、P5 数据质量评分、P6 迁移回滚与源码锚点；完整指南补充 #1386 阶段感知分析、迁移与回滚入口 |
 | [图片识别 Prompt](image-extract-prompt.md) | 图片识别股票信息的 Prompt 与使用边界 |
 | [OpenClaw Skill 集成](openclaw-skill-integration.md) | OpenClaw / Skill 外部集成说明 |
-| [Reports 产品线与 upstream parity](UPSTREAM_PARITY_AUDIT.md) | Reports API/Web/Pages 接入、原产品能力恢复状态和验收结论 |
+| [Reports 产品线与 upstream parity](UPSTREAM_PARITY_AUDIT.md) | Reports API/Web/Pages 接入、同步后原产品能力保留与 parity 验收 |
 | [Reports Agent SOP / Prompt 边界](research-agent-sop.md) | 部门 Agent 输入边界、Prompt 强度、女娲使用边界、ReaderV3 验收口径 |
 | [Reports 产品线与运行边界](reports-product-line.md) | Reports 作为新增产品线的架构、产物治理、Reader/Diagnostics 边界、本地验收与云端发布口径 |
 | [本地工作区边界](local-workspace.md) | 集成线真实路径、源码/生成产物边界和 Git 操作口径 |
