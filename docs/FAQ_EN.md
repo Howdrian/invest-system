@@ -292,8 +292,9 @@ Work through the following 5 checkpoints in order:
 ### Q14: API service inaccessible in Docker?
 
 **Solution**:
-1. Ensure startup command includes `--host 0.0.0.0` (cannot be 127.0.0.1)
-2. Check port mapping is correct:
+1. Set `ADMIN_AUTH_ENABLED=true`, then initialize the password in the persistent `/app/data` volume with `docker compose -f docker/docker-compose.yml run --rm server python -m src.auth reset_password`.
+2. Ensure the startup command includes `--host 0.0.0.0`; the service fails closed if auth is disabled or no password exists.
+3. Check port mapping is correct:
    ```yaml
     ports:
       - "8000:8000"

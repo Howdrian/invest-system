@@ -298,9 +298,9 @@ win-unpacked/
 ### 局域网访问 Windows 桌面端 WebUI
 
 - 桌面端默认仍按 `WEBUI_HOST=127.0.0.1` 只允许本机访问，避免安装后无意暴露后端服务
-- 如需让同一局域网内其他设备访问，在桌面端 `.env` 或 `系统设置 -> WebUI 监听地址` 中设置 `WEBUI_HOST=0.0.0.0`，保存后重启桌面端
+- 如需让同一局域网内其他设备访问，先保持 `WEBUI_HOST=127.0.0.1`、设置 `ADMIN_AUTH_ENABLED=true` 并在本机完成初始密码；再把 `WEBUI_HOST` 改为 `0.0.0.0` 并重启桌面端
 - 桌面端会自动选择 `8000-8100` 中可用端口并传给后端；常见情况下仍是 `8000`，若端口被占用，可在 `logs/desktop.log` 查看 `Using port ...` 和 `Backend launch command=...`
-- Windows 防火墙或服务器安全组仍需放行实际监听端口；对外暴露前建议同时启用 `ADMIN_AUTH_ENABLED`
+- Windows 防火墙或服务器安全组仍需放行实际监听端口；非 loopback 监听对 `ADMIN_AUTH_ENABLED=true` 和已初始化密码是强制要求，不是建议项
 - 即使后端绑定 `0.0.0.0`，桌面窗口自身仍会使用本机可访问地址完成健康检查和页面加载
 
 ### 桌面端更新提醒

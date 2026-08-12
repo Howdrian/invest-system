@@ -294,8 +294,9 @@ OPENAI_MODEL=deepseek-v4-flash
 ### Q14: Docker 中 API 服务无法访问？
 
 **解决方案**：
-1. 确保启动命令包含 `--host 0.0.0.0`（不能是 127.0.0.1）
-2. 检查端口映射是否正确：
+1. 在 `.env` 设置 `ADMIN_AUTH_ENABLED=true`，并用持久化 `/app/data` 先执行 `docker compose -f docker/docker-compose.yml run --rm server python -m src.auth reset_password`。
+2. 确保启动命令包含 `--host 0.0.0.0`；未启用认证或未设置密码时会 fail-closed 退出。
+3. 检查端口映射是否正确：
    ```yaml
    ports:
      - "8000:8000"

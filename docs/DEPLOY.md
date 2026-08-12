@@ -145,12 +145,14 @@ python main.py --schedule
 # 后台运行（使用 nohup）
 nohup python main.py --schedule > /dev/null 2>&1 &
 
-# 启动 Web 管理界面（云服务器需先在 .env 中设置 WEBUI_HOST=0.0.0.0）
+# 启动 Web 管理界面（云服务器先按下方要求启用认证、设密，再设 WEBUI_HOST=0.0.0.0）
 python main.py --webui-only
 
 # 启动 Web 界面（启动时执行一次分析；需每日定时请加 --schedule 或设 SCHEDULE_ENABLED=true）
 python main.py --webui
 ```
+
+> 非 loopback 监听必须先设置 `ADMIN_AUTH_ENABLED=true`，并在服务器本机执行 `python -m src.auth reset_password`。否则服务会 fail-closed 拒绝启动。
 
 > 不知道怎么访问？→ [云服务器 Web 界面访问指南](deploy-webui-cloud.md)
 

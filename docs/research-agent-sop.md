@@ -1,6 +1,6 @@
 # Reports Agent SOP / Prompt 边界
 
-> Last verified: 2026-07-13
+> Last verified: 2026-08-12
 > 目标：让部门 Agent 像投研部门，不像角色扮演；让 Reader 只展示结论、依据、反证和下一步。
 
 ## 运行链路
@@ -41,11 +41,11 @@ Daily Universe
 | FundamentalAgent | 深度 SOP | 财务、估值、SEC/CNINFO/HKEX/SSE/SZSE、公告 |
 | MacroAgent | 深度 SOP | FRED、利率、通胀、信用、流动性、能源 |
 | GeoPolicyAgent | 深度 SOP | GDELT、Tavily、ReliefWeb、制裁、冲突、贸易政策 |
-| MarketAgent | 轻量岗位卡 | 指数、市场宽度、资金面、市场统计 |
+| MarketAgent | 轻量岗位卡 | 本轮已覆盖市场的指数、市场宽度、资金面、市场统计；不强求不存在的三地同构数据 |
 | SectorAgent | 轻量岗位卡 | 行业、风格、热点、候选池 |
 | TechnicalAgent | 轻量岗位卡 | K 线、趋势、量价、指标 |
 | IntelAgent | 轻量岗位卡 | 公告、新闻、搜索线索、催化剂 |
-| PortfolioAgent | 轻量岗位卡 | 持仓、自选、组合暴露；无持仓就说观察池 |
+| PortfolioAgent | 轻量岗位卡 | 持仓、自选、组合暴露；已确认空仓与持仓快照未知必须分开 |
 
 ## 女娲使用边界
 
@@ -62,9 +62,14 @@ Daily Universe
 - 不替代数据源。
 - 不直接写投资结论。
 
-## 输出格式
+## 输入与输出收口
 
-Agent 可以输出 JSON 或固定 Markdown。系统会解析成统一 memo。
+- 共享规则只保留证据等级、时点、因果、universe 和真实缺口 6 类硬约束。
+- 部门 Prompt 只追加本部门的分析方法，不再重复 provider、原报告摘录和全量上下文。
+- 岗位 `avoid`、部门分析规则、输出合同各自只出现一次；system prompt 只负责角色和输出入口，不再复述证据政策。
+- 原系统 LLM 结论以紧凑 opinion 输入给相关部门；Risk / RedTeam / CIO 只读部门结论和关键 evidence，不重读原报告。
+- 运行时要求单一 JSON object，用 backend 的 JSON mode 约束。
+- Markdown 解析只作历史产物/兼容 fallback，不是新 Prompt 的双轨输出合同。
 
 必须包含：
 
@@ -84,6 +89,9 @@ Agent 可以输出 JSON 或固定 Markdown。系统会解析成统一 memo。
 - 不允许为了模板完整硬写“数据缺口”。
 - 单个 provider 失败但同域已有 verified/derived evidence，只能写“待确认/需补强”，不能写“无法分析”。
 - “无 / 暂无 / 无关键缺口”不会进入 Reader 的待确认项统计。
+- 已确认持仓为 0 是业务状态，不是数据缺口；只有持仓快照未接入才记待确认项。
+- 市场部门只比较已有市场级证据的市场。只有个股样本时明确为样本，不要求 Agent 虚构对应市场宽度。
+- 当前估值可以展示；“历史低/高位”必须有本地历史分位或同业基准，至少 20 个日度样本前不输出历史分位。
 
 CIO 的下一步必须覆盖：
 

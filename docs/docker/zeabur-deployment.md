@@ -100,6 +100,8 @@ Zeabur 服务建议从 `1G` 内存起步；`512M` 仅适合轻量 Web/API、单�
 5. 点击「保存」
 6. 重启服务
 
+> Zeabur 的非 loopback FastAPI 模式必须同时满足 `ADMIN_AUTH_ENABLED=true` 和已持久化的管理员密码。先在受控终端对同一数据卷执行 `python -m src.auth reset_password`；公网首访不允许初始化密码。
+
 ## 4. Discord 机器人部署
 
 ### 4.1 准备工作
@@ -210,15 +212,16 @@ Zeabur 服务建议从 `1G` 内存起步；`512M` 仅适合轻量 Web/API、单�
 
 - WebUI 模式：检查 `http://localhost:8000/health` 端点
 - FastAPI 模式：检查 `http://localhost:8000/api/health` 端点
-- 非服务模式：始终返回健康状态
+- 非服务模式：只在容器 PID 1 仍存活时返回健康状态
 
 健康检查配置如下：
 
 ```dockerfile
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:8000/api/health || curl -f http://localhost:8000/health \
-    || python -c "import sys; sys.exit(0)"
+    CMD ["/usr/local/bin/docker-healthcheck.sh"]
 ```
+
+API 模式的 HTTP 探测失败会把容器标为 unhealthy，不再用无条件成功掩盖服务故障。
 
 ## 8. 常见问题
 

@@ -20,7 +20,7 @@
 
 ## 方式一：直接部署（pip + python）
 
-### 第一步：修改 .env 中的监听地址
+### 第一步：先初始化认证，再修改监听地址
 
 用编辑器打开 `.env`（在项目根目录，即包含 `main.py` 的目录），找到这一行：
 
@@ -28,13 +28,24 @@
 WEBUI_HOST=127.0.0.1
 ```
 
-把 `127.0.0.1` 改成 `0.0.0.0`：
+先保持 loopback，启用认证并在服务器本机初始化管理员密码：
+
+```env
+WEBUI_HOST=127.0.0.1
+ADMIN_AUTH_ENABLED=true
+```
+
+```bash
+python -m src.auth reset_password
+```
+
+然后再把 `127.0.0.1` 改成 `0.0.0.0`：
 
 ```env
 WEBUI_HOST=0.0.0.0
 ```
 
-> `127.0.0.1` 表示只有本机能访问，`0.0.0.0` 表示允许任何来源访问。云服务器需要把 `.env` 中的 `WEBUI_HOST` 改成 `0.0.0.0`，或在启动命令里显式传入 `--host 0.0.0.0`，才能从外网打开界面。
+> `127.0.0.1` 表示只有本机能访问，`0.0.0.0` 表示允许任何来源访问。非 loopback 启动同时要求 `ADMIN_AUTH_ENABLED=true` 和已存在的有效管理员密码；任一缺失都会 fail-closed 拒绝启动。
 
 ### 第二步：启动服务
 
@@ -79,6 +90,12 @@ WEBUI_PORT=8888
 ### 第一步：确认已有 .env 配置
 
 项目的 `docker/docker-compose.yml` 在容器内部已经自动设置了 `WEBUI_HOST=0.0.0.0`，你不需要在 `.env` 里再改监听地址，Docker 会自动处理。
+
+因为 Compose 直接绑定非 loopback，必须先在 `.env` 设置 `ADMIN_AUTH_ENABLED=true`，并对持久化数据卷执行：
+
+```bash
+docker compose -f docker/docker-compose.yml run --rm server python -m src.auth reset_password
+```
 
 Docker Compose 中的 `env_file: ../.env` 只会把 `.env` 作为**启动环境变量**注入容器，不会在容器内创建 `/app/.env`，也不会让 WebUI 保存配置时回写宿主机 `.env`。新版 WebUI 会在活跃 `.env` 文件缺少某些键时展示启动注入的同名环境变量作为兜底，因此页面上能看到 Docker 启动时注入的配置；但“导出 `.env`”仍只导出当前活跃配置文件内容。
 
@@ -233,7 +250,7 @@ sudo firewall-cmd --reload
 
 这是第二常见原因。`.env` 里默认是 `WEBUI_HOST=127.0.0.1`，这样服务只监听本机，外网根本连不上。
 
-改法：打开 `.env`，把 `WEBUI_HOST=127.0.0.1` 改成 `WEBUI_HOST=0.0.0.0`，然后重启服务；也可以在启动命令里显式添加 `--host 0.0.0.0`。
+改法：先按本文完成 `ADMIN_AUTH_ENABLED=true` 和管理员设密，再打开 `.env`，把 `WEBUI_HOST=127.0.0.1` 改成 `WEBUI_HOST=0.0.0.0` 并重启服务；也可在标准入口启动命令中显式添加 `--host 0.0.0.0`。
 
 > Docker 方式不需要改这个，可以跳过。
 
@@ -329,7 +346,7 @@ sudo systemctl reload nginx
 
 ## 安全建议
 
-把 Web 界面暴露到公网之前，强烈建议开启登录密码保护：
+把 Web 界面暴露到公网之前，必须开启登录密码保护并预先初始化密码：
 
 在 `.env` 中设置：
 
@@ -337,7 +354,7 @@ sudo systemctl reload nginx
 ADMIN_AUTH_ENABLED=true
 ```
 
-重启服务后，第一次访问网页时会要求设置初始密码。设置完成后，每次打开设置页面都需要输入密码，可以防止 API Key 等敏感配置被他人看到。
+启动前在服务器本机执行 `python -m src.auth reset_password`（Docker 使用上文的 Compose 命令）。公网实例不允许由第一个访客初始化密码；未完成设密会直接拒绝公网启动/请求。
 
 > 如果忘了密码，可以在服务器上执行：`python -m src.auth reset_password`
 

@@ -6,6 +6,7 @@
 
 | 我想要 | 先看 | 继续看 |
 | --- | --- | --- |
+| 查看当前真实进展、验证结果和剩余事项 | [当前状态](CURRENT_STATE.md) | [Reports 产品线](reports-product-line.md)、[技术债台账](TECH_DEBT_REGISTER.md) |
 | 快速了解项目能做什么 | [README](../README.md) | [完整配置与部署指南](full-guide.md) |
 | 第一次把项目跑起来 | [小白客户端安装与配置](beginner-client-setup.md) | [完整配置与部署指南](full-guide.md) |
 | 配置大模型渠道 | [LLM 配置指南](LLM_CONFIG_GUIDE.md) | [LLM 服务商配置指南](llm-providers.md) |
@@ -21,6 +22,7 @@
 
 | 文档 | 内容 |
 | --- | --- |
+| [当前状态](CURRENT_STATE.md) | 当前分支、报告、验证、upstream 漂移、云端边界和下一步；作为活跃发布候选线的进展真相源 |
 | [README](../README.md) | 项目定位、核心能力、快速开始、推送效果 |
 | [小白客户端安装与配置](beginner-client-setup.md) | 面向不会代码用户的客户端下载、Anspire Open / AIHubMix 模型配置、新闻源配置和常见问题 |
 | [完整配置与部署指南](full-guide.md) | 环境准备、运行方式、配置说明、部署路径和常见问题 |

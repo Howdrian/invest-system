@@ -456,6 +456,9 @@ cd daily_stock_analysis
 cp .env.example .env
 vim .env  # Fill in API Keys and configuration
 
+# 2.1 The Web/API container binds 0.0.0.0: enable auth, then initialize its persisted password offline
+docker-compose -f ./docker/docker-compose.yml run --rm server python -m src.auth reset_password
+
 # 3. Start container
 docker-compose -f ./docker/docker-compose.yml up -d server     # Web service mode (recommended, provides API & WebUI)
 docker-compose -f ./docker/docker-compose.yml up -d analyzer   # Scheduled task mode
@@ -470,13 +473,22 @@ docker-compose -f ./docker/docker-compose.yml logs -f server
 
 The default Compose file sets `limits.memory: 1G` and `reservations.memory: 512M` for each service. Use `512M` only for lightweight Web/API usage, single-stock runs, and low concurrency with `MAX_WORKERS=1`; use `1G` for normal full analysis, and `2G+` when running `server + analyzer` together, multi-stock analysis, market review, news expansion, image reports, or screening. If constrained to `512M`, avoid starting both services and reduce heavy features.
 
+Before a service binds to `0.0.0.0`, set `ADMIN_AUTH_ENABLED=true` and initialize the persisted admin password offline. Public first-visitor password setup is intentionally disabled.
+
 ### Run Official Images Directly
 
 If you do not want to keep the source tree on the target machine, you can run the published image directly:
 
+> Set `ADMIN_AUTH_ENABLED=true` and run `python -m src.auth reset_password` once with the same `/app/data` volume before starting the public listener. A fresh public instance fails closed instead of allowing the first visitor to claim the admin password.
+
 ```bash
 # Web/API mode
 docker pull zhulinsen/daily_stock_analysis:latest
+docker run --rm -it \
+  --env-file .env \
+  -v "$(pwd)/data:/app/data" \
+  zhulinsen/daily_stock_analysis:latest \
+  python -m src.auth reset_password
 docker run -d \
   --name dsa-server \
   --env-file .env \
@@ -598,6 +610,11 @@ docker-compose -f ./docker/docker-compose.yml up -d server
 
 ```bash
 docker build -f docker/Dockerfile -t stock-analysis .
+docker run --rm -it \
+  --env-file .env \
+  -v "$(pwd)/data:/app/data" \
+  stock-analysis \
+  python -m src.auth reset_password
 docker run -d \
   --name dsa-server-local \
   --env-file .env \
@@ -1552,7 +1569,7 @@ curl "http://127.0.0.1:8000/api/v1/backtest/results?page=1&limit=20"
 
 ### Custom Configuration
 
-Modify default port or allow LAN access:
+Modify the default port or allow LAN access only after enabling auth and initializing the admin password on loopback/offline:
 
 ```bash
 python main.py --serve-only --host 0.0.0.0 --port 8888

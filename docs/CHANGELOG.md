@@ -9,6 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [修复] `main.py`、`server.py`、`webui.py` 与 API middleware 统一公网 bind guard；非 loopback 必须启用管理员认证并预先初始化密码，运行时关闭认证在公网监听下被拒绝。
+- [修复] 关闭管理员认证即使已有有效 session 也必须重新输入当前密码；通用 System Config 不再允许绕过专用认证入口修改只读开关。
+- [修复] PR Review 改为手动、可信默认分支脚本 + GitHub API 读取 diff，不再由 `pull_request_target` 检出并执行 fork 代码或向其暴露 secrets。
+- [修复] 日报 workflow 在云端验收前保持手动触发；公开 Pages 只上传 Reader allowlist，不上传维护端通用 artifact，也不回显原始日志尾部。
+- [修复] Pages staging/validator 严格校验日期、根目录 containment、symlink、marker 与目标路径，拒绝路径穿越、越界复制和任意目录删除。
+- [修复] Reports artifact id 限制为合法日报日期；ReaderV3 嵌套字段执行严格 schema 校验，非法 artifact fail-closed。
+- [修复] 公开 Reader source URL 统一移除 userinfo、fragment、token/API key/signature query，并拒绝 webhook 与 token-shaped path；Web 端保留二次防御。
+- [修复] Reader curation 不再写死 AAPL、腾讯或固定地缘/公告叙事；rejected 字段不回流，各市场保留自身 `asOf`，JP/KR/TW 不再误标 A 股。
+- [修复] Evidence 历史回跑不再用当前抓取时间冒充目标日期；跨 provider 基本面只在报告期、比较期和币种可比时补齐。
+- [修复] 诊断脱敏覆盖整条 Authorization/Cookie/Set-Cookie、结构化 header、webhook 和 token query，避免多 Cookie 或 JSON 诊断残留秘密。
+- [修复] Docker API healthcheck 必须真实通过 HTTP health；scheduler-only 容器仅检查 PID 1，不再用无条件成功掩盖故障。
+- [修复] 桌面与 Docker 发布显式安装 `orjson`，桌面 PyInstaller 产物同时冻结并执行运行时导入探针，避免 LiteLLM 调用时报 `No module named 'orjson'`。
+- [改进] 个股报告不再单独展示“题材主线与个股位置”卡片，相关市场结构数据仍保留在分析上下文、模型 Prompt 与决策信号提取链路中。
+- [改进] 通知推送与完整 Markdown/微信报告不再重复附加“AI 决策信号”摘要，DecisionSignal 的存储、告警和 Web AI 建议页保持不变。
+- [改进] TickFlow 新增基于申万一级行业池的行业涨跌排行 fallback，并将基本面/市场结构单能力默认超时由 3 秒调整为 8 秒。
+- [修复] 公开 Daily Universe 不自动展开私有 `PORTFOLIO_HOLDINGS`；无真实 snapshot 的符号清单不能支持仓位结论。
+- [修复] Axios、React Router、ESLint / TypeScript ESLint、aiohttp、cryptography、NLTK 与 pyasn1 安全升级；当前本地 npm/pip 审计均为 0 known vulnerabilities。
+- [chore] 退役无法导入且未进入活动 runner 的 `src/market_cycle.py`，保留 `scripts/build_pages_compat_bundle.py` 作为兼容入口。
+- [chore] 技术债扫描按定义线性统计复杂度，避免嵌套 AST 重复遍历导致全仓扫描长期无输出。
+- [文档] 补充 macOS 未签名、未公证 DMG 被 Gatekeeper 拦截时的架构选择、安全排查与官方安装包临时放行步骤。
+- [文档] 2026-08-12 更新 CURRENT_STATE、upstream parity、技术债和部署认证说明；最新 upstream 为 `3b98aa1d`，当前 ahead 9 / behind 60；线上 legacy Pages 三条维护路径仍为 HTTP 200，云端发布继续 NO-GO。
+- [测试] 最终本地回归：后端 `4871 passed, 4 deselected, 416 subtests`；Web `977 passed / 2 skipped`；Pages source 21/30、Reader staging 11/19、semantic、AI assets、Markdown links、依赖审计和 diff gate 全部通过，未执行云端发布。
 <!-- 新条目格式：- [类型] 描述（类型取值：新功能/改进/修复/文档/测试/chore）-->
 <!-- 每条独立一行追加到本段末尾，无需分类标题，合并时冲突最小 -->
 - [改进] AIHubMix 注册与引流链接统一使用 inferera.com，改善中国大陆网络直连体验。
@@ -211,6 +233,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - [文档] 新增 Reports 产品边界、Agent SOP、数据源政策、upstream parity 和技术债台账，并接入文档索引。
 - [测试] 2026-07-15 本地验收：11/11 LLM、0 fallback；后端 `4233 passed, 2 deselected, 359 subtests`；Web `881 passed / 2 skipped`；Pages 21 个必需文件与 48 条链接、9 个 API、语义/时效/安全/浏览器 QA 全部通过。
 - [测试] 2026-07-16 本地验收：11/11 LLM、0 fallback；后端 `4685 passed, 4 deselected, 416 subtests`；Web `971 passed / 2 skipped`；9 个 API 200；Pages、语义、时效、安全与浏览器 QA 通过。当前报告为 `LIMITED_REVIEW / 0.84`，未把本地绿灯误写成云端已发布。
+- [改进] ReaderV3 升级为机构研究简报布局，新增市场范围/观察样本边界、跨市场重点标的表、基准/竞争情景裁决，并把数据与方法细节折叠到次级入口。
+- [修复] 语义门不再把单日指数下跌写成“系统性深调”，也不再把 `range_position_pct=100` 误读为回撤概率或估值分位。
+- [改进] 报告首屏压缩为研究立场、组合动作、可信度、时效和覆盖；CIO 情景裁决前置，部门摘要按 CIO/风险/市场/持仓优先展示，其余部门折叠下钻。
+- [改进] 静态 Pages 发布包仅复制 Reader 首页、汇总报告和分部门报告；完整 artifact、Diagnostics、Agent memo、provider/evidence ledger 与 run status 留在维护端。
+- [修复] Daily Universe 的 A股、港股和美股主要指数均通过原 `DataFetcherManager` 进入 Evidence；孤立的指数 `0.00%` 字段不再当作确定行情，改为“涨跌待核验”。
+- [修复] Reader 最终标题执行独立证据闭环校验，分部门页面统一读取已校验的 ReaderV3 卡片，不再回退展示未经产品化的原始 Agent 文案。
+- [修复] Reader 产品化改写部门结论后重新绑定对应证据：市场页引用 A/H/US 市场级指数，地缘页引用 ReliefWeb 事件线索，不再沿用改写前的单股或宏观样例。
+- [改进] Web 报告工作台把最新报告置于历史列表之前，历史报告默认折叠；静态与 Web Reader 均新增“查看核心证据”入口。
+- [测试] 2026-07-17 机构级 Reader 最终本地验收：11/11 LLM、0 fallback；后端 `4792 passed, 4 deselected, 416 subtests`；Web `974 passed / 2 skipped`；9 个 API 200；公开 staging 仅 11 个 Reader HTML，语义、Pages、安全与三路独立复审通过。
+- [改进] 基本面改为按市场复用通用适配器并保留可比财务历史；历史趋势由在线源提供原始序列、本地确定性计算完成，部门 Prompt 去除重复上下文与规则副本。
+- [改进] 通用估值补齐当前 PE/PB 与港美 YFinance 估值，并按本地日度快照积累历史比较；不足 20 个样本时不再伪称历史分位。
+- [改进] A 股新增 AkShare 公共 PE/PB 近三年序列 fallback，港美估值按字段补齐，避免主源只有市值时丢弃通用 PE/PB；在线样本分位与本地跨日报分位分别标注。
+- [改进] 精简部门 Prompt：证据政策、岗位禁区和输出合同不再重复注入，保留部门独有分析方法与语义门校验。
+- [修复] Reader 不再把港股上涨误写成三地指数同向承压；最终重建 headline 通过证据闭环时，不再被原始 CIO 失败模板覆盖。
+- [改进] 新增 A 股市场宽度本地跨日报比较、中国 GDP/CPI/PMI 免费二级宏观证据与港股 AkShare 宽基指数 fallback；来源等级和失败边界继续进入 Diagnostics。
+- [修复] 部门 Prompt 只比较本轮真实覆盖的市场级数据，区分已确认空仓和持仓未知；被语义门剔除的详细 claim 不再借公共 summary 重新进入 Reader。
+- [测试] Web 全量测试超时由 5 秒调整为 10 秒，避免长测试套件在本机负载波动时产生与功能无关的假红。
+- [修复] Reader 正确展示 A 股近三年公开 PE/PB 分位，不再把 1096 期在线序列误写为“历史样本不足”；港美缺历史序列时仍如实标注。
+- [修复] 部门证据样例按职责重新绑定并跨标的均衡抽样：持仓页只展示持仓/观察清单，基本面与技术面覆盖 A/H/US 标的，不再泄露原始字段名或串栏。
+- [文档] 新增发布候选线 `CURRENT_STATE` 真相源，统一报告、验证、upstream 漂移和 legacy Pages 云端边界；具体数字按当次复核更新。
+- [chore] 技术债扫描改为按定义线性统计分支复杂度，不再对子类/嵌套定义重复遍历完整 AST，避免全仓洁癖审计耗时失控。
+- [改进] macOS 国内财经源强制进入 `NO_PROXY`；日线源出现明确权限/认证失败时按市场立即熔断，避免 Tushare 免费权限不足后对后续标的重复慢试。
+- [改进] 跨市场分化时，CIO/市场/风险/红队统一观察“承压市场能否企稳、强势市场能否延续”，不再要求强势市场也“同步修复”。
+- [修复] 区分原始 CIO 语义审计与最终 Reader 审计；原始总结被拒绝但 Reader 已用核验事实重建时，最终可靠性改为“中等可信，含待验证情景”，原始失败仅保留在 Diagnostics。
+- [测试] 2026-07-18 最终本地回归：后端 `4792 passed, 4 deselected, 416 subtests`；Web `974 passed / 2 skipped`；9 个 API 200；Pages、语义、安全和浏览器视觉 QA 全部通过。
 ## [3.26.0] - 2026-07-12
 
 ### 发布亮点

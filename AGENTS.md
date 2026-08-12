@@ -92,8 +92,10 @@ python main.py --market-review
 python main.py --schedule
 python main.py --serve
 python main.py --serve-only
-uvicorn server:app --reload --host 0.0.0.0 --port 8000
+python server.py
 ```
+
+非 loopback 监听必须先启用 `ADMIN_AUTH_ENABLED=true` 并通过本机/离线 CLI 完成管理员密码初始化；不要用手写 `uvicorn --host 0.0.0.0` 绕过标准入口。
 
 ### 后端验证
 

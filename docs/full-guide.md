@@ -475,7 +475,7 @@ daily_stock_analysis/
 | 变量名 | 说明 | 默认值 |
 |--------|------|--------|
 | `STOCK_LIST` | 自选股代码（逗号分隔） | - |
-| `ADMIN_AUTH_ENABLED` | Web 登录：设为 `true` 启用密码保护；首次访问在网页设置初始密码，可在「系统设置 > 修改密码」修改；忘记密码执行 `python -m src.auth reset_password`。Web 的 `.env` 备份导入导出仅在开启该开关后可用（桌面端不受此限制）。 | `false` |
+| `ADMIN_AUTH_ENABLED` | Web 登录：设为 `true` 启用密码保护；仅 loopback 首次访问可在网页初始化密码。绑定 `0.0.0.0`/公网前必须先执行 `python -m src.auth reset_password`；否则服务 fail-closed 拒绝启动。Web 的 `.env` 备份导入导出仅在开启该开关后可用（桌面端不受此限制）。 | `false` |
 | `TRUST_X_FORWARDED_FOR` | 单层可信反向代理部署时设为 `true`，取 `X-Forwarded-For` 最右值作为真实客户端 IP（用于登录限流等）；直连公网时保持 `false` 防伪造。多级代理/CDN 场景下限流 key 可能退化为边缘代理 IP，需额外评估 | `false` |
 | `MAX_WORKERS` | 并发线程数 | `3` |
 | `MARKET_REVIEW_ENABLED` | 启用大盘复盘 | `true` |
@@ -513,6 +513,9 @@ cd daily_stock_analysis
 cp .env.example .env
 vim .env  # 填入 API Key 和配置
 
+# 2.1 Web/API 容器会绑定 0.0.0.0：先设 ADMIN_AUTH_ENABLED=true，再离线初始化密码
+docker-compose -f ./docker/docker-compose.yml run --rm server python -m src.auth reset_password
+
 # 3. 启动容器
 docker-compose -f ./docker/docker-compose.yml up -d server     # Web 服务模式（推荐，提供 API 与 WebUI）
 docker-compose -f ./docker/docker-compose.yml up -d analyzer   # 定时任务模式
@@ -531,9 +534,16 @@ docker-compose -f ./docker/docker-compose.yml logs -f server
 
 如果你不打算在目标机器上保留源码，可以直接拉取官方镜像：
 
+> 先在 `.env` 设置 `ADMIN_AUTH_ENABLED=true`，并用同一个 `/app/data` 挂载执行一次 `python -m src.auth reset_password`。新公网实例不允许由第一个访客在网页抢先设密。
+
 ```bash
 # Web/API 模式
 docker pull zhulinsen/daily_stock_analysis:latest
+docker run --rm -it \
+  --env-file .env \
+  -v "$(pwd)/data:/app/data" \
+  zhulinsen/daily_stock_analysis:latest \
+  python -m src.auth reset_password
 docker run -d \
   --name dsa-server \
   --env-file .env \
@@ -655,6 +665,11 @@ docker-compose -f ./docker/docker-compose.yml up -d server
 
 ```bash
 docker build -f docker/Dockerfile -t stock-analysis .
+docker run --rm -it \
+  --env-file .env \
+  -v "$(pwd)/data:/app/data" \
+  stock-analysis \
+  python -m src.auth reset_password
 docker run -d \
   --name dsa-server-local \
   --env-file .env \
@@ -1727,7 +1742,7 @@ curl "http://127.0.0.1:8000/api/v1/backtest/results?page=1&limit=20"
 
 ### 自定义配置
 
-修改默认端口或允许局域网访问：
+修改默认端口或允许局域网访问（先设置 `ADMIN_AUTH_ENABLED=true` 并在 loopback/CLI 完成管理员密码初始化）：
 
 ```bash
 python main.py --serve-only --host 0.0.0.0 --port 8888

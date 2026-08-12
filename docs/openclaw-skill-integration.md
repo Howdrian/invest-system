@@ -179,4 +179,4 @@ curl -X POST {DSA_BASE_URL}/api/v1/agent/chat \
 
 ## 认证说明
 
-默认情况下 DSA API 无需认证。若在 `.env` 中启用了 `ADMIN_AUTH_ENABLED=true`，则需在 Skill 调用时携带登录后获得的 Cookie，具体方式取决于 openclaw 的 HTTP 工具能力（当前 API 仅支持 Cookie 认证，不支持 Bearer Token）。
+默认本机 loopback DSA API 可不启用认证。任何非 loopback 部署必须启用 `ADMIN_AUTH_ENABLED=true` 并预先初始化管理员密码；Skill 调用时需携带登录后获得的 Cookie。具体方式取决于 openclaw 的 HTTP 工具能力（当前 API 仅支持 Cookie 认证，不支持 Bearer Token）。
