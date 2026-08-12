@@ -75,5 +75,7 @@ jinja2>=3.1.0               # Jinja2 template engine for report rendering
 
 # FastAPI Web framework
 fastapi==0.139.0            # Pin OpenAPI generation/runtime contract for reproducible docs
+pydantic==2.13.4           # Pin schema generation used by the committed OpenAPI artifact
+starlette==1.3.1           # Pin FastAPI schema/runtime companion for deterministic generation
 uvicorn[standard]>=0.27.0   # ASGI server
 python-multipart>=0.0.6     # FastAPI File/Form upload support
