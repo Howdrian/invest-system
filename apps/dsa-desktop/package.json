@@ -9,11 +9,11 @@
     "test": "node --test tests/*.test.js"
   },
   "dependencies": {
-    "electron-updater": "^6.8.3"
+    "electron-updater": "6.8.9"
   },
   "devDependencies": {
-    "electron": "^31.4.0",
-    "electron-builder": "^24.13.3"
+    "electron": "39.8.10",
+    "electron-builder": "26.15.3"
   },
   "build": {
     "appId": "com.daily-stock-analysis.desktop",
@@ -58,6 +58,23 @@
       "identity": null,
       "hardenedRuntime": false,
       "target": "dmg"
+    }
+  },
+  "overrides": {
+    "form-data": "4.0.6",
+    "js-yaml": "4.3.1",
+    "tmp": "0.2.7",
+    "minimatch@3.1.5": {
+      "brace-expansion": "1.1.18"
+    },
+    "minimatch@5.1.9": {
+      "brace-expansion": "2.1.4"
+    },
+    "minimatch@9.0.9": {
+      "brace-expansion": "2.1.4"
+    },
+    "minimatch@10.2.6": {
+      "brace-expansion": "5.0.9"
     }
   }
 }
