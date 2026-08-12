@@ -362,7 +362,12 @@ class YfinanceFundamentalAdapter:
                 div_series = div_series.iloc[:, 0]
             try:
                 # Index is timezone-aware (ex-dividend date)
-                cutoff = pd.Timestamp.now(tz=div_series.index.tz) - pd.Timedelta(days=365)
+                # Use the adapter clock rather than pandas' separate wall clock so
+                # the report timestamp and rolling dividend window share one source
+                # of truth and deterministic tests can freeze it safely.
+                cutoff = pd.Timestamp(datetime.now(timezone.utc)).tz_convert(
+                    div_series.index.tz
+                ) - pd.Timedelta(days=365)
                 for ts, value in div_series.items():
                     per_share = _safe_float(value)
                     if per_share is None or per_share <= 0:

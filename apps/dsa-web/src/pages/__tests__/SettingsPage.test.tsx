@@ -1767,7 +1767,7 @@ describe('SettingsPage', () => {
     render(<SettingsPage />);
 
     expect(await screen.findByTestId('scheduler-last-success')).toHaveTextContent('-');
-    expect(screen.getByTestId('scheduler-last-error')).toHaveTextContent('analysis failed');
+    expect(await screen.findByTestId('scheduler-last-error')).toHaveTextContent('analysis failed');
   });
 
   it('shows active runtime scheduler state even when saved schedule flag is false', async () => {

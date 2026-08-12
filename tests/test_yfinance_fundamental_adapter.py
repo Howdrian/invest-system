@@ -9,6 +9,7 @@ graceful degradation when yfinance is unavailable.
 from __future__ import annotations
 
 import unittest
+from datetime import datetime, timezone
 from unittest.mock import patch, MagicMock
 
 import pandas as pd
@@ -56,6 +57,11 @@ class TestYfinanceSymbolConversion(unittest.TestCase):
 
 
 class TestYfinanceFundamentalAdapter(unittest.TestCase):
+    @staticmethod
+    def _fixed_now() -> datetime:
+        """Keep relative TTM fixtures deterministic as wall-clock time advances."""
+        return datetime(2026, 7, 1, tzinfo=timezone.utc)
+
     def test_populates_growth_earnings_dividend_boards_for_us_stock(self) -> None:
         info = {
             "financialCurrency": "USD",
@@ -103,17 +109,22 @@ class TestYfinanceFundamentalAdapter(unittest.TestCase):
                 pd.Timestamp("2025-12-31"): {"Operating Cash Flow": 3.5e10},
             }
         )
+        # Four events inside the rolling year as of the fixed 2026-07-01 clock.
         dividends = pd.Series(
             [0.26, 0.26, 0.26, 0.27],
             index=pd.DatetimeIndex(
-                ["2025-08-11", "2025-11-10", "2026-02-09", "2026-05-11"],
+                ["2025-07-11", "2025-11-10", "2026-02-09", "2026-05-11"],
                 tz="America/New_York",
             ),
             name="Dividends",
         )
         ticker = _build_mock_ticker(info, income_df_with_yoy, cashflow_df, dividends)
 
-        with patch("yfinance.Ticker", return_value=ticker):
+        with (
+            patch("yfinance.Ticker", return_value=ticker),
+            patch("data_provider.yfinance_fundamental_adapter.datetime") as clock,
+        ):
+            clock.now.return_value = self._fixed_now()
             bundle = YfinanceFundamentalAdapter().get_fundamental_bundle("AAPL")
 
         self.assertEqual(bundle["status"], "partial")
@@ -163,7 +174,7 @@ class TestYfinanceFundamentalAdapter(unittest.TestCase):
         # is dropped, and TTM silently falls back to the annual-rate estimate — the real
         # bug seen on live US/HK/JP/KR/TW reports (24.0 / "0 次" instead of the true sum).
         idx = pd.DatetimeIndex(
-            ["2025-08-11", "2025-11-10", "2026-02-09", "2026-05-11"],
+            ["2025-07-11", "2025-11-10", "2026-02-09", "2026-05-11"],
             tz="America/New_York",
         )
         dividends_df = pd.DataFrame({"Dividends": [0.26, 0.26, 0.26, 0.27]}, index=idx)
@@ -174,7 +185,11 @@ class TestYfinanceFundamentalAdapter(unittest.TestCase):
             "trailingAnnualDividendRate": 99.0,  # a WRONG fallback we must NOT fall back to
         }
         ticker = _build_mock_ticker(info, dividends=dividends_df)
-        with patch("yfinance.Ticker", return_value=ticker):
+        with (
+            patch("yfinance.Ticker", return_value=ticker),
+            patch("data_provider.yfinance_fundamental_adapter.datetime") as clock,
+        ):
+            clock.now.return_value = self._fixed_now()
             bundle = YfinanceFundamentalAdapter().get_fundamental_bundle("AAPL")
 
         div = bundle["earnings"]["dividend"]
