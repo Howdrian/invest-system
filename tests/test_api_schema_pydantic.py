@@ -61,6 +61,11 @@ P6_SIGNAL_LINKED_SCHEMAS = (
     "PortfolioDecisionSignalRiskItem",
     "PortfolioRiskResponse",
 )
+REPORT_PATHS = (
+    "/api/v1/reports/latest",
+    "/api/v1/reports/artifacts",
+    "/api/v1/reports/artifacts/{artifact_id}",
+)
 
 
 def _collect_component_schema_refs(node: Any) -> set[str]:
@@ -209,7 +214,7 @@ def test_analyze_request_rejects_invalid_analysis_phase() -> None:
         raise AssertionError("invalid analysis_phase should be rejected")
 
 
-def test_decision_signal_static_api_spec_matches_runtime_paths() -> None:
+def test_static_api_spec_matches_runtime_openapi() -> None:
     static_spec_path = Path(__file__).resolve().parents[1] / "docs" / "architecture" / "api_spec.json"
     static_spec = json.loads(static_spec_path.read_text(encoding="utf-8"))
     runtime_spec = create_app().openapi()
@@ -218,6 +223,12 @@ def test_decision_signal_static_api_spec_matches_runtime_paths() -> None:
     assert static_spec["info"]["description"] == runtime_spec["info"]["description"]
     assert "暂无认证要求" not in static_spec["info"]["description"]
     assert "ADMIN_AUTH_ENABLED=true" in static_spec["info"]["description"]
+    assert set(static_spec["paths"]) == set(runtime_spec["paths"]), (
+        "Static OpenAPI paths drifted from create_app().openapi(); "
+        "run python scripts/generate_openapi_spec.py"
+    )
+    for path in REPORT_PATHS:
+        assert static_spec["paths"][path] == runtime_spec["paths"][path]
     for path in DECISION_SIGNAL_PATHS:
         assert static_spec["paths"][path] == runtime_spec["paths"][path]
         for operation in static_spec["paths"][path].values():
@@ -237,6 +248,10 @@ def test_decision_signal_static_api_spec_matches_runtime_paths() -> None:
 
     status_schema = static_spec["components"]["schemas"]["DecisionSignalStatusUpdateRequest"]["properties"]["status"]
     assert status_schema["enum"] == ["active", "expired", "invalidated", "closed", "archived"]
+    assert static_spec == runtime_spec, (
+        "Static OpenAPI artifact drifted from create_app().openapi(); "
+        "run python scripts/generate_openapi_spec.py"
+    )
 
 
 def test_v1_prefix_is_applied_at_app_mount_level() -> None:

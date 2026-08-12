@@ -74,6 +74,6 @@ lxml_html_clean             # Fix for lxml.html.clean ImportError in newer lxml 
 jinja2>=3.1.0               # Jinja2 template engine for report rendering
 
 # FastAPI Web framework
-fastapi>=0.109.0            # Modern Python Web framework
+fastapi==0.139.0            # Pin OpenAPI generation/runtime contract for reproducible docs
 uvicorn[standard]>=0.27.0   # ASGI server
 python-multipart>=0.0.6     # FastAPI File/Form upload support
