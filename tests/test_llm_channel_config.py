@@ -344,12 +344,12 @@ class LLMChannelConfigTestCase(unittest.TestCase):
         with patch.dict(os.environ, env, clear=True):
             config = Config._load_from_env()
 
-        self.assertFalse(config.llm_blocks_legacy_fallback)
+        self.assertTrue(config.llm_blocks_legacy_fallback)
         self.assertEqual(config.openai_api_keys, [])
         self.assertEqual(config.llm_channels, [])
         self.assertEqual(config.llm_models_source, "legacy_env")
-        self.assertEqual(config.litellm_model, "gemini/gemini-3.1-pro-preview")
-        self.assertTrue(config.llm_model_list)
+        self.assertEqual(config.litellm_model, "")
+        self.assertEqual(config.llm_model_list, [])
         self.assertEqual(
             [issue["code"] for issue in config.llm_channel_config_issues],
             ["invalid_api_surface"],
@@ -373,12 +373,12 @@ class LLMChannelConfigTestCase(unittest.TestCase):
         with patch.dict(os.environ, env, clear=True):
             config = Config._load_from_env()
 
-        self.assertFalse(config.llm_blocks_legacy_fallback)
+        self.assertTrue(config.llm_blocks_legacy_fallback)
         self.assertEqual(config.openai_api_keys, [])
         self.assertEqual(config.llm_channels, [])
         self.assertEqual(config.llm_models_source, "legacy_env")
-        self.assertEqual(config.litellm_model, "gemini/gemini-3.1-pro-preview")
-        self.assertTrue(config.llm_model_list)
+        self.assertEqual(config.litellm_model, "")
+        self.assertEqual(config.llm_model_list, [])
         self.assertEqual(
             [issue["code"] for issue in config.llm_channel_config_issues],
             ["responses_requires_openai_protocol"],

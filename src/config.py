@@ -16,7 +16,7 @@ import os
 import re
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional, Tuple
+from typing import Any, Dict, List, Literal, Mapping, Optional, Tuple
 from urllib.parse import unquote, urlparse
 from dotenv import load_dotenv, dotenv_values
 from dataclasses import dataclass, field
@@ -231,6 +231,142 @@ def parse_env_bool(value: Optional[str], default: bool = False) -> bool:
     if not normalized:
         return default
     return normalized not in _FALSEY_ENV_VALUES
+
+
+@dataclass(frozen=True)
+class LegacyLLMResolution:
+    """Pure result of resolving the backward-compatible provider env contract."""
+
+    gemini_api_keys: List[str]
+    anthropic_api_keys: List[str]
+    openai_api_keys: List[str]
+    deepseek_api_keys: List[str]
+    anspire_api_keys: List[str]
+    openai_base_url: Optional[str]
+    gemini_model: str
+    gemini_model_fallback: str
+    anthropic_model: str
+    openai_model: str
+    explicit_primary_model: str
+    explicit_fallback_models: List[str]
+    primary_model: str
+    fallback_models: List[str]
+    fallback_models_explicit: bool
+    using_anspire_llm_legacy: bool
+    inferred_legacy_deepseek_model: bool
+
+
+def resolve_legacy_llm_config(env: Mapping[str, Any]) -> LegacyLLMResolution:
+    """Resolve legacy LLM provider settings from ``env`` without side effects.
+
+    This is deliberately mapping-based so the full Config loader and the
+    lightweight Reports loader share exactly the same provider precedence
+    without copying dotenv values into ``os.environ``.
+    """
+
+    def value(name: str, default: str = "") -> str:
+        raw = env.get(name, default)
+        return default if raw is None else str(raw)
+
+    def keys(multi_name: str, single_name: str) -> List[str]:
+        resolved = [item.strip() for item in value(multi_name).split(",") if item.strip()]
+        single = value(single_name).strip()
+        return resolved or ([single] if single else [])
+
+    gemini_api_keys = keys("GEMINI_API_KEYS", "GEMINI_API_KEY")
+    anthropic_api_keys = keys("ANTHROPIC_API_KEYS", "ANTHROPIC_API_KEY")
+    deepseek_api_keys = keys("DEEPSEEK_API_KEYS", "DEEPSEEK_API_KEY")
+    anspire_api_keys = [
+        item.strip() for item in value("ANSPIRE_API_KEYS").split(",") if item.strip()
+    ]
+
+    aihubmix_key = value("AIHUBMIX_KEY").strip()
+    openai_api_keys = [
+        item.strip() for item in value("OPENAI_API_KEYS").split(",") if item.strip()
+    ]
+    if not openai_api_keys:
+        openai_key = value("OPENAI_API_KEY").strip()
+        selected_key = aihubmix_key or openai_key
+        if selected_key:
+            openai_api_keys = [selected_key]
+
+    openai_base_url = value("OPENAI_BASE_URL").strip() or (
+        "https://aihubmix.com/v1" if aihubmix_key else ""
+    )
+    anspire_llm_enabled = parse_env_bool(value("ANSPIRE_LLM_ENABLED") or None, default=True)
+    anspire_base_url = value("ANSPIRE_LLM_BASE_URL").strip() or ANSPIRE_LLM_BASE_URL_DEFAULT
+    anspire_model = value("ANSPIRE_LLM_MODEL").strip()
+    channel_names = {
+        item.strip().lower() for item in value("LLM_CHANNELS").split(",") if item.strip()
+    }
+    using_anspire_llm_legacy = bool(
+        anspire_llm_enabled
+        and "anspire" not in channel_names
+        and anspire_api_keys
+        and not openai_api_keys
+    )
+    if using_anspire_llm_legacy:
+        openai_api_keys = list(anspire_api_keys)
+        openai_base_url = anspire_base_url
+
+    gemini_model = value("GEMINI_MODEL", "gemini-3.1-pro-preview").strip()
+    gemini_model_fallback = value(
+        "GEMINI_MODEL_FALLBACK", "gemini-3-flash-preview"
+    ).strip()
+    anthropic_model = value("ANTHROPIC_MODEL", "claude-sonnet-4-6").strip()
+    configured_openai_model = value("OPENAI_MODEL").strip()
+    openai_model = (
+        anspire_model or configured_openai_model or ANSPIRE_LLM_MODEL_DEFAULT
+        if using_anspire_llm_legacy
+        else configured_openai_model or "gpt-5.5"
+    )
+
+    explicit_primary_model = value("LITELLM_MODEL").strip()
+    explicit_fallback_models = [
+        item.strip()
+        for item in value("LITELLM_FALLBACK_MODELS").replace("，", ",").split(",")
+        if item.strip()
+    ]
+    primary_model = explicit_primary_model
+    inferred_legacy_deepseek_model = False
+    if not primary_model:
+        if gemini_api_keys:
+            primary_model = f"gemini/{gemini_model}"
+        elif anthropic_api_keys:
+            primary_model = f"anthropic/{anthropic_model}"
+        elif deepseek_api_keys:
+            primary_model = "deepseek/deepseek-chat"
+            inferred_legacy_deepseek_model = True
+        elif openai_api_keys:
+            primary_model = openai_model if "/" in openai_model else f"openai/{openai_model}"
+
+    fallback_models = list(explicit_fallback_models)
+    if not fallback_models and primary_model.startswith("gemini/") and gemini_model_fallback:
+        fallback_models = [
+            gemini_model_fallback
+            if "/" in gemini_model_fallback
+            else f"gemini/{gemini_model_fallback}"
+        ]
+
+    return LegacyLLMResolution(
+        gemini_api_keys=gemini_api_keys,
+        anthropic_api_keys=anthropic_api_keys,
+        openai_api_keys=openai_api_keys,
+        deepseek_api_keys=deepseek_api_keys,
+        anspire_api_keys=anspire_api_keys,
+        openai_base_url=openai_base_url or None,
+        gemini_model=gemini_model,
+        gemini_model_fallback=gemini_model_fallback,
+        anthropic_model=anthropic_model,
+        openai_model=openai_model,
+        explicit_primary_model=explicit_primary_model,
+        explicit_fallback_models=explicit_fallback_models,
+        primary_model=primary_model,
+        fallback_models=fallback_models,
+        fallback_models_explicit=bool(explicit_fallback_models),
+        using_anspire_llm_legacy=using_anspire_llm_legacy,
+        inferred_legacy_deepseek_model=inferred_legacy_deepseek_model,
+    )
 
 
 def parse_env_int(
@@ -1450,88 +1586,21 @@ class Config:
             if (c or "").strip()
         ]
 
-        # === LiteLLM multi-key parsing ===
-        # GEMINI_API_KEYS (comma-separated) > GEMINI_API_KEY (single)
-        _gemini_keys_raw = os.getenv('GEMINI_API_KEYS', '')
-        gemini_api_keys = [k.strip() for k in _gemini_keys_raw.split(',') if k.strip()]
-        _single_gemini = os.getenv('GEMINI_API_KEY', '').strip()
-        if not gemini_api_keys and _single_gemini:
-            gemini_api_keys = [_single_gemini]
-
-        # ANTHROPIC_API_KEYS > ANTHROPIC_API_KEY
-        _anthropic_keys_raw = os.getenv('ANTHROPIC_API_KEYS', '')
-        anthropic_api_keys = [k.strip() for k in _anthropic_keys_raw.split(',') if k.strip()]
-        _single_anthropic = os.getenv('ANTHROPIC_API_KEY', '').strip()
-        if not anthropic_api_keys and _single_anthropic:
-            anthropic_api_keys = [_single_anthropic]
-
-        # OPENAI_API_KEYS > AIHUBMIX_KEY > OPENAI_API_KEY
-        _aihubmix = os.getenv('AIHUBMIX_KEY', '').strip()
-        _openai_keys_raw = os.getenv('OPENAI_API_KEYS', '')
-        openai_api_keys = [k.strip() for k in _openai_keys_raw.split(',') if k.strip()]
-        if not openai_api_keys:
-            _single_openai = os.getenv('OPENAI_API_KEY', '').strip()
-            _fallback_key = _aihubmix or _single_openai
-            if _fallback_key:
-                openai_api_keys = [_fallback_key]
-        openai_base_url = os.getenv('OPENAI_BASE_URL') or (
-            'https://aihubmix.com/v1' if _aihubmix else None
-        )
-
-        # DEEPSEEK_API_KEYS > DEEPSEEK_API_KEY (independent from OpenAI-compatible layer)
-        _deepseek_keys_raw = os.getenv('DEEPSEEK_API_KEYS', '')
-        deepseek_api_keys = [k.strip() for k in _deepseek_keys_raw.split(',') if k.strip()]
-        if not deepseek_api_keys:
-            _single_deepseek = os.getenv('DEEPSEEK_API_KEY', '').strip()
-            if _single_deepseek:
-                deepseek_api_keys = [_single_deepseek]
-
-        # Anspire Open shares the same key as Anspire Search and exposes an
-        # OpenAI-compatible LLM gateway.  When no other OpenAI-compatible key is
-        # configured, use ANSPIRE_API_KEYS as the legacy openai-compatible
-        # provider so "one key" setups work without LLM_CHANNELS.
-        anspire_keys_str = os.getenv('ANSPIRE_API_KEYS', '')
-        anspire_api_keys = [k.strip() for k in anspire_keys_str.split(',') if k.strip()]
-        anspire_llm_enabled = parse_env_bool(os.getenv('ANSPIRE_LLM_ENABLED'), default=True)
-        anspire_llm_base_url = (
-            os.getenv('ANSPIRE_LLM_BASE_URL') or ANSPIRE_LLM_BASE_URL_DEFAULT
-        ).strip()
-        _anspire_llm_model_env = os.getenv('ANSPIRE_LLM_MODEL', '').strip()
-        anspire_channel_declared = False
-        for _raw_channel in os.getenv('LLM_CHANNELS', '').split(','):
-            if _raw_channel.strip().lower() != "anspire":
-                continue
-            anspire_channel_declared = True
-            break
-        using_anspire_llm_legacy = bool(
-            anspire_llm_enabled
-            and not anspire_channel_declared
-            and anspire_api_keys
-            and not openai_api_keys
-        )
-        if using_anspire_llm_legacy:
-            openai_api_keys = list(anspire_api_keys)
-            openai_base_url = anspire_llm_base_url
-
-        # LITELLM_MODEL / LITELLM_FALLBACK_MODELS explicit values are recorded
-        # before YAML/channels are parsed, but legacy inference is delayed until
-        # the higher-priority sources and Hermes blocking issues are known.
-        litellm_model_explicit = os.getenv('LITELLM_MODEL', '').strip()
-        litellm_model = litellm_model_explicit
+        # Resolve the legacy provider layer once from a mapping.  Reports uses
+        # the same pure resolver against an isolated dotenv/process mapping.
+        legacy_llm = resolve_legacy_llm_config(os.environ)
+        gemini_api_keys = legacy_llm.gemini_api_keys
+        anthropic_api_keys = legacy_llm.anthropic_api_keys
+        openai_api_keys = legacy_llm.openai_api_keys
+        deepseek_api_keys = legacy_llm.deepseek_api_keys
+        anspire_api_keys = legacy_llm.anspire_api_keys
+        openai_base_url = legacy_llm.openai_base_url
+        using_anspire_llm_legacy = legacy_llm.using_anspire_llm_legacy
+        litellm_model = legacy_llm.explicit_primary_model
+        litellm_fallback_models = list(legacy_llm.explicit_fallback_models)
+        litellm_fallback_models_explicit = legacy_llm.fallback_models_explicit
         inferred_legacy_deepseek_model = False
-        _openai_model_env = os.getenv('OPENAI_MODEL', '').strip()
-        if using_anspire_llm_legacy:
-            _openai_model_name = _anspire_llm_model_env or _openai_model_env or ANSPIRE_LLM_MODEL_DEFAULT
-        else:
-            _openai_model_name = _openai_model_env or 'gpt-5.5'
-
-        # LITELLM_FALLBACK_MODELS: comma-separated list of fallback models
-        _fallback_str = os.getenv('LITELLM_FALLBACK_MODELS', '')
-        litellm_fallback_models_explicit = bool(_fallback_str.strip())
-        if _fallback_str.strip():
-            litellm_fallback_models = [m.strip() for m in _fallback_str.split(',') if m.strip()]
-        else:
-            litellm_fallback_models = []
+        _openai_model_name = legacy_llm.openai_model
 
         # === LLM Channels + YAML config ===
         litellm_config_path = os.getenv('LITELLM_CONFIG', '').strip() or None
@@ -1565,6 +1634,8 @@ class Config:
                     llm_blocked_hermes_routes,
                 ) = cls._parse_llm_channels_with_issues(_channels_str)
                 llm_channel_config_issues = [issue.as_dict() for issue in hermes_issues]
+                if hermes_issues:
+                    llm_blocks_legacy_fallback = True
                 llm_model_list = cls._channels_to_model_list(llm_channels)
                 if llm_model_list:
                     llm_models_source = "llm_channels"
@@ -1582,7 +1653,11 @@ class Config:
 
         # Priority 3: Legacy env vars → auto-build model_list (backward compatible).
         # This is skipped when an explicit invalid Hermes channel blocks legacy fallback.
-        if not llm_model_list and not llm_blocks_legacy_fallback:
+        if (
+            not llm_model_list
+            and not llm_blocks_legacy_fallback
+            and not llm_channel_config_issues
+        ):
             llm_model_list = cls._legacy_keys_to_model_list(
                 gemini_api_keys, anthropic_api_keys, openai_api_keys,
                 openai_base_url,
@@ -1592,28 +1667,11 @@ class Config:
                 llm_models_source = "legacy_env"
 
             if not litellm_model:
-                _gemini_model_name = os.getenv('GEMINI_MODEL', 'gemini-3.1-pro-preview').strip()
-                _anthropic_model_name = os.getenv('ANTHROPIC_MODEL', 'claude-sonnet-4-6').strip()
-                if gemini_api_keys:
-                    litellm_model = f'gemini/{_gemini_model_name}'
-                elif anthropic_api_keys:
-                    litellm_model = f'anthropic/{_anthropic_model_name}'
-                elif deepseek_api_keys:
-                    litellm_model = 'deepseek/deepseek-chat'
-                    inferred_legacy_deepseek_model = True
-                elif openai_api_keys:
-                    # For openai-compatible models, add prefix only if not already prefixed
-                    if '/' not in _openai_model_name:
-                        litellm_model = f'openai/{_openai_model_name}'
-                    else:
-                        litellm_model = _openai_model_name
+                litellm_model = legacy_llm.primary_model
+                inferred_legacy_deepseek_model = legacy_llm.inferred_legacy_deepseek_model
 
             if not litellm_fallback_models and not litellm_fallback_models_explicit:
-                # Backward compat: use gemini_model_fallback when primary is gemini
-                _gemini_fallback = os.getenv('GEMINI_MODEL_FALLBACK', 'gemini-3-flash-preview').strip()
-                if litellm_model.startswith('gemini/') and _gemini_fallback:
-                    _fb = f'gemini/{_gemini_fallback}' if '/' not in _gemini_fallback else _gemini_fallback
-                    litellm_fallback_models = [_fb]
+                litellm_fallback_models = list(legacy_llm.fallback_models)
 
         if (
             inferred_legacy_deepseek_model
@@ -1850,14 +1908,14 @@ class Config:
             openai_api_keys=openai_api_keys,
             deepseek_api_keys=deepseek_api_keys,
             gemini_api_key=os.getenv('GEMINI_API_KEY'),
-            gemini_model=os.getenv('GEMINI_MODEL', 'gemini-3.1-pro-preview'),
-            gemini_model_fallback=os.getenv('GEMINI_MODEL_FALLBACK', 'gemini-3-flash-preview'),
+            gemini_model=legacy_llm.gemini_model,
+            gemini_model_fallback=legacy_llm.gemini_model_fallback,
             gemini_temperature=parse_env_float(os.getenv('GEMINI_TEMPERATURE'), 0.7, field_name='GEMINI_TEMPERATURE'),
             gemini_request_delay=parse_env_float(os.getenv('GEMINI_REQUEST_DELAY'), 2.0, field_name='GEMINI_REQUEST_DELAY', minimum=0.0),
             gemini_max_retries=parse_env_int(os.getenv('GEMINI_MAX_RETRIES'), 5, field_name='GEMINI_MAX_RETRIES', minimum=0),
             gemini_retry_delay=parse_env_float(os.getenv('GEMINI_RETRY_DELAY'), 5.0, field_name='GEMINI_RETRY_DELAY', minimum=0.0),
             anthropic_api_key=os.getenv('ANTHROPIC_API_KEY'),
-            anthropic_model=os.getenv('ANTHROPIC_MODEL', 'claude-sonnet-4-6'),
+            anthropic_model=legacy_llm.anthropic_model,
             anthropic_temperature=parse_env_float(os.getenv('ANTHROPIC_TEMPERATURE'), 0.7, field_name='ANTHROPIC_TEMPERATURE'),
             anthropic_max_tokens=parse_env_int(os.getenv('ANTHROPIC_MAX_TOKENS'), 8192, field_name='ANTHROPIC_MAX_TOKENS', minimum=1),
             # AIHubmix is the preferred OpenAI-compatible provider (one key, all models, no VPN required).
@@ -2280,7 +2338,11 @@ class Config:
         )
 
     @classmethod
-    def _parse_litellm_yaml(cls, config_path: str) -> List[Dict[str, Any]]:
+    def _parse_litellm_yaml(
+        cls,
+        config_path: str,
+        env: Optional[Mapping[str, Any]] = None,
+    ) -> List[Dict[str, Any]]:
         """Parse a standard LiteLLM config YAML file into Router model_list.
 
         Supports the ``os.environ/VAR_NAME`` syntax for secret references.
@@ -2320,7 +2382,11 @@ class Config:
                 val = params.get(key)
                 if isinstance(val, str) and val.startswith('os.environ/'):
                     env_name = val.split('/', 1)[1]
-                    params[key] = os.getenv(env_name, '')
+                    if env is None:
+                        params[key] = os.getenv(env_name, '')
+                    else:
+                        value = env.get(env_name, '')
+                        params[key] = '' if value is None else str(value)
 
         _logger.info(f"LITELLM_CONFIG: loaded {len(model_list)} model deployment(s) from {path}")
         return model_list
@@ -2335,6 +2401,7 @@ class Config:
     def _parse_llm_channels_with_issues(
         cls,
         channels_str: str,
+        env: Optional[Mapping[str, Any]] = None,
     ) -> Tuple[List[Dict[str, Any]], List[HermesConfigIssue], bool, List[str]]:
         """Parse LLM_CHANNELS env var and per-channel env vars.
 
@@ -2355,6 +2422,13 @@ class Config:
         blocks_legacy_fallback = False
         blocked_hermes_routes: List[str] = []
 
+        def getenv(name: str, default: Optional[str] = None) -> Optional[str]:
+            """Read channel configuration from an isolated mapping when supplied."""
+            if env is None:
+                return os.getenv(name, default)
+            value = env.get(name, default)
+            return default if value is None else str(value)
+
         def record_blocked_hermes_routes(raw_models: List[str]) -> None:
             nonlocal blocks_legacy_fallback
             blocks_legacy_fallback = True
@@ -2370,37 +2444,37 @@ class Config:
             ch_lower = ch_name.lower()
             ch_upper = ch_name.upper()
 
-            base_url = os.getenv(f'LLM_{ch_upper}_BASE_URL', '').strip() or None
+            base_url = (getenv(f'LLM_{ch_upper}_BASE_URL', '') or '').strip() or None
             if ch_lower == "anspire" and not base_url:
                 base_url = (
-                    os.getenv('ANSPIRE_LLM_BASE_URL') or ANSPIRE_LLM_BASE_URL_DEFAULT
+                    getenv('ANSPIRE_LLM_BASE_URL') or ANSPIRE_LLM_BASE_URL_DEFAULT
                 ).strip() or None
-            protocol_raw = os.getenv(f'LLM_{ch_upper}_PROTOCOL', '').strip()
+            protocol_raw = (getenv(f'LLM_{ch_upper}_PROTOCOL', '') or '').strip()
             if ch_lower == "anspire" and not protocol_raw:
                 protocol_raw = "openai"
-            api_surface_raw = os.getenv(f'LLM_{ch_upper}_API_SURFACE', '').strip()
-            enabled_raw = os.getenv(f'LLM_{ch_upper}_ENABLED')
+            api_surface_raw = (getenv(f'LLM_{ch_upper}_API_SURFACE', '') or '').strip()
+            enabled_raw = getenv(f'LLM_{ch_upper}_ENABLED')
             if ch_lower == "anspire" and (enabled_raw is None or not enabled_raw.strip()):
-                enabled_raw = os.getenv('ANSPIRE_LLM_ENABLED')
+                enabled_raw = getenv('ANSPIRE_LLM_ENABLED')
             enabled = parse_env_bool(enabled_raw, default=True)
 
             # API keys: LLM_{NAME}_API_KEYS (multi) > LLM_{NAME}_API_KEY (single)
-            api_keys_raw = os.getenv(f'LLM_{ch_upper}_API_KEYS', '')
+            api_keys_raw = getenv(f'LLM_{ch_upper}_API_KEYS', '') or ''
             api_keys = [k.strip() for k in api_keys_raw.split(',') if k.strip()]
-            single_key = os.getenv(f'LLM_{ch_upper}_API_KEY', '').strip()
+            single_key = (getenv(f'LLM_{ch_upper}_API_KEY', '') or '').strip()
             if not api_keys:
                 if single_key:
                     api_keys = [single_key]
             if not api_keys and ch_lower == "anspire":
-                anspire_keys_raw = os.getenv('ANSPIRE_API_KEYS', '')
+                anspire_keys_raw = getenv('ANSPIRE_API_KEYS', '') or ''
                 api_keys = [k.strip() for k in anspire_keys_raw.split(',') if k.strip()]
 
             # Models
-            models_raw = os.getenv(f'LLM_{ch_upper}_MODELS', '')
+            models_raw = getenv(f'LLM_{ch_upper}_MODELS', '') or ''
             raw_models = [m.strip() for m in models_raw.split(',') if m.strip()]
             if not raw_models and ch_lower == "anspire":
                 anspire_model = (
-                    os.getenv('ANSPIRE_LLM_MODEL') or ANSPIRE_LLM_MODEL_DEFAULT
+                    getenv('ANSPIRE_LLM_MODEL') or ANSPIRE_LLM_MODEL_DEFAULT
                 ).strip()
                 if anspire_model:
                     raw_models = [anspire_model]
@@ -2452,7 +2526,7 @@ class Config:
                     base_url=base_url or HERMES_DEFAULT_BASE_URL,
                     api_key=single_key,
                     api_keys_raw=api_keys_raw,
-                    extra_headers_raw=os.getenv(f'LLM_{ch_upper}_EXTRA_HEADERS', ''),
+                    extra_headers_raw=getenv(f'LLM_{ch_upper}_EXTRA_HEADERS', '') or '',
                     models=raw_models,
                 )
                 issues.extend(result.issues)
@@ -2506,7 +2580,7 @@ class Config:
             models = [normalize_llm_channel_model(m, protocol, base_url) for m in raw_models]
 
             # Extra headers (JSON string, optional)
-            extra_headers_raw = os.getenv(f'LLM_{ch_upper}_EXTRA_HEADERS', '').strip()
+            extra_headers_raw = (getenv(f'LLM_{ch_upper}_EXTRA_HEADERS', '') or '').strip()
             extra_headers = None
             if extra_headers_raw:
                 try:

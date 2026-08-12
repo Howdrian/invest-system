@@ -1,5 +1,7 @@
 from pathlib import Path
 import json
+import os
+from types import SimpleNamespace
 
 import pytest
 
@@ -10,10 +12,12 @@ from src.daily_department_llm import (
     _apply_semantic_gate_to_memo,
     _compact_universe_for_spec,
     _compact_evidence_row,
+    _call_litellm_inline,
     _department_prompt,
     _evidence_for_spec,
     _fill_missing_memo_fields,
     _load_lightweight_llm_config,
+    _model_preflight_error,
     _normalize_next_action,
     _parse_agent_output,
     _prompt_evidence_for_spec,
@@ -310,6 +314,50 @@ def test_lightweight_llm_config_agent_model_overrides_global_model(tmp_path, mon
     assert config.litellm_model == 'vertex_ai/gemini-2.5-pro'
 
 
+@pytest.mark.parametrize(
+    ("provider_env", "expected_model", "key_attr", "expected_base"),
+    [
+        ({"GEMINI_API_KEY": "gemini-only-key", "GEMINI_MODEL": "gemini-only"}, "gemini/gemini-only", "gemini_api_keys", None),
+        ({"ANTHROPIC_API_KEY": "anthropic-only-key", "ANTHROPIC_MODEL": "claude-only"}, "anthropic/claude-only", "anthropic_api_keys", None),
+        ({"DEEPSEEK_API_KEY": "deepseek-only-key"}, "deepseek/deepseek-chat", "deepseek_api_keys", None),
+        ({"OPENAI_API_KEY": "openai-only-key", "OPENAI_MODEL": "gpt-only", "OPENAI_BASE_URL": "https://openai.example/v1"}, "openai/gpt-only", "openai_api_keys", "https://openai.example/v1"),
+        ({"AIHUBMIX_KEY": "aihubmix-only-key", "OPENAI_MODEL": "mix-only"}, "openai/mix-only", "openai_api_keys", "https://aihubmix.com/v1"),
+        ({"ANSPIRE_API_KEYS": "anspire-only-key", "ANSPIRE_LLM_MODEL": "anspire-only", "ANSPIRE_LLM_BASE_URL": "https://anspire.example/v6"}, "openai/anspire-only", "openai_api_keys", "https://anspire.example/v6"),
+    ],
+)
+def test_lightweight_llm_config_resolves_only_legacy_provider_without_env_pollution(
+    tmp_path,
+    monkeypatch,
+    provider_env,
+    expected_model,
+    key_attr,
+    expected_base,
+):
+    legacy_keys = {
+        "GEMINI_API_KEY", "GEMINI_API_KEYS", "GEMINI_MODEL", "GEMINI_MODEL_FALLBACK",
+        "ANTHROPIC_API_KEY", "ANTHROPIC_API_KEYS", "ANTHROPIC_MODEL",
+        "DEEPSEEK_API_KEY", "DEEPSEEK_API_KEYS", "OPENAI_API_KEY", "OPENAI_API_KEYS",
+        "OPENAI_MODEL", "OPENAI_BASE_URL", "AIHUBMIX_KEY", "ANSPIRE_API_KEYS",
+        "ANSPIRE_LLM_MODEL", "ANSPIRE_LLM_BASE_URL", "ANSPIRE_LLM_ENABLED",
+        "LITELLM_MODEL", "LITELLM_FALLBACK_MODELS", "LLM_CHANNELS",
+    }
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "\n".join(f"{key}={value}" for key, value in provider_env.items()) + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("ENV_FILE", str(env_file))
+    for key in legacy_keys:
+        monkeypatch.delenv(key, raising=False)
+
+    config = _load_lightweight_llm_config()
+
+    assert config.litellm_model == expected_model
+    assert getattr(config, key_attr) == [next(iter(value for key, value in provider_env.items() if key.endswith("KEY") or key == "ANSPIRE_API_KEYS"))]
+    assert config.openai_base_url == expected_base
+    assert all(key not in os.environ for key in provider_env)
+
+
 def test_lightweight_llm_config_forwards_vertex_adc_project_and_global_location(tmp_path, monkeypatch):
     env_file = tmp_path / '.env'
     env_file.write_text(
@@ -329,6 +377,218 @@ def test_lightweight_llm_config_forwards_vertex_adc_project_and_global_location(
     assert config.agent_litellm_model == 'vertex_ai/gemini-3.5-flash'
     assert config.runtime_env['VERTEXAI_PROJECT'] == 'project-test'
     assert config.runtime_env['VERTEXAI_LOCATION'] == 'global'
+
+
+def test_lightweight_llm_config_preserves_responses_channel_router_config(tmp_path, monkeypatch):
+    env_file = tmp_path / '.env'
+    env_file.write_text(
+        '\n'.join([
+            'LLM_CHANNELS=reports',
+            'LLM_REPORTS_PROTOCOL=openai',
+            'LLM_REPORTS_API_SURFACE=responses',
+            'LLM_REPORTS_BASE_URL=https://responses.example.test/v1',
+            'LLM_REPORTS_API_KEY=sk-reports-channel-test',
+            'LLM_REPORTS_MODELS=gpt-5.6-sol',
+            'AGENT_LITELLM_MODEL=openai/gpt-5.6-sol',
+        ]) + '\n',
+        encoding='utf-8',
+    )
+    monkeypatch.setenv('ENV_FILE', str(env_file))
+    for key in (
+        'LLM_CHANNELS', 'LLM_REPORTS_PROTOCOL', 'LLM_REPORTS_API_SURFACE',
+        'LLM_REPORTS_BASE_URL', 'LLM_REPORTS_API_KEY', 'LLM_REPORTS_MODELS',
+        'AGENT_LITELLM_MODEL', 'OPENAI_API_KEY', 'OPENAI_API_KEYS',
+    ):
+        monkeypatch.delenv(key, raising=False)
+
+    config = _load_lightweight_llm_config()
+
+    assert all(
+        key not in os.environ
+        for key in (
+            'LLM_CHANNELS', 'LLM_REPORTS_PROTOCOL', 'LLM_REPORTS_API_SURFACE',
+            'LLM_REPORTS_BASE_URL', 'LLM_REPORTS_API_KEY', 'LLM_REPORTS_MODELS',
+            'AGENT_LITELLM_MODEL',
+        )
+    )
+    assert config.agent_litellm_model == 'openai/gpt-5.6-sol'
+    assert config.llm_channel_config_issues == []
+    assert config.llm_model_list == [{
+        'model_name': 'openai/gpt-5.6-sol',
+        'litellm_params': {
+            'model': 'openai/responses/gpt-5.6-sol',
+            'api_key': 'sk-reports-channel-test',
+            'api_base': 'https://responses.example.test/v1',
+        },
+        'model_info': {'dsa_api_surface': 'responses'},
+    }]
+    assert _model_preflight_error('openai/gpt-5.6-sol', config) == ''
+
+
+def test_lightweight_llm_config_uses_yaml_responses_routes_without_mutating_env(tmp_path, monkeypatch):
+    config_yaml = tmp_path / 'litellm.yaml'
+    config_yaml.write_text(
+        '\n'.join([
+            'model_list:',
+            '  - model_name: reports-sol',
+            '    litellm_params:',
+            '      model: openai/responses/gpt-5.6-sol',
+            '      api_key: os.environ/REPORTS_API_KEY',
+            '      api_base: https://responses.example.test/v1',
+            '    model_info:',
+            '      dsa_api_surface: responses',
+            '  - model_name: reports-terra',
+            '    litellm_params:',
+            '      model: openai/responses/gpt-5.6-terra',
+            '      api_key: os.environ/REPORTS_API_KEY',
+        ]) + '\n',
+        encoding='utf-8',
+    )
+    env_file = tmp_path / '.env'
+    env_file.write_text(
+        f'LITELLM_CONFIG={config_yaml}\nREPORTS_API_KEY=sk-yaml-reports-test\n',
+        encoding='utf-8',
+    )
+    monkeypatch.setenv('ENV_FILE', str(env_file))
+    for key in (
+        'LITELLM_CONFIG', 'REPORTS_API_KEY', 'LLM_CHANNELS',
+        'AGENT_LITELLM_MODEL', 'LITELLM_MODEL', 'LITELLM_FALLBACK_MODELS',
+        'OPENAI_API_KEY', 'OPENAI_API_KEYS',
+    ):
+        monkeypatch.delenv(key, raising=False)
+
+    config = _load_lightweight_llm_config()
+
+    assert all(
+        key not in os.environ
+        for key in ('LITELLM_CONFIG', 'REPORTS_API_KEY', 'AGENT_LITELLM_MODEL', 'LITELLM_MODEL')
+    )
+    assert config.llm_models_source == 'litellm_config'
+    assert config.litellm_model == 'reports-sol'
+    assert config.litellm_fallback_models == ['reports-terra']
+    assert config.llm_model_list[0]['litellm_params'] == {
+        'model': 'openai/responses/gpt-5.6-sol',
+        'api_key': 'sk-yaml-reports-test',
+        'api_base': 'https://responses.example.test/v1',
+    }
+    assert config.llm_model_list[0]['model_info'] == {'dsa_api_surface': 'responses'}
+    assert _model_preflight_error('reports-sol', config) == ''
+
+
+@pytest.mark.parametrize("yaml_kind", ["missing", "empty"])
+def test_lightweight_llm_config_invalid_explicit_yaml_fails_closed_without_lower_priority_fallback(
+    tmp_path,
+    monkeypatch,
+    yaml_kind,
+):
+    config_yaml = tmp_path / 'litellm.yaml'
+    if yaml_kind == "empty":
+        config_yaml.write_text('model_list: []\n', encoding='utf-8')
+    env_file = tmp_path / '.env'
+    env_file.write_text(
+        '\n'.join([
+            f'LITELLM_CONFIG={config_yaml}',
+            'LLM_CHANNELS=reports',
+            'LLM_REPORTS_PROTOCOL=openai',
+            'LLM_REPORTS_API_SURFACE=responses',
+            'LLM_REPORTS_API_KEY=sk-reports-channel-test',
+            'LLM_REPORTS_MODELS=gpt-5.6-sol',
+            'AGENT_LITELLM_MODEL=gemini/gemini-3-flash-preview',
+            'GEMINI_API_KEY=sk-gemini-legacy-test',
+        ]) + '\n',
+        encoding='utf-8',
+    )
+    monkeypatch.setenv('ENV_FILE', str(env_file))
+    for key in (
+        'LITELLM_CONFIG', 'LLM_CHANNELS', 'LLM_REPORTS_PROTOCOL',
+        'LLM_REPORTS_API_SURFACE', 'LLM_REPORTS_API_KEY', 'LLM_REPORTS_MODELS',
+        'AGENT_LITELLM_MODEL', 'GEMINI_API_KEY', 'GEMINI_API_KEYS',
+        'OPENAI_API_KEY', 'OPENAI_API_KEYS',
+    ):
+        monkeypatch.delenv(key, raising=False)
+
+    config = _load_lightweight_llm_config()
+
+    assert config.llm_models_source == 'litellm_config'
+    assert config.llm_model_list == []
+    assert config.llm_channels == []
+    assert config.llm_blocks_legacy_fallback is True
+    assert [issue['code'] for issue in config.llm_channel_config_issues] == [
+        'invalid_litellm_config'
+    ]
+    assert config.gemini_api_keys == ['sk-gemini-legacy-test']
+    assert _model_preflight_error(config.litellm_model, config) == 'llm_channel_config_invalid'
+
+
+def test_lightweight_llm_config_invalid_surface_fails_closed(tmp_path, monkeypatch):
+    env_file = tmp_path / '.env'
+    env_file.write_text(
+        '\n'.join([
+            'LLM_CHANNELS=reports',
+            'LLM_REPORTS_PROTOCOL=openai',
+            'LLM_REPORTS_API_SURFACE=respones',
+            'LLM_REPORTS_API_KEY=sk-reports-channel-test',
+            'LLM_REPORTS_MODELS=gpt-5.6-sol',
+            'AGENT_LITELLM_MODEL=gemini/gemini-3-flash-preview',
+            'GEMINI_API_KEY=sk-gemini-legacy-test',
+        ]) + '\n',
+        encoding='utf-8',
+    )
+    monkeypatch.setenv('ENV_FILE', str(env_file))
+    for key in (
+        'LLM_CHANNELS', 'LLM_REPORTS_PROTOCOL', 'LLM_REPORTS_API_SURFACE',
+        'LLM_REPORTS_API_KEY', 'LLM_REPORTS_MODELS', 'AGENT_LITELLM_MODEL',
+        'GEMINI_API_KEY', 'GEMINI_API_KEYS',
+        'OPENAI_API_KEY', 'OPENAI_API_KEYS',
+    ):
+        monkeypatch.delenv(key, raising=False)
+
+    config = _load_lightweight_llm_config()
+
+    assert config.llm_model_list == []
+    assert [issue['code'] for issue in config.llm_channel_config_issues] == ['invalid_api_surface']
+    assert config.gemini_api_keys == ['sk-gemini-legacy-test']
+    assert _model_preflight_error('gemini/gemini-3-flash-preview', config) == 'llm_channel_config_invalid'
+
+
+def test_responses_alias_uses_router_deployment(monkeypatch):
+    import litellm
+
+    captured = {}
+
+    class FakeRouter:
+        def __init__(self, *, model_list, num_retries):
+            captured['model_list'] = model_list
+            captured['num_retries'] = num_retries
+
+        def completion(self, **kwargs):
+            captured['kwargs'] = kwargs
+            return SimpleNamespace(
+                choices=[SimpleNamespace(message=SimpleNamespace(content='{"ok": true}'))],
+                usage=SimpleNamespace(prompt_tokens=1, completion_tokens=2, total_tokens=3),
+            )
+
+    model_list = [{
+        'model_name': 'openai/gpt-5.6-sol',
+        'litellm_params': {
+            'model': 'openai/responses/gpt-5.6-sol',
+            'api_key': 'sk-router-test',
+            'api_base': 'https://responses.example.test/v1',
+        },
+        'model_info': {'dsa_api_surface': 'responses'},
+    }]
+    monkeypatch.setattr(litellm, 'Router', FakeRouter)
+
+    text, usage = _call_litellm_inline(
+        {'model': 'openai/gpt-5.6-sol', 'messages': [{'role': 'user', 'content': 'test'}]},
+        model_list,
+        {},
+    )
+
+    assert text == '{"ok": true}'
+    assert usage['total_tokens'] == 3
+    assert captured['model_list'] == model_list
+    assert captured['kwargs']['model'] == 'openai/gpt-5.6-sol'
 
 
 def test_department_prompt_is_scoped_to_agent_domain(tmp_path):

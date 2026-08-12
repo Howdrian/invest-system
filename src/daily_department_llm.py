@@ -697,28 +697,86 @@ def _load_lightweight_llm_config(
     instead and pass only the LLM runtime variables to the child process.
     """
 
-    from src.config import normalize_agent_litellm_model
+    from src.config import (
+        Config,
+        get_configured_llm_models,
+        normalize_agent_litellm_model,
+        resolve_legacy_llm_config,
+    )
 
     env_values = _load_lightweight_env_values()
 
+    # Process values override the dotenv mapping without publishing dotenv keys
+    # into process-wide state.  The shared Config channel parser then preserves
+    # aliases, API surfaces, bases, keys and headers exactly as the main runtime.
+    merged_env: Dict[str, str] = dict(env_values)
+    merged_env.update({str(key): str(value) for key, value in os.environ.items()})
+
     def env(name: str, default: str = "") -> str:
-        current = os.getenv(name)
-        if current is not None:
-            return str(current)
-        value = env_values.get(name, default)
+        value = merged_env.get(name, default)
         return "" if value is None else str(value)
 
-    def split(name: str) -> List[str]:
-        return [item.strip() for item in env(name).replace("，", ",").split(",") if item.strip()]
-
-    def one(name: str) -> List[str]:
-        value = env(name).strip()
-        return [value] if value else []
-
-    agent_model = normalize_agent_litellm_model(agent_model_override or env("AGENT_LITELLM_MODEL"))
-    primary_model = agent_model or env("LITELLM_MODEL").strip()
+    legacy_llm = resolve_legacy_llm_config(merged_env)
+    raw_agent_model = agent_model_override or env("AGENT_LITELLM_MODEL")
+    explicit_primary_model = legacy_llm.explicit_primary_model
+    explicit_fallback_models = list(legacy_llm.explicit_fallback_models)
+    channels_str = env("LLM_CHANNELS").strip()
+    llm_channels: List[Dict[str, Any]] = []
+    llm_channel_config_issues: List[Dict[str, str]] = []
+    llm_model_list: List[Dict[str, Any]] = []
+    llm_blocks_legacy_fallback = False
+    llm_models_source = "legacy_env"
+    litellm_config_path = env("LITELLM_CONFIG").strip()
+    if litellm_config_path:
+        llm_models_source = "litellm_config"
+        try:
+            llm_model_list = Config._parse_litellm_yaml(litellm_config_path, env=merged_env)
+        except Exception:  # noqa: BLE001 - explicit YAML must fail closed below
+            llm_model_list = []
+        has_valid_deployment = any(
+            isinstance(entry, Mapping)
+            and isinstance(entry.get("litellm_params"), Mapping)
+            and bool(str(entry["litellm_params"].get("model") or "").strip())
+            for entry in llm_model_list
+        )
+        if not has_valid_deployment:
+            llm_model_list = []
+            llm_blocks_legacy_fallback = True
+            llm_channel_config_issues = [{
+                "field": "LITELLM_CONFIG",
+                "code": "invalid_litellm_config",
+                "message": (
+                    "Explicit LITELLM_CONFIG did not yield a valid model deployment; "
+                    "lower-priority Channels and legacy providers are disabled."
+                ),
+                "severity": "error",
+            }]
+    if not litellm_config_path and not llm_model_list and channels_str:
+        llm_channels, channel_issues, llm_blocks_legacy_fallback, _blocked_routes = Config._parse_llm_channels_with_issues(
+            channels_str,
+            env=merged_env,
+        )
+        llm_channel_config_issues = [issue.as_dict() for issue in channel_issues]
+        if channel_issues:
+            llm_blocks_legacy_fallback = True
+        llm_model_list = Config._channels_to_model_list(llm_channels)
+        if llm_model_list:
+            llm_models_source = "llm_channels"
+    route_models = get_configured_llm_models(llm_model_list)
+    agent_model = normalize_agent_litellm_model(
+        raw_agent_model,
+        configured_models=set(route_models),
+    )
+    primary_model = agent_model or explicit_primary_model or (route_models[0] if route_models else "")
+    legacy_fallback_allowed = not llm_blocks_legacy_fallback and not llm_channel_config_issues
+    if not primary_model and not llm_model_list and legacy_fallback_allowed:
+        primary_model = legacy_llm.primary_model
     if fallback_models_override is None:
-        fallback_models = [item.strip() for item in env("LITELLM_FALLBACK_MODELS").replace("，", ",").split(",") if item.strip()]
+        fallback_models = explicit_fallback_models
+        if not fallback_models and route_models and primary_model:
+            fallback_models = [model for model in route_models if model != primary_model]
+        elif not fallback_models and not llm_model_list and legacy_fallback_allowed:
+            fallback_models = list(legacy_llm.fallback_models)
     else:
         fallback_models = [str(item).strip() for item in fallback_models_override if str(item).strip()]
     runtime_env = {
@@ -744,12 +802,18 @@ def _load_lightweight_llm_config(
         agent_litellm_model=agent_model,
         litellm_model=primary_model,
         litellm_fallback_models=fallback_models,
-        llm_model_list=[],
-        openai_api_keys=split("OPENAI_API_KEYS") or one("OPENAI_API_KEY"),
-        deepseek_api_keys=split("DEEPSEEK_API_KEYS") or one("DEEPSEEK_API_KEY"),
-        gemini_api_keys=split("GEMINI_API_KEYS") or one("GEMINI_API_KEY"),
-        anthropic_api_keys=split("ANTHROPIC_API_KEYS") or one("ANTHROPIC_API_KEY"),
-        openai_base_url=env("OPENAI_BASE_URL").strip(),
+        litellm_config_path=litellm_config_path or None,
+        llm_models_source=llm_models_source,
+        llm_channels=llm_channels,
+        llm_channel_names=[item.strip().lower() for item in channels_str.split(",") if item.strip()],
+        llm_channel_config_issues=llm_channel_config_issues,
+        llm_blocks_legacy_fallback=llm_blocks_legacy_fallback,
+        llm_model_list=llm_model_list,
+        openai_api_keys=legacy_llm.openai_api_keys,
+        deepseek_api_keys=legacy_llm.deepseek_api_keys,
+        gemini_api_keys=legacy_llm.gemini_api_keys,
+        anthropic_api_keys=legacy_llm.anthropic_api_keys,
+        openai_base_url=legacy_llm.openai_base_url,
         research_agent_llm_timeout_seconds=env("RESEARCH_AGENT_LLM_TIMEOUT_SECONDS", "90").strip(),
         runtime_env=runtime_env,
     )
@@ -982,6 +1046,19 @@ def _temporary_environ(values: Mapping[str, str]):
 
 
 def _model_preflight_error(model: str, config: Any) -> str:
+    # Router deployments own their credentials.  In particular an OpenAI
+    # Responses alias must not also require the unrelated legacy OPENAI_API_KEY.
+    if any(
+        str(entry.get("model_name") or "").strip() == str(model or "").strip()
+        for entry in (getattr(config, "llm_model_list", None) or [])
+        if isinstance(entry, Mapping)
+    ):
+        return ""
+    if (
+        (getattr(config, "llm_channel_config_issues", None) or [])
+        or bool(getattr(config, "llm_blocks_legacy_fallback", False))
+    ):
+        return "llm_channel_config_invalid"
     provider = _provider_from_model(model)
     if provider in {"vertex_ai", "vertexai"}:
         try:

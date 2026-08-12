@@ -12,6 +12,8 @@ import os
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Sequence
 
+from src.utils.market_review_region import normalize_market_review_region_lenient
+
 
 DEFAULT_MACRO_SERIES = ["DGS10", "DGS2", "FEDFUNDS", "CPIAUCSL", "UNRATE", "M2SL"]
 
@@ -35,7 +37,8 @@ def build_daily_universe(
     explicit_symbols = _clean_symbols(symbols or [])
     stock_list_symbols = explicit_symbols or _symbols_from_env(env_values)
     candidates = _candidate_symbols_from_docs(docs, run_date)
-    region = (market or _env_get("MARKET_REVIEW_REGION", env_values) or "cn").strip() or "cn"
+    raw_region = market if market is not None else _env_get("MARKET_REVIEW_REGION", env_values)
+    region = normalize_market_review_region_lenient(raw_region) or "cn"
 
     groups = [
         {
@@ -125,7 +128,7 @@ def load_daily_universe(docs_dir: str | Path, run_date: str) -> Dict[str, Any]:
 
 
 def _symbols_from_env(env_values: Mapping[str, str]) -> List[str]:
-    raw = _env_get("STOCK_LIST", env_values)
+    raw = _env_get("STOCK_LIST", env_values) or _env_get("STOCK_LIST_CONFIG", env_values)
     symbols = _clean_symbols(raw.replace("，", ",").split(","))
     # Guard against upstream's old minimum fallback being mistaken as a daily
     # universe. A user may still explicitly pass --symbols 600519.

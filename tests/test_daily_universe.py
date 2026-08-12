@@ -75,3 +75,28 @@ def test_daily_universe_does_not_publish_private_portfolio_holdings(tmp_path, mo
     assert portfolio["symbols"] == []
     assert portfolio["snapshotAvailable"] is False
     assert "PRIVATE-CANARY" not in json.dumps(payload)
+
+
+def test_daily_universe_uses_workflow_stock_list_config_alias(tmp_path, monkeypatch):
+    from src.source_health.daily_universe import build_daily_universe
+
+    monkeypatch.setenv("ENV_FILE", str(tmp_path / "missing.env"))
+    monkeypatch.setenv("STOCK_LIST", "")
+    monkeypatch.setenv("STOCK_LIST_CONFIG", "000001, AAPL，hk00700")
+
+    payload = build_daily_universe(tmp_path / "docs", "2099-01-02")
+
+    assert payload["subjectSymbols"] == ["000001", "AAPL", "hk00700"]
+    watchlist = next(row for row in payload["groups"] if row["name"] == "watchlist")
+    assert watchlist["symbols"] == ["000001", "AAPL", "hk00700"]
+
+
+def test_daily_universe_normalizes_market_and_falls_back_invalid_or_empty_to_cn(tmp_path, monkeypatch):
+    from src.source_health.daily_universe import build_daily_universe
+
+    monkeypatch.setenv("ENV_FILE", str(tmp_path / "missing.env"))
+    monkeypatch.setenv("STOCK_LIST", "")
+    monkeypatch.setenv("MARKET_REVIEW_REGION", " us,xx,kr ")
+    assert build_daily_universe(tmp_path / "docs", "2099-01-02")["market"] == "us,kr"
+    assert build_daily_universe(tmp_path / "docs", "2099-01-02", market="invalid")["market"] == "cn"
+    assert build_daily_universe(tmp_path / "docs", "2099-01-02", market="")["market"] == "cn"
