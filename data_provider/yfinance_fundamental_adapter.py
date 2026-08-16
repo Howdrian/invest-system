@@ -236,6 +236,10 @@ class YfinanceFundamentalAdapter:
         # renderer can suffix per-block currency tags correctly.
         financial_currency = str(info.get("financialCurrency") or info.get("currency") or "").upper() or None
         dividend_currency = str(info.get("currency") or info.get("financialCurrency") or "").upper() or None
+        # Capture the UTC calendar date once so every dated field in this
+        # bundle uses the same observation point, even if execution crosses
+        # midnight while yfinance calls are in flight.
+        as_of_date = datetime.now(timezone.utc).date()
 
         # Current valuation is a generic public snapshot.  It is deliberately
         # not called a historical percentile: the daily research layer builds
@@ -248,7 +252,7 @@ class YfinanceFundamentalAdapter:
             "enterprise_to_ebitda": _safe_float(info.get("enterpriseToEbitda")),
             "market_cap": _safe_float(info.get("marketCap")),
             "currency": dividend_currency,
-            "as_of": datetime.now(timezone.utc).date().isoformat(),
+            "as_of": as_of_date.isoformat(),
         }
         if any(value is not None for key, value in valuation_payload.items() if key not in {"currency", "as_of"}):
             result["valuation"] = valuation_payload
@@ -361,13 +365,10 @@ class YfinanceFundamentalAdapter:
             if hasattr(div_series, "columns"):
                 div_series = div_series.iloc[:, 0]
             try:
-                # Index is timezone-aware (ex-dividend date)
-                # Use the adapter clock rather than pandas' separate wall clock so
-                # the report timestamp and rolling dividend window share one source
-                # of truth and deterministic tests can freeze it safely.
-                cutoff = pd.Timestamp(datetime.now(timezone.utc)).tz_convert(
-                    div_series.index.tz
-                ) - pd.Timedelta(days=365)
+                # Use the same UTC-derived calendar date as valuation/dividend
+                # metadata. Localizing that date to the event index timezone
+                # keeps comparisons valid for both aware and naive indexes.
+                cutoff = pd.Timestamp(as_of_date).tz_localize(div_series.index.tz) - pd.Timedelta(days=365)
                 for ts, value in div_series.items():
                     per_share = _safe_float(value)
                     if per_share is None or per_share <= 0:
@@ -410,7 +411,7 @@ class YfinanceFundamentalAdapter:
                 "ttm_cash_dividend_per_share": round(ttm_cash, 6) if ttm_cash is not None else None,
                 "coverage": "cash_dividend_pre_tax",
                 "currency": dividend_currency,
-                "as_of": datetime.now(timezone.utc).date().isoformat(),
+                "as_of": as_of_date.isoformat(),
             }
 
             # Yield: prefer recomputing from TTM cash / latest price so the
