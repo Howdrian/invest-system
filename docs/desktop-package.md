@@ -13,6 +13,16 @@
 
 ## 本地开发
 
+### 构建工具支持矩阵
+
+| 场景 | Node.js | Python |
+|---|---:|---:|
+| Desktop 本地开发与打包 | `>=22.12.0` | `>=3.10` |
+| PR Desktop Windows/macOS 打包门禁 | `22.12.0` | `3.12` |
+| `desktop-release` Windows/macOS 发布工作流 | `22.12.0` | `3.12` |
+
+Node 下限与 `apps/dsa-desktop/package.json` 的 `engines.node` 保持一致，PR 与发布工作流使用同一个精确版本，避免 Electron 依赖在旧 Node 环境下安装失败。已打包的桌面应用自带 Electron/Node 运行时，终端用户无需另行安装 Node.js。
+
 一键启动（开发模式）：
 
 ```bash
@@ -43,7 +53,7 @@ npm run dev
 
 ### 前置条件
 
-- Node.js 18+
+- Node.js 22.12.0+
 - Python 3.10+
 - 开启 Windows 开发者模式（electron-builder 需要创建符号链接）
   - 设置 -> 隐私和安全性 -> 开发者选项 -> 开发者模式

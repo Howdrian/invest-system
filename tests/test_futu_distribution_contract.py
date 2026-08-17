@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import yaml
@@ -25,6 +26,14 @@ def _job_run_text(job: dict) -> str:
         for step in job.get("steps", [])
         if isinstance(step, dict)
     )
+
+
+def _setup_node_versions(job: dict) -> list[str]:
+    return [
+        str(step["with"]["node-version"])
+        for step in job.get("steps", [])
+        if isinstance(step, dict) and step.get("uses") == "actions/setup-node@v6"
+    ]
 
 
 def test_futu_sdk_is_pinned_and_verified_across_linux_distributions() -> None:
@@ -80,3 +89,26 @@ def test_futu_sdk_is_collected_and_probed_in_desktop_backends() -> None:
     assert 'Test-PythonCode -Python $pythonBin -Code "import futu"' in windows_script
     assert "'--collect-all', 'futu'" in windows_script
     assert "@('src.services.screening.pipeline', 'futu', 'orjson')" in windows_script
+
+
+def test_desktop_node_baseline_is_consistent_across_ci_and_package() -> None:
+    ci = _workflow(".github/workflows/ci.yml")
+    release = _workflow(".github/workflows/desktop-release.yml")
+    desktop_package = json.loads(_read("apps/dsa-desktop/package.json"))
+    desktop_lock = json.loads(_read("apps/dsa-desktop/package-lock.json"))
+
+    for job_name in (
+        "desktop-futu-package-windows",
+        "desktop-futu-package-macos",
+    ):
+        assert _setup_node_versions(ci["jobs"][job_name]) == ["22.12.0"]
+
+    release_versions = [
+        version
+        for job in release["jobs"].values()
+        for version in _setup_node_versions(job)
+    ]
+    assert release_versions
+    assert set(release_versions) == {"22.12.0"}
+    assert desktop_package["engines"]["node"] == ">=22.12.0"
+    assert desktop_lock["packages"][""]["engines"] == desktop_package["engines"]
