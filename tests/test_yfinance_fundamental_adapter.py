@@ -226,6 +226,57 @@ class TestYfinanceFundamentalAdapter(unittest.TestCase):
         self.assertEqual(div["ttm_event_count"], 3)
         self.assertAlmostEqual(div["ttm_cash_dividend_per_share"], 0.79, places=2)
 
+    def test_ttm_dividend_window_is_inclusive_and_excludes_future_aware_events(self) -> None:
+        dividends = pd.Series(
+            [1.0, 2.0, 4.0, 8.0],
+            index=pd.DatetimeIndex(
+                [
+                    "2025-08-13 23:59:59",
+                    "2025-08-14 23:59:59",
+                    "2026-08-14 23:59:59",
+                    "2026-08-15 00:00:01",
+                ],
+                tz="America/New_York",
+            ),
+            name="Dividends",
+        )
+        ticker = _build_mock_ticker(
+            {"currency": "USD", "financialCurrency": "USD", "currentPrice": 100},
+            dividends=dividends,
+        )
+
+        with patch("yfinance.Ticker", return_value=ticker), self._freeze_as_of():
+            bundle = YfinanceFundamentalAdapter().get_fundamental_bundle("AAPL")
+
+        div = bundle["earnings"]["dividend"]
+        self.assertEqual(div["ttm_event_count"], 2)
+        self.assertAlmostEqual(div["ttm_cash_dividend_per_share"], 6.0, places=4)
+
+    def test_ttm_dividend_window_is_inclusive_and_excludes_future_naive_events(self) -> None:
+        dividends = pd.Series(
+            [1.0, 2.0, 4.0, 8.0],
+            index=pd.DatetimeIndex(
+                [
+                    "2025-08-13 23:59:59",
+                    "2025-08-14 23:59:59",
+                    "2026-08-14 23:59:59",
+                    "2026-08-15 00:00:01",
+                ],
+            ),
+            name="Dividends",
+        )
+        ticker = _build_mock_ticker(
+            {"currency": "USD", "financialCurrency": "USD", "currentPrice": 100},
+            dividends=dividends,
+        )
+
+        with patch("yfinance.Ticker", return_value=ticker), self._freeze_as_of():
+            bundle = YfinanceFundamentalAdapter().get_fundamental_bundle("AAPL")
+
+        div = bundle["earnings"]["dividend"]
+        self.assertEqual(div["ttm_event_count"], 2)
+        self.assertAlmostEqual(div["ttm_cash_dividend_per_share"], 6.0, places=4)
+
     def test_falls_back_to_info_when_statements_only_have_4_quarters(self) -> None:
         """yfinance default is 4 quarters → statement-derived YoY refuses to use QoQ.
 

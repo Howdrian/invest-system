@@ -651,10 +651,11 @@ def _save_reused_market_review_report(
     config: Config,
     trigger_source: str,
     region: str,
-) -> None:
+    fallback_save_report: Optional[Callable[..., Optional[str]]] = None,
+) -> Optional[str]:
     body = str(market_report or "").strip()
     if not body:
-        return
+        return None
     title = (
         "# 🎯 Market Review"
         if str(getattr(config, "report_language", "zh")).strip().lower() == "en"
@@ -662,19 +663,42 @@ def _save_reused_market_review_report(
     )
     if not any(body.startswith(item) for item in ("# 🎯 大盘复盘", "# 🎯 Market Review")):
         body = f"{title}\n\n{body}"
+    date_str = datetime.now().strftime('%Y%m%d')
+    report_filename = f"market_review_{date_str}.md"
     try:
-        date_str = datetime.now().strftime('%Y%m%d')
-        report_filename = f"market_review_{date_str}.md"
         filepath = notifier.save_report_to_file(body, report_filename)
-        logger.info(
-            "[MarketReview] component=market_review action=save_reused_report "
-            "trigger_source=%s region=%s path=%s",
-            trigger_source,
-            region,
-            filepath,
-        )
+        normalized_path = str(filepath or "").strip()
+        if normalized_path:
+            logger.info(
+                "[MarketReview] component=market_review action=save_reused_report "
+                "trigger_source=%s region=%s path=%s",
+                trigger_source,
+                region,
+                normalized_path,
+            )
+            return normalized_path
+        logger.warning("复用大盘上下文保存失败: 通知服务未返回报告路径")
     except Exception as exc:
         logger.warning("复用大盘上下文保存大盘复盘报告失败: %s", exc)
+
+    if not callable(fallback_save_report):
+        return None
+    try:
+        fallback_path = fallback_save_report(body, filename=report_filename)
+        normalized_path = str(fallback_path or "").strip()
+        if normalized_path:
+            logger.warning(
+                "[MarketReview] component=market_review action=save_reused_report_fallback "
+                "trigger_source=%s region=%s path=%s",
+                trigger_source,
+                region,
+                normalized_path,
+            )
+            return normalized_path
+        logger.error("复用大盘上下文回退保存失败: 本地文件系统未返回报告路径")
+    except Exception as exc:
+        logger.error("复用大盘上下文回退保存大盘复盘报告失败: %s", exc)
+    return None
 
 
 def _run_auto_backtest(config: Config) -> None:
@@ -844,6 +868,8 @@ def run_full_analysis(
                 analysis_reference_time,
             )
         market_report = ""
+        reused_market_report_path: Optional[str] = None
+        reused_market_report_save_attempted = False
         market_context_summary = ""
         market_context_full_report = ""
         market_context_generated_during_stock = False
@@ -943,12 +969,18 @@ def run_full_analysis(
                 logger.info(
                     "复盘上下文可复用，跳过重复大盘复盘并复用上下文内容。"
                 )
-                _save_reused_market_review_report(
+                reused_market_report_save_attempted = True
+                reused_market_report_path = _save_reused_market_review_report(
                     pipeline.notifier,
                     market_report,
                     config=config,
                     trigger_source=review_trigger_source,
                     region=market_review_region,
+                    fallback_save_report=getattr(
+                        pipeline,
+                        "_fallback_save_report_to_file",
+                        None,
+                    ),
                 )
                 if (
                     market_context_generated_during_stock
@@ -1010,6 +1042,20 @@ def run_full_analysis(
                 market_report = _market_review_report_text(review_result)
             elif can_reuse_market_context:
                 market_report = market_context_full_report or market_context_summary
+                if market_report and not reused_market_report_save_attempted:
+                    reused_market_report_save_attempted = True
+                    reused_market_report_path = _save_reused_market_review_report(
+                        pipeline.notifier,
+                        market_report,
+                        config=config,
+                        trigger_source=review_trigger_source,
+                        region=market_review_region,
+                        fallback_save_report=getattr(
+                            pipeline,
+                            "_fallback_save_report_to_file",
+                            None,
+                        ),
+                    )
 
         expected_stock_report = (
             not getattr(args, "dry_run", False)
@@ -1031,6 +1077,17 @@ def run_full_analysis(
             not getattr(args, "dry_run", False)
             and should_run_market_review
         )
+        if (
+            expected_market_report
+            and market_report
+            and reused_market_report_save_attempted
+            and not reused_market_report_path
+        ):
+            _LAST_ANALYSIS_FAILURE_REASON = "report_save_failed"
+            logger.error(
+                "本轮已复用大盘复盘文本，但通知服务与本地文件系统均未保存报告。"
+            )
+            deferred_failure_result = False
         if (expected_stock_report or expected_market_report) and not results and not market_report:
             _LAST_ANALYSIS_FAILURE_REASON = "no_report"
             logger.error(
@@ -1680,11 +1737,7 @@ def main() -> int:
                 if analysis_ok is False:
                     if start_serve:
                         logger.error("启动时分析执行失败，Web/API 服务继续运行。")
-                    elif _LAST_ANALYSIS_FAILURE_REASON in {
-                        "no_report",
-                        "empty_stock_list",
-                        "report_save_failed",
-                    }:
+                    else:
                         return 1
         else:
             logger.info("配置为不立即运行分析 (RUN_IMMEDIATELY=false)")

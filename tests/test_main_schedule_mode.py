@@ -464,6 +464,35 @@ class MainScheduleModeTestCase(unittest.TestCase):
         self.assertEqual(exit_code, 1)
         run_with_lock.assert_called_once_with(config, args, None)
 
+    def test_serve_run_keeps_api_alive_when_startup_analysis_reports_failure(self) -> None:
+        args = self._make_args(serve=True, host="127.0.0.1", port=8000)
+        config = self._make_config(run_immediately=True, webui_enabled=False)
+
+        with (
+            patch.dict(os.environ, {"GITHUB_ACTIONS": "false"}, clear=False),
+            patch("main.parse_arguments", return_value=args),
+            patch("main.get_config", return_value=config),
+            patch("main.prepare_webui_frontend_assets", return_value=True),
+            patch("main.start_api_server") as start_api_server,
+            patch("main.start_bot_stream_clients"),
+            patch(
+                "main._run_analysis_with_runtime_scheduler_lock",
+                return_value=False,
+            ) as run_with_lock,
+            patch("main.time.sleep", side_effect=KeyboardInterrupt),
+            patch("main.logger.error") as error_log,
+        ):
+            exit_code = main.main()
+
+        self.assertEqual(exit_code, 0)
+        start_api_server.assert_called_once_with(
+            host="127.0.0.1",
+            port=8000,
+            config=config,
+        )
+        run_with_lock.assert_called_once_with(config, args, None)
+        error_log.assert_any_call("启动时分析执行失败，Web/API 服务继续运行。")
+
     def test_standalone_futu_portfolio_failure_returns_nonzero(self) -> None:
         args = self._make_args(portfolio="futu")
         config = self._make_config(run_immediately=True)
@@ -507,7 +536,7 @@ class MainScheduleModeTestCase(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         loader.assert_called_once_with()
 
-    def test_standalone_futu_downstream_failure_keeps_existing_exit_semantics(self) -> None:
+    def test_standalone_futu_downstream_failure_returns_nonzero(self) -> None:
         args = self._make_args(portfolio="futu")
         config = self._make_config(run_immediately=True)
 
@@ -527,7 +556,7 @@ class MainScheduleModeTestCase(unittest.TestCase):
         ):
             exit_code = main.main()
 
-        self.assertEqual(exit_code, 0)
+        self.assertEqual(exit_code, 1)
         loader.assert_called_once_with()
 
     def test_schedule_mode_reload_uses_latest_runtime_config(self) -> None:
@@ -1762,6 +1791,119 @@ class MainScheduleModeTestCase(unittest.TestCase):
         self.assertEqual(prime_context.call_count, 3)
         refresh.assert_called_once_with(config)
         pipeline.run.assert_called_once()
+
+    def test_reused_market_context_falls_back_to_same_local_filename(self) -> None:
+        notifier = MagicMock()
+        notifier.save_report_to_file.return_value = ""
+        fallback_save = MagicMock(return_value="/tmp/fallback-market-review.md")
+
+        path = main._save_reused_market_review_report(
+            notifier,
+            "## 完整大盘复盘",
+            config=self._make_config(report_language="zh"),
+            trigger_source="cli",
+            region="cn",
+            fallback_save_report=fallback_save,
+        )
+
+        self.assertEqual(path, "/tmp/fallback-market-review.md")
+        saved_content, primary_filename = notifier.save_report_to_file.call_args.args
+        fallback_save.assert_called_once_with(saved_content, filename=primary_filename)
+        self.assertTrue(primary_filename.startswith("market_review_"))
+        self.assertTrue(primary_filename.endswith(".md"))
+
+    def test_reused_market_context_double_save_failure_finishes_exports_then_fails(self) -> None:
+        args = self._make_args(no_notify=False)
+        target_date = date(2026, 3, 26)
+        config = self._make_config(
+            trading_day_check_enabled=False,
+            market_review_enabled=True,
+            daily_market_context_enabled=True,
+            single_stock_notify=False,
+            merge_email_notification=False,
+            analysis_delay=0,
+            report_type="simple",
+            database_path=str(Path(self.temp_dir.name) / "stock_analysis.db"),
+        )
+        pipeline = MagicMock()
+        pipeline.run.return_value = []
+        pipeline.notifier = MagicMock(
+            is_available=MagicMock(return_value=True),
+            send=MagicMock(return_value=True),
+        )
+        pipeline.notifier.save_report_to_file.return_value = None
+        pipeline._fallback_save_report_to_file.return_value = None
+        runtime_context = ("本轮运行时复盘摘要", "## 本轮运行时完整复盘")
+
+        with (
+            patch.object(main, "_refresh_stock_index_cache_for_analysis"),
+            patch("main._compute_trading_day_filter", return_value=([], "cn", False)),
+            patch("main._resolve_daily_market_context_target_date", return_value=target_date),
+            patch("src.core.pipeline.StockAnalysisPipeline", return_value=pipeline),
+            patch(
+                "main._prime_daily_market_context",
+                side_effect=[("", ""), ("", ""), runtime_context],
+            ),
+            patch("main._run_market_review_with_shared_lock") as run_with_lock,
+            patch("src.core.market_review.run_market_review"),
+            patch("src.feishu_doc.FeishuDocManager") as feishu_manager,
+        ):
+            feishu = feishu_manager.return_value
+            feishu.is_configured.return_value = True
+            feishu.create_daily_doc.return_value = "https://feishu.example/doc"
+            result = main.run_full_analysis(config, args, [])
+
+        self.assertFalse(result)
+        self.assertEqual(main._LAST_ANALYSIS_FAILURE_REASON, "report_save_failed")
+        run_with_lock.assert_not_called()
+        self.assertEqual(pipeline.notifier.send.call_count, 2)
+        self.assertIn(
+            "## 本轮运行时完整复盘",
+            pipeline.notifier.send.call_args_list[0].args[0],
+        )
+        feishu.create_daily_doc.assert_called_once()
+
+    def test_failed_fresh_review_saves_reused_query_context(self) -> None:
+        args = self._make_args(no_notify=True)
+        target_date = date(2026, 3, 26)
+        config = self._make_config(
+            trading_day_check_enabled=False,
+            market_review_enabled=True,
+            daily_market_context_enabled=True,
+            single_stock_notify=False,
+            merge_email_notification=False,
+            analysis_delay=0,
+            database_path=str(Path(self.temp_dir.name) / "stock_analysis.db"),
+        )
+        pipeline = MagicMock()
+        pipeline.run.return_value = []
+        pipeline.notifier.save_report_to_file.return_value = "/tmp/market_review.md"
+        runtime_context = ("本轮运行时复盘摘要", "## 本轮运行时完整复盘")
+
+        with (
+            patch.object(main, "_refresh_stock_index_cache_for_analysis"),
+            patch("main._compute_trading_day_filter", return_value=([], "cn", False)),
+            patch("main._resolve_daily_market_context_target_date", return_value=target_date),
+            patch("src.core.pipeline.StockAnalysisPipeline", return_value=pipeline),
+            patch(
+                "main._prime_daily_market_context",
+                side_effect=[
+                    ("", ""),
+                    ("旧复盘摘要", "## 旧复盘正文"),
+                    runtime_context,
+                ],
+            ),
+            patch("main._run_market_review_with_shared_lock", return_value=None) as run_with_lock,
+            patch("src.core.market_review.run_market_review"),
+        ):
+            result = main.run_full_analysis(config, args, [])
+
+        self.assertTrue(result)
+        run_with_lock.assert_called_once()
+        pipeline.notifier.save_report_to_file.assert_called_once()
+        saved_content, saved_filename = pipeline.notifier.save_report_to_file.call_args.args
+        self.assertIn("## 本轮运行时完整复盘", saved_content)
+        self.assertTrue(saved_filename.startswith("market_review_"))
 
     def test_run_full_analysis_still_runs_market_review_for_merge_disabled_with_reused_context(self) -> None:
         args = self._make_args()

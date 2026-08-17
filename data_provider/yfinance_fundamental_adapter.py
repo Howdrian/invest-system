@@ -28,7 +28,7 @@ mark the block as ``partial`` when only some fields are populated.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
@@ -365,33 +365,36 @@ class YfinanceFundamentalAdapter:
             if hasattr(div_series, "columns"):
                 div_series = div_series.iloc[:, 0]
             try:
-                # Use the same UTC-derived calendar date as valuation/dividend
-                # metadata. Localizing that date to the event index timezone
-                # keeps comparisons valid for both aware and naive indexes.
-                cutoff = pd.Timestamp(as_of_date).tz_localize(div_series.index.tz) - pd.Timedelta(days=365)
+                event_candidates: List[tuple[Dict[str, Any], date]] = []
                 for ts, value in div_series.items():
                     per_share = _safe_float(value)
                     if per_share is None or per_share <= 0:
                         continue
                     try:
-                        event_date = pd.Timestamp(ts).date().isoformat()
+                        event_ts = pd.Timestamp(ts)
+                        if pd.isna(event_ts):
+                            continue
+                        event_calendar_date = event_ts.date()
+                        event_date = event_calendar_date.isoformat()
                     except Exception:
                         continue
-                    events.append({
+                    event = {
                         "event_date": event_date,
                         "ex_dividend_date": event_date,
                         "record_date": None,
                         "announcement_date": None,
                         "cash_dividend_per_share": per_share,
                         "is_pre_tax": True,
-                    })
+                    }
+                    events.append(event)
+                    event_candidates.append((event, event_calendar_date))
                 ttm_events = []
-                for item in events:
-                    try:
-                        event_ts = pd.Timestamp(item["event_date"]).tz_localize(div_series.index.tz)
-                    except Exception:
-                        continue
-                    if event_ts >= cutoff:
+                cutoff_date = as_of_date - timedelta(days=365)
+                for item, event_date in event_candidates:
+                    # Dividend events are day-granularity facts. Compare their
+                    # local calendar date, not their timestamp, so an event later
+                    # on the as-of day is included for both aware and naive indexes.
+                    if cutoff_date <= event_date <= as_of_date:
                         ttm_events.append(item)
             except Exception as exc:
                 result["errors"].append(f"dividend_window:{type(exc).__name__}")
