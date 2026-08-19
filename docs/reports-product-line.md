@@ -1,6 +1,6 @@
 # Reports 产品线与运行边界
 
-> Last verified: 2026-08-12
+> Last verified: 2026-08-19
 
 ## 定位
 
@@ -23,6 +23,10 @@ Reports 是在原系统旁新增的投研阅读中心，不替代原交互面板
 内部真相边界是 `src/research_core/` 的纯契约、语义门和可靠性裁决。`ReportArtifact v1` 是兼容发布契约，`readerV3` 是唯一产品文案源，Diagnostics 是原始排障视图。三者不是平行分析系统。
 
 原系统 `DataFetcherManager` 的行情、K 线、基本面、资金、板块和指数进入 Evidence；原系统 LLM 个股/市场分析只作为 `opinion/input`，不能直接升级为 verified fact。最终 Reader claim 必须通过 evidence 主体、指标、时间、来源等级和因果边界校验。
+
+运行结果与报告持久化也必须一致：缓存或回退得到的大盘复盘文本只有在报告成功落盘后才算成功；常规 one-shot 只要 `analysis_ok=false` 就返回非零。通知发送成功不能替代报告生成成功。YFinance TTM 现金股息按事件时区使用包含边界的 `cutoff <= event <= as_of`，不得把未来股息计入目标日 TTM。
+
+Agent 工具超时按 first-wins 解析：显式 per-run > 单工具声明 > data/search/analysis/action/market 类别默认 > 无限制，剩余总 wall-clock 预算只作不可突破的外层上限。超时结果标记 non-retriable 并阻止同调用重入；后台 handler 只能协作取消，不能把 Python 线程误述为已强制终止。若 5 个已超时的非协作 handler 占满 pool，runner 给 0.5 秒 cooperative grace，随后只取消仍未启动的 future，并返回带 `queued=true` 的 non-retriable timeout；不会谎称运行中线程已被终止。真实外部 provider 的长工具调用仍需 live 验证。
 
 ## 运行产物边界
 
@@ -89,6 +93,8 @@ scripts/run_research_daily_local.sh --date YYYY-MM-DD --runtime llm \
 
 ## 打开
 
+当前工作树 `.venv311` 已新鲜安装依赖；本地启动使用当前代码和当前解释器：
+
 ```bash
 .venv311/bin/python server.py
 ```
@@ -105,7 +111,7 @@ http://localhost:8000/reports
 
 ## 验收
 
-本地必须通过：后端 gate、Pages validator、API smoke、Web test/lint/build、semantic quality audit、AI asset check、`git diff --check` 和运行产物 secret scan。2026-08-12 最终代码快照验收：后端 `6174 passed, 4 deselected, 501 subtests`，Web 最终 `1108 passed / 2 skipped`；Pages source 为 21 个必需文件 / 30 个链接 / 0 broken，公开 staging 只含 11 个 Reader HTML / 19 个链接，工程字段与维护路径扫描为 0。Desktop 50 tests、DMG 打包框架和依赖审计已通过；该验收仍不包含新 LLM 日报、完整 Desktop backend bundle/跨平台签名、成功 Docker image 或云端发布。
+本地必须通过：后端 gate、Pages validator、API smoke、Web test/lint/build、semantic quality audit、AI asset check、`git diff --check` 和运行产物 secret scan。2026-08-19 验收代码 `5de0183a`：后端 `6248 passed, 4 deselected, 40 warnings, 501 subtests passed`，Agent timeout targeted `536 passed / 1 warning / 8.86s`，merge semantic matrix `557 passed`，当前环境 authenticated Playwright `12/12 passed`；当前工作树 Python dependency audit 为 0。Playwright 使用真实本地 login/backend 与临时 DB，但 Chat/report API 为 hermetic fixture，不调用真实 LLM/provider。Web 代码本轮未变，沿用 `1108 passed / 2 skipped`、lint/TypeScript/build/audit 0；Desktop 代码本轮未变，沿用 Electron `41.10.3` / Node `22.12.0` 下 50 tests、build 和 audit 0，但仍只是未签名 DMG 框架。Pages 的 21 required / 30 links 与公开 staging 11 files / 19 links 是当前 validator 对 **2026-07-17 历史产物**的重跑，不是 `5de0183a` 新生成日报。验收不包含新 LLM 日报、完整 Desktop backend bundle/Windows/签名公证、成功 Docker image 或云端发布。
 
 ## 云端发布边界
 
@@ -128,9 +134,11 @@ Pages staging 只复制公开 Reader 资产：`index.html`、汇总报告和分�
 
 首次发布前还要把仓库 Pages build source 从 legacy `main/docs` 切换成 `GitHub Actions`。该设置属于云端状态，必须在代码提交后再切换并手动触发验证。
 
-截至 2026-08-12，GitHub Pages 仍为 `build_type=legacy`、
-source=`main/docs`，线上 `origin/main@7a8b4cf8` 不是当前发布候选线。
+截至 2026-08-19 20:35 CST，GitHub Pages 仍为 `build_type=legacy`、
+source=`main:/docs`，线上 `origin/main@7a8b4cf8` 不是当前发布候选线。
 实时抽检完整 artifact、RAW_AGENT memo 与 source-health JSON 仍为 HTTP 200，
 说明旧维护产物正在公开；候选 allowlist 不会自动清理旧站或 Git 历史。首次发布必须
 在用户授权下切换 Actions、部署 allowlist，并逐项验证旧 raw URL 已 404。以上本地验收
-不能表述为云端已发布。
+不能表述为云端已发布。候选分支仍未 push、PR 为 0，CI workflow 为 `state=deleted`；
+2026-08-19 Network Smoke #59 虽显示 success，但有效网络覆盖和 quick analysis 仍不满足
+发布门且仅覆盖旧 main，属于 false-green，不能作为候选发布证据。

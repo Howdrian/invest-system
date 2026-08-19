@@ -25,25 +25,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - [改进] 通知推送与完整 Markdown/微信报告不再重复附加“AI 决策信号”摘要，DecisionSignal 的存储、告警和 Web AI 建议页保持不变。
 - [改进] TickFlow 新增基于申万一级行业池的行业涨跌排行 fallback，并将基本面/市场结构单能力默认超时由 3 秒调整为 8 秒。
 - [修复] 公开 Daily Universe 不自动展开私有 `PORTFOLIO_HOLDINGS`；无真实 snapshot 的符号清单不能支持仓位结论。
-- [修复] Axios、React Router、ESLint / TypeScript ESLint、aiohttp、cryptography、NLTK 与 pyasn1 安全升级；Desktop 同步升级 Electron `39.8.10`、electron-builder `26.15.3`、electron-updater `6.8.9` 并收窄依赖 override；当前 Web/Desktop npm 与 Python 本地审计均为 0 known vulnerabilities。
+- [修复] Axios、React Router、ESLint / TypeScript ESLint、aiohttp、cryptography、NLTK 与 pyasn1 安全升级；Desktop 最终升级 Electron `41.10.3`、electron-builder `26.15.3`、electron-updater `6.8.9`，Desktop CI/Release Node 固定 `22.12.0` 并收窄依赖 override；当前 Web/Desktop npm 与 Python 本地审计均为 0 known vulnerabilities。
 - [修复] Reports lightweight LLM 配置与主 Config 统一为 `YAML > Channels > legacy`，保留 Responses API Router 路由并对显式无效配置 fail-closed；Daily Reports step 同步 LLM、Stock List、Tushare、TickFlow 与 Longbridge 配置，原子落盘 YAML。
 - [修复] OpenAPI 文档改为从 runtime 确定性生成并固定 FastAPI/Pydantic/Starlette schema toolchain；静态产物现覆盖 116 paths、193 schemas 和三条 Reports API。
 - [修复] 完成点时代码级 upstream provider parity：保留 4/5 位裸港股路由、Tencent 最终兜底、港股全市场缓存、Longbridge keyword args 与 YFinance PE/PB；Longbridge 真实凭据 live smoke 未在本轮执行。
 - [chore] 退役无法导入且未进入活动 runner 的 `src/market_cycle.py`，保留 `scripts/build_pages_compat_bundle.py` 作为兼容入口。
 - [chore] 技术债扫描按定义线性统计复杂度，避免嵌套 AST 重复遍历导致全仓扫描长期无输出。
 - [文档] 补充 macOS 未签名、未公证 DMG 被 Gatekeeper 拦截时的架构选择、安全排查与官方安装包临时放行步骤。
-- [文档] 2026-08-12 更新 CURRENT_STATE、upstream parity、技术债和工作区路由；验收代码对 `upstream/main@3b98aa1d` 为 ahead 15 / behind 0；线上 legacy Pages 三条维护路径仍为 HTTP 200，云端发布继续 NO-GO。
-- [测试] 最终本地回归：后端 `6174 passed, 4 deselected, 501 subtests`；Web `1108 passed / 2 skipped`；Desktop 50/50、provider 109、Pages source 21/30、Reader staging 11/19、semantic、AI assets、OpenAPI、依赖审计和 diff gate 通过；Docker compose 通过，image build 首次超时、第二次慢速后中止，未执行云端发布。
-<!-- 新条目格式：- [类型] 描述（类型取值：新功能/改进/修复/文档/测试/chore）-->
-<!-- 每条独立一行追加到本段末尾，无需分类标题，合并时冲突最小 -->
+- [文档] 2026-08-19 更新 CURRENT_STATE、upstream parity、技术债、工作区路由和 Reports 边界；验收代码 `5de0183a` 对 `upstream/main@cfd6b0a5` 为 ahead 22 / behind 0；线上 legacy Pages 三条维护路径仍为 HTTP 200，云端发布继续 NO-GO。
+- [测试] 最终本地回归：当前新鲜 `.venv311` 后端 `6248 passed, 4 deselected, 40 warnings, 501 subtests`，Agent timeout targeted 536、merge semantic matrix 557、authenticated Playwright 12/12、Python audit 0；Web 沿用 1108/2 与 lint/TypeScript/build/audit 0，Desktop 沿用 50/50/audit 0/DMG 框架。Pages 21/30 与 Reader staging 11/19 是当前 validator 对 **2026-07-17 历史产物**的重跑，不是新日报。Docker compose 通过，但 image build 卡在 Dockerfile frontend，未取得镜像/import/health 证据，也未执行云端发布。
 - [改进] AIHubMix 注册与引流链接统一使用 inferera.com，改善中国大陆网络直连体验。
 - [修复] 单股推送模式在未配置通知渠道时仍会落盘本地个股报告；CLI 启动分析若因空股票列表、个股结果全失败或本地报告保存失败而未生成报告，会显式返回失败并记录原因。
 - [修复] 合并推送模式下即使个股汇总报告落盘失败，仍会先发送已有的合并通知；仅启用大盘复盘但最终未生成任何复盘内容时，分析任务会显式返回失败。
+- [修复] 缓存命中或分析失败后的回退大盘复盘必须成功持久化报告才算成功；常规 one-shot 对任意 `analysis_ok=false` 返回非零，不再用已生成文本或通知成功掩盖报告保存失败。
+- [修复] YFinance TTM 现金股息窗口按事件时区使用包含边界的 `cutoff <= event <= as_of`，排除目标日之后的未来股息。
+- [测试] Authenticated Playwright smoke 使用真实本地登录/后端和临时 DB，报告历史/API与 Chat SSE 使用 hermetic route fixture；12/12 通过且不调用真实或付费 LLM/provider。
+- [chore] Desktop 安全基线升级到 Electron `41.10.3` / Node `22.12.0`；本地 50/50 tests、build、production/full npm audit 0。产物仍是未签名且不含完整 backend bundle 的 DMG 框架，不作为跨平台发布验收。
 
 - [新功能] Agent 工具调用支持按类别（data/search/analysis/action/market）配置默认超时，并允许单工具声明 `timeout_seconds`；有效超时按 first-wins 优先级解析（显式 per-run `tool_call_timeout_seconds` > 单工具显式 `timeout_seconds` > 类别默认 > 无限制），剩余 wall-clock 预算仅作不可突破的外层 cap，超时后返回结构化 `{"timeout": true}` 错误（标记 `retriable: false` 并写入 `non_retriable_tool_results` 防重试重复执行）供 Agent 继续执行而非中断循环（fixes #1890）。
 - [修复] Agent 工具注册表（`src/agent/factory.get_tool_registry`）由模块级缓存改为按「类别超时映射的值」比对失效，规避 CPython 回收对象后地址复用（`id(config)` 相同）导致配置 reload 后的 `Config` 被误判为未变、沿用过期超时的真 bug；新增 `_coerce_config_timeout` 类型白名单，使调用方传入 `MagicMock` / 缺属性 stub / 脏字符串（如 `float(MagicMock())` 静默得到 1.0）时降级为「无类别限制」而非崩溃或强加 1 秒超时；`build_agent_executor(config)` / `build_agent_chat_executor(config)` 现已把调用方 `config` 透传给 `get_tool_registry(config)`（不再无参调用冻结首构 registry）；`main._reload_runtime_config` 与 `SystemConfigService._reload_runtime_singletons`（及 `update()`→`reload_now` 路径）在配置热重载时调用 `reset_tool_registry()` 强制重建；回归测试补充「传入新 config 后 registry 重建」「reload 后新超时应生效」及「builder 透传 config」三类场景（#1890 的 review follow-up，闭环 OR-COM-dd1e8fa7 / OR-COM-bff42110）
 - [修复] Agent 工具超时 review 闭环（fixes #1890 的 4 个 blocker）：超时解析由 min 契约改为 first-wins（显式 per-run `tool_call_timeout_seconds` > 单工具 `ToolDefinition.timeout_seconds` > 类别默认 > 无限制，剩余 wall-clock 预算只作不可突破的外层 cap；research 路径不再传 `tool_call_timeout_seconds` 以免覆盖类别限制）；超时结果标记 `retriable: false` 并写入 `non_retriable_tool_results` 阻断 LLM 同调用重试重入，且超时触发时为仍在后台运行的 handler 武装协作取消信号（`is_tool_cancellation_requested()` 与既有 `check_tool_execution()` 检查点均响应，handler 从不轮询则行为不变），作为 review 要求的「handler 内协作取消」缓解，规避 Python 线程无法 force-stop 导致的重复执行与副作用；`_coerce_config_timeout` 对 `inf`/`nan`/负数降级为「无限制」，根绝 `future.result(timeout=inf)` 触发 `OverflowError`；`get_tool_registry` / `reset_tool_registry` 加 `threading.Lock` 双检锁，且重建后返回本次构建的局部 registry（而非全局缓存），消除并发重建竞态与跨调用超时串扰；`@tool` 装饰器将 `ToolPolicy.timeout_seconds` 折叠进 `ToolDefinition` 单一来源；统一单/并行工具超时包装（单一 executor + deadline 驱动的 wait loop，消除并行路径嵌套 executor 与线程翻倍，duration 精确到各工具自身超时值），并新增快慢工具混合并行回归；同步 `docs/full-guide_EN.md` 的超时环境变量文档；测试覆盖 first-wins、non-retriable、协作取消接线、finite 校验、缓存线程安全与快慢混合并行。
 - [修复] 按最新 review 复核收敛 3 处正确性问题（OR-COM-7f3d3f5b / 3d6b61f8 / a1e8b0c2）：`BaseAgent._filtered_registry()` 携带源 registry 的类别超时映射（工具子集仍生效类别上限，不再绕过 #1890 类别超时）；并行批次 >5 时排队调用的 per-tool 超时自 worker 实际开始起算（不再提交即烧预算导致对未启动调用的假超时）；`get_tool_registry()` 缓存命中快路径在锁内读取一致对（消除与 `reset_tool_registry()` 竞态返回 `None` 或错配 registry）。新增对应回归测试。
+- [修复] Agent 工具满池 queue stall 改为 fail-closed：5 个已超时且不响应协作取消的 handler 占满 pool 时先给 0.5 秒 cooperative grace，仍不退出则仅取消尚未启动的 future，返回 `timeout + queued + retriable:false` 并写入 non-retriable cache；原 1.21 秒复现降至约 0.60 秒，同时保留 worker 正常释放后第 6 个 fast 调用成功的语义。
+<!-- 新条目格式：- [类型] 描述（类型取值：新功能/改进/修复/文档/测试/chore）-->
+<!-- 每条独立一行追加到本段末尾，无需分类标题，合并时冲突最小 -->
 
 ## [3.30.0] - 2026-08-09
 

@@ -1,9 +1,9 @@
 # invest-system 当前状态
 
 > Document status: `CURRENT_TRUTH`
-> Last verified: 2026-08-12
+> Last verified: 2026-08-19 21:11 CST
 > Active repo: `/Users/hac/AI-Studio/投研/invest-system-upstream-sync-20260812`
-> Validated code SHA: `4f12aac5ebae`
+> Validated code SHA: `5de0183abf2f`
 
 ## 一句话结论
 
@@ -13,48 +13,48 @@ LOCAL RELEASE PACKAGING PARTIAL
 CLOUD RELEASE NO-GO
 ```
 
-Reports 发布候选已在独立分支完成 upstream 同步、人工 diff review、安全与配置收口、分包提交和本地回归。对本轮 fetch 的 `upstream/main@3b98aa1d779a` 为 `ahead 15 / behind 0`。这只证明本地点时 parity，不代表已推送、已通过托管 CI 或已发布。
+Reports 发布候选已完成最新 upstream 同步、人工 diff review、分包提交和最终本地回归。2026-08-19 fetch 后，验收代码相对 `upstream/main@cfd6b0a5fb9c` 为 `ahead 22 / behind 0`。这只证明本地点时 parity，不代表已推送、已通过托管 CI 或已发布。
 
-线上仍是旧 `main/docs` legacy Pages，三条维护端原始产物仍公开；候选分支尚未 push、无 PR、未跑云端 CI。因此不能称 production ready 或已发布。
+线上仍是旧 `main:/docs` legacy Pages，三条维护端原始产物仍公开；候选分支未 push、PR 0，云端 CI 仍被删除。因此不能称 production ready 或已发布。
 
 ## 当前版本与 Git
 
 | 项目 | 当前值 |
 |---|---|
 | Branch | `codex/reports-v1-upstream-sync` |
-| 验收代码 SHA | `4f12aac5ebae` |
-| 当前同步基底 | `upstream/main@3b98aa1d779a` |
+| 验收代码 SHA | `5de0183abf2f` |
+| 当前同步基底 | `upstream/main@cfd6b0a5fb9c` |
 | Reports 历史建线基底 | `upstream/main@55946536a976` |
-| 验收代码点时 upstream parity | `4f12aac5` 为 `ahead 15 / behind 0` |
+| 验收代码点时 upstream parity | `5de0183a` 为 `ahead 22 / behind 0` |
 | origin/main | `7a8b4cf83e02`（旧线上主线，最后 push 2026-06-26） |
-| 工作树 | 不固化文档编辑态；最终提交后以 `git status` 回执为准 |
 | 外部动作 | 未 push、未建 PR、未切 Pages source、未触发候选日报或部署 |
 
 ## 本轮完成
 
-- 把 9 个 Reports/安全/研究/文档提交重放到最新 upstream，并逐项人工审查冲突和无冲突自动合并。
-- 保留上游内建 Screening、Responses API、Futu/Tushare、CI 三分片、Desktop 分享图及通知能力。
-- 集成并验证裸港股路由、Tencent 最终兜底、港股全市场缓存、Longbridge kwargs、YFinance PE/PB 等 provider 修复。
-- 公网 bind/auth 继续 fail-closed：非 loopback 必须启用认证且预先初始化管理员密码；关闭认证需二次密码，公网运行时禁止关闭；通用 System Config 不能旁路只读开关。
-- Reports lightweight LLM 配置与主 Config 共享同一解析语义：`YAML > Channels > legacy`；Responses alias 保留 wire route/API surface/base/key/header，显式无效 YAML/channel fail-closed，不污染 `os.environ`。
-- Daily workflow 的 Reports step 与主分析对齐 LLM、Stock List、Realtime、Tushare、TickFlow、Longbridge 配置；`LITELLM_CONFIG_YAML` 独立原子落盘。
-- OpenAPI 产物从 runtime 确定性生成，覆盖 116 paths、193 schemas 和三条 Reports API；FastAPI/Pydantic/Starlette schema toolchain 已固定。
-- Desktop 依赖升级到 Electron `39.8.10`、electron-builder `26.15.3`、electron-updater `6.8.9`；漏洞补丁按兼容 major 收窄 override，Release Node 固定 `20.17.0`。
-- YFinance 股息窗口统一使用可注入 UTC 时钟；Web 异步断言去除历史时间/调度型 flaky。
+- 在原 `upstream/main@5c964bf2` 收口基础上合并 Agent per-category tool timeout，当前基底前进到 `cfd6b0a5`；本地代码人工复核与语义矩阵未发现 P0/P1，外部云端门禁仍单列开放。
+- Agent 工具支持 data/search/analysis/action/market 类别默认超时、单工具超时和显式 per-run 覆盖；按 first-wins 解析，剩余 wall-clock 只作外层硬上限。
+- 工具超时返回结构化 non-retriable 结果，阻止同调用重入；支持协作取消、配置热重载、线程安全 registry 重建，并让排队调用从 worker 实际启动时计时。
+- 修复满池停滞：5 个已超时且不响应协作取消的 handler 占满 worker 时，先给 0.5 秒退出宽限；仍未退出则只取消尚未启动的 future，返回 `timeout + queued + retriable:false` 并写入 non-retriable cache。原 1.21 秒复现降至约 0.60 秒，正常第 6 个 fast 调用场景保持不变。
+- 保留上游内建 Screening、Responses API、Futu/Tushare、Desktop 分享图及通知能力，以及本地 Reports/Evidence/Agent/Reader 产品线。
+- 报告结果 fail-closed：缓存/回退大盘复盘也必须持久化报告；常规 one-shot 只要 `analysis_ok=false` 即非零退出。
+- YFinance TTM 现金股息窗口使用 `cutoff <= event <= as_of`，按事件时区执行包含边界判断，未来股息不计入 TTM。
+- Web authenticated Playwright 使用真实本地登录/后端与临时 DB，报告和聊天接口使用 hermetic fixture，不调用真实或付费 LLM/provider。
+- Desktop 安全基线为 Electron `41.10.3`、electron-builder `26.15.3`、electron-updater `6.8.9`，Desktop CI/Release Node 为 `22.12.0`。
+- 公网 bind/auth 继续 fail-closed；Reports LLM 配置继续复用 `YAML > Channels > legacy`；OpenAPI 继续由 runtime 确定性生成。
 
 ## 本地验证
 
-- Backend gate：syntax、flake8、deterministic、offline 全通过；`6174 passed, 4 deselected, 501 subtests`。
-- Web：`npm ci`、lint、TypeScript/Vite build 通过；最终 Vitest `1108 passed / 2 skipped`。并行满载首轮出现 3 个既有时序 flaky，三个用例单独复跑全通过，随后全量复跑 0 fail。
-- Provider parity：109 个裸港股/Tencent/HK cache/Longbridge/YFinance 目标测试通过；相关能力也包含在全量 backend gate。
-- Desktop：`npm ci`、50/50 tests、prod/full `npm audit` 0；DMG packaging framework 通过。仍缺真实 Windows NSIS、签名/公证，且本机未提供 `dist/backend/stock_analysis`，所以不是完整可安装交付包。
-- 依赖：Web 与 Desktop production/full audit 均为 0；Python `pip check` 通过，`pip-audit --local` 为 0 known vulnerabilities。
-- OpenAPI：生成器 `--check` PASS；runtime/static 全量相等，116 paths / 193 schemas。
-- Pages：历史 2026-07-17 source bundle 21 required / 30 links / 0 broken；Reader-only staging 11 files / 19 links / 0 broken，未 publish。
-- Semantic：PASS；11 个部门、blocking 0；历史 artifact 有 rejected claims 21、conditional claims 28，可靠性“中等可信，含待验证情景”。
-- AI assets、workflow YAML/shell、`git diff --check`：PASS。
-- 结构审计：957 files / 427962 LOC / 220 个 500 行以上文件 / 613 个复杂定义 / 235 个 TODO-like hits / 5 个 import cycles；`legacyPublicFiles=0`，`readerLeakFiles={}`。
-- Docker：daemon 与 compose config 可用；image build 首次在 `files.pythonhosted.org` 下载超时，第二次在同一慢速点中止，均未完成；未取得镜像/import/health smoke 成功证据。
+- Backend gate（验收代码 `5de0183a`）：syntax、critical flake8、deterministic、offline 全通过；`6248 passed, 4 deselected, 40 warnings, 501 subtests passed`。
+- Agent timeout 目标回归：`536 passed / 1 warning / 8.86s`；合并语义矩阵：`557 passed`。
+- 当前工作树 `.venv311` 已新鲜安装依赖；`pip check` 通过，`pip-audit --local` 为 0 known vulnerabilities。
+- Authenticated Playwright：当前环境 `12/12 passed`；覆盖真实本地认证入口，但 Chat SSE、报告历史/API 为隔离 fixture，不是外部 provider、真实 LLM 或生产端到端证明。
+- Web（本轮无 Web 代码变更，沿用已验证证据）：lint、TypeScript、Vite build、prod/full audit 通过；Vitest `1108 passed / 2 skipped`。
+- Desktop（本轮无 Desktop 代码变更，沿用已验证证据）：50/50 tests、build、prod/full `npm audit` 0；仅为未签名 DMG 打包框架，未包含可交付 backend bundle，未验证 Windows、签名或公证。
+- OpenAPI：2026-08-19 生成器 `--check` PASS；runtime/static 全量相等，116 paths / 193 schemas。
+- Pages：2026-08-19 用当前 validator 重跑 **2026-07-17 历史产物**，source bundle 21 required / 30 links / 0 broken，Reader-only staging 11 files / 19 links / 0 broken；未生成新日报、未 publish。
+- AI assets：2026-08-19 PASS。
+- 结构审计：958 files / 430516 LOC / 223 个 500 行以上文件 / 614 个复杂定义 / 246 个 TODO-like hits / 5 个 import cycles；`legacyPublicFiles=0`，`readerLeakFiles={}`。扫描时仅 6 份本轮真相文档处于编辑态。
+- Docker：daemon 与 compose config PASS；build 仍卡在 `resolve image config for docker-image://docker.io/docker/dockerfile:1.7`。没有生成镜像，关键模块 import 与 health smoke 未验证。
 
 ## 历史真实日报
 
@@ -77,12 +77,13 @@ Reports 发布候选已在独立分支完成 upstream 同步、人工 diff revie
 
 ## 线上 Pages：当前 P0
 
-2026-08-12 实时核验：
+2026-08-19 20:35 CST 实时只读核验：
 
 ```text
 build_type=legacy
 status=built
-source=main/docs
+source=main:/docs
+deployed_commit=7a8b4cf83e02
 url=https://howdrian.github.io/invest-system/
 ```
 
@@ -97,11 +98,12 @@ url=https://howdrian.github.io/invest-system/
 ## 仍未收口
 
 1. **线上 raw Pages exposure（P0 external）**：旧维护产物仍公开；必须经授权部署 Reader allowlist 并逐条验证旧 URL 404。
-2. **云端 CI/发布（P1 external）**：候选分支未 push、无 PR；云端 `CI` workflow endpoint 为 `state=deleted`，active workflow 无 CI/required checks。最新 Daily 是旧 main 的 2026-06-26 failure；2026-08-12 Network Smoke success 也只覆盖旧 main。
-3. **GitHub 治理（P1 external）**：main 无 branch protection/ruleset；Actions 允许全部且不强制 SHA pin；secret scanning、push protection、Dependabot security updates 关闭。
-4. **Docker/Desktop/live（P1）**：Docker image 未因网络超时完成；Windows/签名/公证/完整 backend bundle、真实外部 provider、Playwright 和新 LLM 日报未验。
-5. **API 权限分层（P1）**：完整 Reports artifact 仍依赖全局 admin auth；公开 Reader DTO 与私有维护 DTO 尚未拆开。
-6. **继承型技术债（P2）**：220 个大文件、613 个复杂定义、5 个 import cycles 后续独立治理，不在本轮强拆。
+2. **云端 CI/发布（P1 external）**：候选分支未 push、PR 0；`CI` workflow endpoint 为 `state=deleted`，active workflow 无 CI/required checks。
+3. **云端 false-green（P1 external）**：2026-08-19 Network Smoke #59 仍显示 success，但有效网络覆盖和 quick analysis 结果仍不满足发布门，而且只覆盖旧 main，不能作为候选验收。
+4. **GitHub 治理（P1 external）**：main 无 branch protection/ruleset；Actions 允许全部且不强制 SHA pin；secret scanning、push protection、Dependabot security updates 仍未启用，code scanning 无有效结果。
+5. **Docker/Desktop/live（P1）**：Docker 无成功 image/import/health；Desktop 无完整 backend bundle、Windows、签名或公证；真实外部 provider、新 LLM 日报与云端浏览器链未验。
+6. **API 权限分层（P1）**：完整 Reports artifact 仍依赖全局 admin auth；公开 Reader DTO 与私有维护 DTO 尚未拆开。
+7. **继承型技术债（P2）**：223 个大文件、614 个复杂定义、5 个 import cycles 后续独立治理，不在本轮强拆。
 
 ## 下一步顺序
 
