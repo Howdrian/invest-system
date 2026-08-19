@@ -266,6 +266,70 @@ class TestExecuteToolsTimeout:
         assert len(slow_ress) == 5
         assert all(json.loads(r["result_str"]).get("timeout") is True for r in slow_ress)
 
+    def test_queued_call_fails_closed_when_timed_out_workers_do_not_exit(self):
+        """A full pool of non-cooperative timed-out handlers must not leave a
+        never-started call queued until the much larger outer agent deadline.
+
+        Python cannot kill the five running threads, so the runner gives them a
+        short grace period to observe cancellation.  If they still occupy every
+        worker, it cancels the queued future and returns a complete, structured,
+        non-retriable timeout result for that call.
+        """
+        reg = ToolRegistry(category_timeout_map={"data": 0.1})
+        release_blockers = threading.Event()
+        fast_started = threading.Event()
+
+        def uncooperative():
+            # Deliberately ignore TOOL_CANCEL_EVENT.  The timed wait keeps the red
+            # regression test bounded before the runner-side fix is applied.
+            release_blockers.wait(1.2)
+            return {"ok": True}
+
+        def fast():
+            fast_started.set()
+            return {"ok": True}
+
+        _register(reg, "uncooperative", uncooperative, category="data")
+        _register(reg, "fast", fast, category="data")
+        tool_calls = [
+            _make_tool_call("uncooperative", tc_id=f"s{i}") for i in range(5)
+        ] + [_make_tool_call("fast", tc_id="f1")]
+        log = []
+        non_retriable = {}
+
+        start = time.monotonic()
+        try:
+            results = _execute_tools(
+                tool_calls,
+                reg,
+                step=1,
+                progress_callback=None,
+                tool_calls_log=log,
+                # Mirrors the real agent's much larger remaining outer budget;
+                # the queued call must not wait for this 600s ceiling.
+                tool_wait_timeout_seconds=600.0,
+                non_retriable_tool_results=non_retriable,
+            )
+        finally:
+            release_blockers.set()
+        elapsed = time.monotonic() - start
+
+        assert elapsed < 1.0
+        assert len(results) == 6
+        queued = next(r for r in results if r["tc"].name == "fast")
+        queued_payload = json.loads(queued["result_str"])
+        assert queued_payload == {
+            "error": "Tool execution could not start because timed-out workers did not exit",
+            "timeout": True,
+            "queued": True,
+            "retriable": False,
+        }
+        assert fast_started.is_set() is False
+        queued_log = next(e for e in log if e["tool"] == "fast")
+        assert queued_log["timeout"] is True
+        assert queued_log["queued_timeout"] is True
+        assert non_retriable[_build_tool_cache_key("fast", {})] == queued["result_str"]
+
 
 # ---------------------------------------------------------------------------
 # 5. Config env contract (Issue #1890 test point 1: AGENT_DATA_TOOL_TIMEOUT_S=20)

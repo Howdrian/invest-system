@@ -629,6 +629,8 @@ def _build_timeout_result_payload(
     arguments: Dict[str, Any],
     timeout_s: float,
     non_retriable_tool_results: Optional[Dict[str, str]],
+    *,
+    queued: bool = False,
 ) -> str:
     """Build the timeout-shaped result string and record it as non-retriable.
 
@@ -638,12 +640,20 @@ def _build_timeout_result_payload(
     execution — a best-effort guard against duplicate work, since Python cannot
     forcibly cancel an already-started tool thread.
     """
-    label = f"{timeout_s:.2f}s"
-    result_str = json.dumps({
-        "error": f"Tool execution timed out after {label}",
-        "timeout": True,
-        "retriable": False,
-    })
+    if queued:
+        result_str = json.dumps({
+            "error": "Tool execution could not start because timed-out workers did not exit",
+            "timeout": True,
+            "queued": True,
+            "retriable": False,
+        })
+    else:
+        label = f"{timeout_s:.2f}s"
+        result_str = json.dumps({
+            "error": f"Tool execution timed out after {label}",
+            "timeout": True,
+            "retriable": False,
+        })
     if non_retriable_tool_results is not None:
         cache_key = _build_tool_cache_key(tool_name, arguments)
         # Non-dict / missing ``arguments`` yields ``None`` here; skip the write so
@@ -751,13 +761,25 @@ def _execute_tools(
             deadline_holder[0] = time.monotonic() + per_tool_timeout
         return _exec_single(tc_item)
 
-    def _record(tc_item, *, timed_out, timeout_s=None, out=None, guard_result=None):
+    def _record(
+        tc_item,
+        *,
+        timed_out,
+        timeout_s=None,
+        out=None,
+        guard_result=None,
+        queued_timeout=False,
+    ):
         """Emit ``tool_done``, build the log entry, and append to ``results``."""
         if out is not None:
             _, result_str, success, dur, cached, guard_result = out
         else:
             result_str = _build_timeout_result_payload(
-                tc_item.name, tc_item.arguments, timeout_s, non_retriable_tool_results,
+                tc_item.name,
+                tc_item.arguments,
+                timeout_s,
+                non_retriable_tool_results,
+                queued=queued_timeout,
             )
             success = False
             dur = round(timeout_s, 2)
@@ -773,6 +795,8 @@ def _execute_tools(
         }
         if timed_out:
             log_entry["timeout"] = True
+        if queued_timeout:
+            log_entry["queued_timeout"] = True
         if guard_result is not None:
             log_entry.update({
                 "guarded": True,
@@ -801,7 +825,8 @@ def _execute_tools(
         _record(plan[0][0], timed_out=False, out=_exec_single(plan[0][0]))
         return results
 
-    pool = ThreadPoolExecutor(max_workers=min(len(plan), 5))
+    max_workers = min(len(plan), 5)
+    pool = ThreadPoolExecutor(max_workers=max_workers)
     futures: Dict[Any, Any] = {}
     cancel_of: Dict[Any, threading.Event] = {}
     # ``deadline_of`` maps a Future to a single-element holder list; the worker
@@ -811,6 +836,13 @@ def _execute_tools(
     deadline_of: Dict[Any, List[Optional[float]]] = {}
     timeout_of: Dict[Any, float] = {}
     timeout_triggered = False
+    timed_out_running = set()
+    queue_stall_deadline: Optional[float] = None
+    # A timed-out Python thread cannot be force-killed.  Give cooperative tools
+    # a short chance to observe TOOL_CANCEL_EVENT and free a worker, but do not
+    # let never-started calls inherit an unbounded queue wait behind five
+    # non-cooperative handlers.
+    timed_out_worker_exit_grace_s = 0.5
     try:
         # One executor for the whole batch.  Each future gets its own cancel
         # event (keyed by Future, not by tool name, so two parallel calls to the
@@ -837,6 +869,22 @@ def _execute_tools(
 
         while pending:
             now = time.monotonic()
+            timed_out_running = {
+                fut for fut in timed_out_running if not fut.done()
+            }
+            queued_pending = [
+                fut for fut in pending if not fut.running() and not fut.done()
+            ]
+            if (
+                queued_pending
+                and len(timed_out_running) >= max_workers
+                and not any(fut.running() for fut in pending)
+            ):
+                if queue_stall_deadline is None:
+                    queue_stall_deadline = now + timed_out_worker_exit_grace_s
+            else:
+                queue_stall_deadline = None
+
             deadlines = []
             for f in pending:
                 holder = deadline_of.get(f)
@@ -844,6 +892,8 @@ def _execute_tools(
                     deadlines.append(holder[0])
             if batch_deadline is not None:
                 deadlines.append(batch_deadline)
+            if queue_stall_deadline is not None:
+                deadlines.append(queue_stall_deadline)
             next_deadline = min(deadlines) if deadlines else None
             if next_deadline is not None:
                 wait_timeout = max(0.0, next_deadline - now)
@@ -864,6 +914,32 @@ def _execute_tools(
                 _record(futures[fut], timed_out=False, out=fut.result())
 
             now = time.monotonic()
+            if queue_stall_deadline is not None and now >= queue_stall_deadline:
+                # Only cancel futures that are provably still queued.  A worker
+                # may become free at this exact boundary; ``cancel()`` returning
+                # False means that call won the race and must keep its normal
+                # worker-start deadline.
+                for fut in list(pending):
+                    if fut.running() or fut.done() or not fut.cancel():
+                        continue
+                    pending.discard(fut)
+                    cancel_of[fut].set()
+                    timeout_triggered = True
+                    logger.warning(
+                        "Tool '%s' could not start because timed-out workers "
+                        "did not exit within %.2fs at step %d",
+                        futures[fut].name,
+                        timed_out_worker_exit_grace_s,
+                        step,
+                    )
+                    _record(
+                        futures[fut],
+                        timed_out=True,
+                        timeout_s=timed_out_worker_exit_grace_s,
+                        queued_timeout=True,
+                    )
+                queue_stall_deadline = None
+
             for fut in list(pending):
                 holder = deadline_of.get(fut)
                 deadline = holder[0] if holder is not None else None
@@ -875,6 +951,8 @@ def _execute_tools(
                 pending.discard(fut)
                 cancel_of[fut].set()
                 timeout_triggered = True
+                if fut.running() and not fut.done():
+                    timed_out_running.add(fut)
                 timeout_s = timeout_of.get(fut) or (tool_wait_timeout_seconds or 0.0)
                 logger.warning(
                     "Tool '%s' timed out after %.2fs at step %d",
