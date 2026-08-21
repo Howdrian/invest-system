@@ -127,13 +127,13 @@ def _daily_agent_fixture(tmp_path):
         'blockingReasons': [],
     })
     _append_jsonl(run / 'evidence_ledger.jsonl', [
-        {'id': 'fred:DGS10:2026-06-29', 'domain': 'macro', 'fact_type': 'verified_fact', 'value': 'DGS10=4.38'},
-        {'id': 'fred:VIXCLS:2026-06-30', 'domain': 'macro', 'fact_type': 'verified_fact', 'value': 'VIXCLS=16.45'},
-        {'id': 'subject:600519:quote', 'domain': 'price', 'fact_type': 'derived_fact', 'symbol': '600519', 'value': 'quote price=1193'},
-        {'id': 'subject:AAPL:fundamental', 'domain': 'fundamentals', 'fact_type': 'derived_fact', 'symbol': 'AAPL', 'value': 'valuation available'},
-        {'id': 'official:AAPL:sec', 'domain': 'filings_events', 'fact_type': 'verified_fact', 'symbol': 'AAPL', 'value': 'SEC filing'},
-        {'id': 'subject:market:hot_stocks', 'domain': 'news_sentiment', 'fact_type': 'derived_fact', 'value': 'hot stocks available'},
-        {'id': 'subject:portfolio:empty', 'domain': 'portfolio', 'fact_type': 'derived_fact', 'value': 'portfolio empty'},
+        {'id': 'fred:DGS10:2026-06-29', 'domain': 'macro', 'fact_type': 'verified_fact', 'value': 'DGS10=4.38', 'source_url': 'https://fred.example/DGS10', 'as_of': '2026-06-29'},
+        {'id': 'fred:VIXCLS:2026-06-30', 'domain': 'macro', 'fact_type': 'verified_fact', 'value': 'VIXCLS=16.45', 'source_url': 'https://fred.example/VIXCLS', 'as_of': '2026-06-30'},
+        {'id': 'subject:600519:quote', 'domain': 'price', 'fact_type': 'derived_fact', 'symbol': '600519', 'value': 'quote price=1193', 'raw_path': 'subject_evidence.jsonl', 'as_of': date},
+        {'id': 'subject:AAPL:fundamental', 'domain': 'fundamentals', 'fact_type': 'derived_fact', 'symbol': 'AAPL', 'value': 'valuation available', 'raw_path': 'subject_evidence.jsonl', 'as_of': date},
+        {'id': 'official:AAPL:sec', 'domain': 'filings_events', 'fact_type': 'verified_fact', 'symbol': 'AAPL', 'value': 'SEC filing', 'source_url': 'https://sec.example/AAPL', 'as_of': date},
+        {'id': 'subject:market:hot_stocks', 'domain': 'news_sentiment', 'fact_type': 'derived_fact', 'value': 'hot stocks available', 'raw_path': 'subject_evidence.jsonl', 'as_of': date},
+        {'id': 'subject:portfolio:empty', 'domain': 'portfolio', 'fact_type': 'derived_fact', 'value': 'portfolio empty', 'raw_path': 'daily_universe.json', 'as_of': date},
     ])
     _append_jsonl(run / 'provider_runs.jsonl', [{'provider': 'FRED', 'operation': 'macro_context', 'success': True, 'record_count': 2}])
     _write_json(docs / 'official_events' / f'{date}.json', {'evidenceFacts': [{'provider': 'SEC', 'symbol': 'AAPL'}]})
@@ -735,7 +735,7 @@ def test_department_evidence_selection_balances_domains_and_symbols():
             {'id': 'subject:AAPL:quote', 'domain': 'price', 'symbol': 'AAPL', 'fact_type': 'derived_fact', 'provider': 'YfinanceFetcher', 'value': 'AAPL quote'},
             {'id': 'subject:HK00700:quote', 'domain': 'price', 'symbol': 'HK00700', 'fact_type': 'derived_fact', 'provider': 'AkshareFetcher', 'value': 'HK quote'},
             {'id': 'subject:market:stats', 'domain': 'price', 'subject': 'market', 'fact_type': 'derived_fact', 'provider': 'DataFetcherManager', 'value': 'up=100 down=50'},
-            {'id': 'fred:VIXCLS', 'domain': 'macro', 'symbol': 'VIXCLS', 'fact_type': 'verified_fact', 'provider': 'FRED', 'value': 'VIX=16'},
+            {'id': 'fred:VIXCLS', 'domain': 'macro', 'symbol': 'VIXCLS', 'fact_type': 'verified_fact', 'provider': 'FRED', 'value': 'VIX=16', 'source_url': 'https://fred.example/VIXCLS'},
         ]
     )
 
@@ -1128,6 +1128,7 @@ def test_geo_policy_pack_prioritizes_current_geo_discovery_and_keeps_time_labels
                 'provider': 'FRED',
                 'value': 'VIX=15',
                 'as_of': '2026-07-11',
+                'source_url': 'https://fred.example/VIXCLS',
             },
         ]
     )
@@ -1169,6 +1170,7 @@ def test_intel_context_filters_personal_finance_noise_but_keeps_market_news():
             'provider': 'CNINFO',
             'value': '公司公告摘要',
             'as_of': '2026-07-15',
+            'source_url': 'https://cninfo.example/600519',
         },
     ]
 

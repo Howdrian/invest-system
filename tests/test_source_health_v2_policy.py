@@ -217,6 +217,7 @@ def test_governed_review_with_price_and_agent_outputs_is_limited_not_screen_only
             "fact_type": "derived_fact",
             "provider": "FRED",
             "confidence": "medium",
+            "as_of": "2099-01-02",
         },
         {
             "id": "derived:fundamentals:1",
@@ -224,6 +225,7 @@ def test_governed_review_with_price_and_agent_outputs_is_limited_not_screen_only
             "fact_type": "derived_fact",
             "provider": "governed_result",
             "confidence": "medium",
+            "as_of": "2099-01-02",
         },
         {
             "id": "derived:news:1",
@@ -231,6 +233,7 @@ def test_governed_review_with_price_and_agent_outputs_is_limited_not_screen_only
             "fact_type": "derived_fact",
             "provider": "governed_result",
             "confidence": "medium",
+            "as_of": "2099-01-02",
         },
     ]
     facts.extend(
@@ -519,3 +522,66 @@ def test_available_legacy_macro_does_not_keep_degraded_blocker():
     macro = health["domains"]["macro"]
     assert macro["status"] == "available"
     assert "macro_degraded" not in macro.get("blockers", [])
+
+
+def test_stale_subject_price_cannot_become_fresh_or_support_claims():
+    from src.source_health.policy import build_source_health_v2
+
+    stale_id = "subject:AAPL:quote:2026-07-01"
+    health = build_source_health_v2(
+        {},
+        provider_runs=[{
+            "provider": "YfinanceFetcher",
+            "domain": "price",
+            "operation": "quote",
+            "success": True,
+            "record_count": 1,
+            "symbol": "AAPL",
+            "source_scope": "subject_evidence",
+        }],
+        evidence_facts=[{
+            "id": stale_id,
+            "domain": "price",
+            "subject": "AAPL",
+            "fact_type": "derived_fact",
+            "raw_path": "quote.json",
+            "as_of": "2026-07-01",
+            "evidence_scope": "subject_evidence",
+        }],
+        subject_symbols=["AAPL"],
+        reference_date="2026-08-21",
+    )
+
+    price = health["domains"]["price"]
+    assert price["status"] == "partial"
+    assert price["coverage"] == 0.45
+    assert price["freshness"] == "stale"
+    assert price["confidence"] == "low"
+    assert "stale_evidence" in price["blockers"]
+    for claim in health["claimEvidence"]["claims"].values():
+        assert stale_id not in claim["evidenceIds"]
+
+
+def test_current_subject_price_remains_available_with_explicit_run_date():
+    from src.source_health.policy import build_source_health_v2
+
+    current_id = "subject:AAPL:quote:2026-08-21"
+    health = build_source_health_v2(
+        {},
+        evidence_facts=[{
+            "id": current_id,
+            "domain": "price",
+            "subject": "AAPL",
+            "fact_type": "derived_fact",
+            "raw_path": "quote.json",
+            "as_of": "2026-08-21",
+            "evidence_scope": "subject_evidence",
+        }],
+        subject_symbols=["AAPL"],
+        reference_date="2026-08-21",
+    )
+
+    price = health["domains"]["price"]
+    assert price["status"] == "available"
+    assert price["freshness"] == "fresh"
+    assert price["confidence"] == "high"

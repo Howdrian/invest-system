@@ -1758,6 +1758,7 @@ def _apply_semantic_gate_to_memo(
 ) -> None:
     """Validate evidence relevance before a memo reaches downstream agents."""
 
+    reference_date = str(memo.get("run_date") or "")
     raw_claims = [dict(row) for row in memo.get("claim_evidence") or [] if isinstance(row, Mapping)]
     if not raw_claims:
         refs = _string_list(memo.get("evidence_ids"))
@@ -1765,7 +1766,12 @@ def _apply_semantic_gate_to_memo(
             {"claim": claim, "evidence_ids": refs}
             for claim in _string_list(memo.get("key_claims"))
         ]
-    validations = validate_claim_dicts(raw_claims, list(evidence_rows), source_agent=spec.agent)
+    validations = validate_claim_dicts(
+        raw_claims,
+        list(evidence_rows),
+        source_agent=spec.agent,
+        reference_date=reference_date,
+    )
     safe_claims: List[str] = []
     safe_mappings: List[Dict[str, Any]] = []
     validation_rows: List[Dict[str, Any]] = []
@@ -1818,7 +1824,12 @@ def _apply_semantic_gate_to_memo(
             }
             for index, sentence in enumerate(summary_sentences)
         ]
-        summary_results = validate_claim_dicts(summary_claims, list(evidence_rows), source_agent=spec.agent)
+        summary_results = validate_claim_dicts(
+            summary_claims,
+            list(evidence_rows),
+            source_agent=spec.agent,
+            reference_date=reference_date,
+        )
         if summary_results:
             status_order = {
                 ClaimStatus.SUPPORTED: 0,
@@ -1865,6 +1876,7 @@ def _apply_semantic_gate_to_memo(
         evidence_ids=_string_list(memo.get("evidence_ids")),
         evidence_rows=evidence_rows,
         source_agent=spec.agent,
+        reference_date=reference_date,
     )
     warnings.extend(
         reason
@@ -1883,6 +1895,7 @@ def _apply_semantic_gate_to_memo(
         evidence_ids=_string_list(memo.get("evidence_ids")),
         evidence_rows=evidence_rows,
         source_agent=spec.agent,
+        reference_date=reference_date,
     )
     warnings.extend(
         reason
@@ -1897,6 +1910,7 @@ def _apply_semantic_gate_to_memo(
         sanitized_challenges, challenge_validation = _validate_red_team_challenges(
             memo.get("challenges") or [],
             evidence_rows=evidence_rows,
+            reference_date=reference_date,
         )
         memo["challenges"] = sanitized_challenges
         if (
@@ -1925,6 +1939,7 @@ def _apply_semantic_gate_to_memo(
             memo.get("adjudication") or {},
             evidence_ids=_string_list(memo.get("evidence_ids")),
             evidence_rows=evidence_rows,
+            reference_date=reference_date,
         )
         memo["adjudication"] = sanitized_adjudication
 
@@ -2010,6 +2025,7 @@ def _validate_red_team_challenges(
     values: Sequence[Mapping[str, Any]],
     *,
     evidence_rows: Sequence[Mapping[str, Any]],
+    reference_date: str = "",
 ) -> tuple[List[Dict[str, Any]], Dict[str, Any]]:
     challenge_rows = [
         row
@@ -2025,7 +2041,12 @@ def _validate_red_team_challenges(
         }
         for index, row in enumerate(challenge_rows)
     ]
-    results = validate_claim_dicts(claims, list(evidence_rows), source_agent="RedTeamAgent")
+    results = validate_claim_dicts(
+        claims,
+        list(evidence_rows),
+        source_agent="RedTeamAgent",
+        reference_date=reference_date,
+    )
     sanitized: List[Dict[str, Any]] = []
     audit_rows: List[Dict[str, Any]] = []
     for raw, result in zip(challenge_rows, results):
@@ -2062,6 +2083,7 @@ def _validate_cio_adjudication(
     *,
     evidence_ids: Sequence[str],
     evidence_rows: Sequence[Mapping[str, Any]],
+    reference_date: str = "",
 ) -> tuple[Dict[str, Any], Dict[str, Any]]:
     field_contracts = {
         "sharedFacts": (value.get("sharedFacts") or [], "fact"),
@@ -2081,6 +2103,7 @@ def _validate_cio_adjudication(
             evidence_ids=evidence_ids,
             evidence_rows=evidence_rows,
             source_agent="CIOAgent",
+            reference_date=reference_date,
         )
         if field == "sharedFacts":
             supported = [
@@ -2132,6 +2155,7 @@ def _validate_reader_claims(
     evidence_ids: Sequence[str],
     evidence_rows: Sequence[Mapping[str, Any]],
     source_agent: str,
+    reference_date: str = "",
 ) -> tuple[List[Dict[str, Any]], List[str]]:
     claims = [
         {
@@ -2143,7 +2167,12 @@ def _validate_reader_claims(
         for index, text in enumerate(texts)
         if str(text).strip()
     ]
-    results = validate_claim_dicts(claims, list(evidence_rows), source_agent=source_agent)
+    results = validate_claim_dicts(
+        claims,
+        list(evidence_rows),
+        source_agent=source_agent,
+        reference_date=reference_date,
+    )
     rows: List[Dict[str, Any]] = []
     safe: List[str] = []
     for claim, result in zip(claims, results):
@@ -2554,6 +2583,18 @@ def _evidence_for_spec(rows: Sequence[Mapping[str, Any]], spec: DepartmentSpec, 
     seen_ids: Set[str] = set()
     for row in rows:
         if not isinstance(row, Mapping):
+            continue
+        if str(row.get("evidence_scope") or row.get("evidenceScope") or "subject_evidence") != "subject_evidence":
+            continue
+        fact_type = str(row.get("fact_type") or row.get("factType") or "").lower()
+        if fact_type == "missing":
+            continue
+        if fact_type == "verified_fact" and not (
+            row.get("source_url")
+            or row.get("sourceUrl")
+            or row.get("raw_path")
+            or row.get("rawPath")
+        ):
             continue
         domain = str(row.get("domain") or "")
         if domains and domain not in domains:

@@ -68,6 +68,7 @@ def build_source_health_v2(
     evidence_facts: Optional[Iterable[Mapping[str, Any]]] = None,
     agent_origin_counts: Optional[Mapping[str, int]] = None,
     subject_symbols: Optional[Iterable[Any]] = None,
+    reference_date: Optional[Any] = None,
 ) -> Dict[str, Any]:
     """Build additive product data-confidence payload.
 
@@ -79,6 +80,7 @@ def build_source_health_v2(
     facts = [normalize_evidence_fact(row) for row in (evidence_facts or []) if isinstance(row, Mapping)]
     counts = dict(agent_origin_counts or {})
     subjects = _normalize_subjects(subject_symbols or [])
+    freshness_reference = _parse_date(reference_date) or _latest_evidence_date(facts)
 
     provider_matrix = [_provider_matrix_row(row) for row in runs]
     subject_provider_matrix = [
@@ -100,13 +102,24 @@ def build_source_health_v2(
     domains = _base_domains()
     _apply_legacy_health(domains, legacy)
     _apply_provider_runs(domains, subject_provider_matrix)
-    _apply_evidence_facts(domains, subject_facts)
-    _apply_subject_coverage(domains, subject_provider_matrix, subject_facts, subjects)
+    _apply_evidence_facts(domains, subject_facts, freshness_reference)
+    _apply_subject_coverage(
+        domains,
+        subject_provider_matrix,
+        subject_facts,
+        subjects,
+        freshness_reference,
+    )
     _apply_agent_counts(domains, counts)
 
     evidence_stats = _evidence_stats(subject_facts, domains)
     overall_score = _overall_score(domains)
-    claim_evidence = _claim_evidence(subject_facts, evidence_stats, domains)
+    claim_evidence = _claim_evidence(
+        subject_facts,
+        evidence_stats,
+        domains,
+        freshness_reference,
+    )
     overall_mode = _overall_mode(domains, overall_score, legacy, claim_evidence, evidence_stats)
     claim_policy = _claim_policy(overall_mode, claim_evidence, evidence_stats)
 
@@ -199,15 +212,19 @@ def _set_domain(
         # Keep stronger observed status unless this is a hard blocker.
         if status != "blocked":
             return
+    was_unobserved = (
+        str(row.get("status") or "") == "missing"
+        and list(row.get("blockers") or []) == ["not_observed"]
+    )
     row["status"] = status
     row["coverage"] = max(float(row.get("coverage") or 0.0), max(0.0, min(1.0, float(coverage))))
     row["freshness"] = freshness
     row["confidence"] = confidence
-    blockers = [] if status == "available" else list(row.get("blockers") or [])
+    blockers = [] if status == "available" or was_unobserved else list(row.get("blockers") or [])
     if blocker and status != "available" and blocker not in blockers:
         blockers.append(blocker)
     row["blockers"] = blockers
-    hints = [] if status == "available" else list(row.get("repairHints") or [])
+    hints = [] if status == "available" or was_unobserved else list(row.get("repairHints") or [])
     if repair_hint and repair_hint not in hints:
         hints.append(repair_hint)
     row["repairHints"] = hints
@@ -261,8 +278,11 @@ def _apply_provider_runs(domains: Dict[str, Dict[str, Any]], matrix: List[Dict[s
             _set_domain(domains, domain, status="degraded", coverage=0.2, blocker=status, repair_hint=_repair_hint_for_provider(row))
 
 
-def _apply_evidence_facts(domains: Dict[str, Dict[str, Any]], facts: List[Dict[str, Any]]) -> None:
-    reference_date = _latest_evidence_date(facts)
+def _apply_evidence_facts(
+    domains: Dict[str, Dict[str, Any]],
+    facts: List[Dict[str, Any]],
+    reference_date: date,
+) -> None:
     grouped: Dict[str, List[Dict[str, Any]]] = {domain: [] for domain in domains}
     for fact in facts:
         domain = str(fact.get("domain") or "")
@@ -329,7 +349,24 @@ def _latest_evidence_date(facts: Iterable[Mapping[str, Any]]) -> date:
 
 def _fact_is_fresh(fact: Mapping[str, Any], reference_date: date) -> bool:
     domain = str(fact.get("domain") or "")
-    if domain == "news_sentiment":
+    identity = f"{fact.get('id') or ''} {fact.get('metric') or ''}".lower()
+    historical = (
+        "history_comparison" in identity
+        or "historical" in identity
+        or bool(fact.get("period_start") or fact.get("periodStart") or fact.get("period_end") or fact.get("periodEnd"))
+    )
+    if historical:
+        observed_value = (
+            fact.get("fetched_at")
+            or fact.get("fetchedAt")
+            or fact.get("published_at")
+            or fact.get("publishedAt")
+            or fact.get("event_time")
+            or fact.get("eventTime")
+            or fact.get("as_of")
+            or fact.get("asOf")
+        )
+    elif domain == "news_sentiment":
         observed_value = (
             fact.get("published_at")
             or fact.get("publishedAt")
@@ -345,7 +382,9 @@ def _fact_is_fresh(fact: Mapping[str, Any], reference_date: date) -> bool:
     observed = _parse_date(observed_value)
     if observed is None:
         return False
-    age = max(0, (reference_date - observed).days)
+    if observed > reference_date:
+        return False
+    age = (reference_date - observed).days
     metric = str(fact.get("metric") or fact.get("symbol") or fact.get("subject") or "").upper()
     if domain == "price":
         limit = 5
@@ -379,6 +418,7 @@ def _apply_subject_coverage(
     provider_rows: Iterable[Mapping[str, Any]],
     facts: Iterable[Mapping[str, Any]],
     subjects: List[str],
+    reference_date: date,
 ) -> None:
     if not subjects:
         return
@@ -406,6 +446,8 @@ def _apply_subject_coverage(
             continue
         if fact_type == "verified_fact" and not has_fact_source(fact):
             continue
+        if not _fact_is_fresh(fact, reference_date):
+            continue
         for symbol in _symbols_from_row(fact):
             key = symbol.upper()
             if key in subject_by_key:
@@ -426,8 +468,14 @@ def _apply_subject_coverage(
             coverage = len(covered) / len(subjects)
         row = domains[domain]
         complete = not missing and not shallow
-        blockers: List[str] = []
-        hints: List[str] = []
+        stale_domain = str(row.get("freshness") or "") == "stale"
+        if stale_domain:
+            # Stale rows remain diagnostically visible, but a successful
+            # provider call must not inflate stale subject data to full
+            # decision coverage.
+            coverage = min(max(coverage, float(row.get("coverage") or 0.0)), 0.45)
+        blockers: List[str] = list(row.get("blockers") or []) if stale_domain else []
+        hints: List[str] = list(row.get("repairHints") or []) if stale_domain else []
         if missing:
             blockers.append("subject_coverage_incomplete")
             hints.append(f"补齐 {domain} 缺失标的: {', '.join(missing)}")
@@ -436,10 +484,14 @@ def _apply_subject_coverage(
             hints.append(f"补齐结构化财务/增长事实: {', '.join(shallow)}")
         row.update(
             {
-                "status": "available" if complete else ("partial" if covered else "missing"),
+                "status": (
+                    "available"
+                    if complete and not stale_domain
+                    else ("partial" if covered or stale_domain else "missing")
+                ),
                 "coverage": round(coverage, 4),
-                "freshness": "fresh" if covered else "missing",
-                "confidence": "high" if complete else ("medium" if covered else "low"),
+                "freshness": "stale" if stale_domain else ("fresh" if covered else "missing"),
+                "confidence": "low" if stale_domain else ("high" if complete else ("medium" if covered else "low")),
                 "blockers": blockers,
                 "repairHints": hints,
                 "subjectCoverageRequired": True,
@@ -705,6 +757,7 @@ def _claim_evidence(
     facts: List[Dict[str, Any]],
     evidence_stats: Mapping[str, Any],
     domains_payload: Mapping[str, Mapping[str, Any]],
+    reference_date: date,
 ) -> Dict[str, Any]:
     support_by_domain: Dict[str, List[str]] = {domain: [] for domain in DOMAINS}
     for fact in facts:
@@ -712,6 +765,8 @@ def _claim_evidence(
             continue
         fact_type = str(fact.get("fact_type") or fact.get("factType") or "").lower()
         if fact_type not in {"verified_fact", "derived_fact"}:
+            continue
+        if not _fact_is_fresh(fact, reference_date):
             continue
         domain = str(fact.get("domain") or "")
         if domain not in support_by_domain:

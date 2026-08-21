@@ -41,6 +41,7 @@
 3. 因果、机制和未来路径没有直接证据时必须条件化。
 4. 原系统 LLM 市场/个股分析只作观点输入；原系统确定性数据和计算才可成为 derived fact。
 5. 单个 optional provider 失败不拖垮日报；失败原因必须进入 Diagnostics。
+6. 日报事实按 `runDate` 校验时点；source smoke、缺失事实、无来源 verified fact、过期事实和未来穿越事实均不得支撑 Agent/CIO 结论。
 
 ## 当前默认覆盖
 

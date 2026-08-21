@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [修复] Reports 证据门拒绝 source-smoke、缺失、无来源、过期和未来穿越证据；SourceHealth 按日报日期计算新鲜度，过期数据不再获得完整覆盖或支撑 Agent/CIO 结论。
 - [修复] `main.py`、`server.py`、`webui.py` 与 API middleware 统一公网 bind guard；非 loopback 必须启用管理员认证并预先初始化密码，运行时关闭认证在公网监听下被拒绝。
 - [修复] 关闭管理员认证即使已有有效 session 也必须重新输入当前密码；通用 System Config 不再允许绕过专用认证入口修改只读开关。
 - [修复] PR Review 改为手动、可信默认分支脚本 + GitHub API 读取 diff，不再由 `pull_request_target` 检出并执行 fork 代码或向其暴露 secrets。

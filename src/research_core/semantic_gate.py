@@ -9,6 +9,7 @@ identifier exists.
 from __future__ import annotations
 
 import re
+from datetime import date
 from typing import Dict, Iterable, List, Mapping, Sequence, Tuple
 
 from .contracts import (
@@ -219,6 +220,14 @@ _MEASUREMENT_ALIASES = {
     "net_profit_yoy": "net_profit_yoy_pct",
 }
 
+_EVIDENCE_MAX_AGE_DAYS = {
+    "price": 5,
+    "news_sentiment": 10,
+    "filings_events": 90,
+    "fundamentals": 190,
+    "portfolio": 30,
+}
+
 
 def _has_valuation_benchmark(rows: Sequence[EvidenceFact]) -> bool:
     for row in rows:
@@ -246,11 +255,17 @@ _DOMAIN_PATTERNS = (
 )
 
 
-def validate_claim(claim: AtomicClaim, evidence: Iterable[EvidenceFact]) -> ClaimValidation:
+def validate_claim(
+    claim: AtomicClaim,
+    evidence: Iterable[EvidenceFact],
+    *,
+    reference_date: date | str | None = None,
+) -> ClaimValidation:
     by_id = {row.id: row for row in evidence}
     accepted: List[EvidenceFact] = []
     rejected_ids: List[str] = []
     reasons: List[str] = []
+    claim_date = _parse_iso_date(reference_date) or _parse_iso_date(claim.time_scope)
 
     for evidence_id in claim.evidence_ids:
         if str(evidence_id).startswith("memo:"):
@@ -259,6 +274,11 @@ def validate_claim(claim: AtomicClaim, evidence: Iterable[EvidenceFact]) -> Clai
         row = by_id.get(str(evidence_id))
         if row is None:
             rejected_ids.append(str(evidence_id))
+            continue
+        rejection = _evidence_trust_rejection(row, claim_date)
+        if rejection:
+            rejected_ids.append(row.id)
+            reasons.append(rejection)
             continue
         if claim.subject and row.subject and not _subject_matches(claim.subject, row):
             rejected_ids.append(row.id)
@@ -802,6 +822,7 @@ def validate_claim_dicts(
     evidence_rows: Sequence[Mapping[str, object]],
     *,
     source_agent: str = "",
+    reference_date: date | str | None = None,
 ) -> List[ClaimValidation]:
     pool = evidence_pool_from_dicts(evidence_rows)
     out: List[ClaimValidation] = []
@@ -809,7 +830,7 @@ def validate_claim_dicts(
         text = str(row.get("claim") or row.get("text") or "").strip()
         if not text:
             continue
-        out.append(validate_claim(AtomicClaim(
+        claim = AtomicClaim(
             id=str(row.get("claimId") or row.get("claim_id") or f"{source_agent or 'claim'}:{index + 1}"),
             text=text,
             claim_type=str(row.get("claimType") or row.get("claim_type") or _infer_claim_type(text)),
@@ -819,8 +840,72 @@ def validate_claim_dicts(
             time_scope=str(row.get("timeScope") or row.get("time_scope") or ""),
             evidence_ids=tuple(str(item) for item in row.get("evidence_ids") or row.get("evidenceIds") or []),
             source_agent=source_agent,
-        ), pool.facts))
+        )
+        out.append(validate_claim(
+            claim,
+            pool.facts,
+            reference_date=reference_date,
+        ))
     return out
+
+
+def _evidence_trust_rejection(row: EvidenceFact, reference_date: date | None) -> str:
+    """Return the first trust-boundary rejection for a cited evidence row."""
+
+    if str(row.evidence_scope or "subject_evidence") != "subject_evidence":
+        return "non_subject_evidence_scope"
+    fact_type = row.normalized_type()
+    if fact_type == EvidenceType.MISSING:
+        return "missing_evidence_cannot_support_claim"
+    if fact_type == EvidenceType.VERIFIED_FACT and not (row.source_url or row.raw_path):
+        return "verified_fact_missing_source"
+    if reference_date is None:
+        return ""
+
+    observed = _evidence_observed_date(row)
+    if observed is None:
+        return "evidence_date_missing"
+    if observed > reference_date:
+        return "evidence_after_claim_time"
+    max_age = _evidence_max_age_days(row)
+    if (reference_date - observed).days > max_age:
+        return "stale_evidence"
+    return ""
+
+
+def _evidence_observed_date(row: EvidenceFact) -> date | None:
+    identity = f"{row.id} {row.metric}".lower()
+    historical = (
+        "history_comparison" in identity
+        or "historical" in identity
+        or bool(row.period_start or row.period_end)
+    )
+    values = (
+        (row.fetched_at, row.published_at, row.event_time, row.as_of)
+        if historical
+        else (row.event_time, row.published_at, row.as_of, row.fetched_at)
+    )
+    return next((parsed for value in values if (parsed := _parse_iso_date(value))), None)
+
+
+def _evidence_max_age_days(row: EvidenceFact) -> int:
+    domain = str(row.domain or "")
+    metric = str(row.metric or row.subject or "").upper()
+    if domain == "macro":
+        if metric == "GDP":
+            return 150
+        if metric in {"UNRATE", "CPIAUCSL", "SAHMREALTIME"}:
+            return 50
+        return 14
+    return _EVIDENCE_MAX_AGE_DAYS.get(domain, 30)
+
+
+def _parse_iso_date(value: object) -> date | None:
+    text = str(value or "").strip()[:10]
+    try:
+        return date.fromisoformat(text)
+    except ValueError:
+        return None
 
 
 def _result(

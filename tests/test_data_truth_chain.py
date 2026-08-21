@@ -103,6 +103,7 @@ def test_price_and_fundamentals_coverage_uses_daily_subjects(tmp_path):
             "fact_type": "derived_fact",
             "evidence_scope": "subject_evidence",
             "raw_path": f"run_status/{run_date}/subject_evidence.jsonl",
+            "as_of": run_date,
         }],
     )
     write_daily_source_health_ledgers(docs, run_date)
@@ -138,6 +139,7 @@ def test_valuation_only_fundamentals_do_not_count_as_full_depth():
             "fact_type": "derived_fact",
             "evidence_scope": "subject_evidence",
             "raw_path": "fixture.jsonl",
+            "as_of": "2099-01-02",
         })
 
     health = build_source_health_v2(

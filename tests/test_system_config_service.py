@@ -32,6 +32,7 @@ class SystemConfigServiceTestCase(unittest.TestCase):
         "AGENT_LITELLM_MODEL",
         "VISION_MODEL",
         "LLM_CHANNELS",
+        "SEARXNG_PUBLIC_INSTANCES_ENABLED",
     )
 
     def setUp(self) -> None:

@@ -545,6 +545,8 @@ def build_daily_report_artifact(docs_dir: str | Path, run_date: str) -> Dict[str
         provider_runs=_load_daily_provider_runs(docs_path, run_date),
         evidence_facts=evidence_facts,
         agent_origin_counts=agent_counts,
+        subject_symbols=universe_subjects,
+        reference_date=run_date,
     )
     department_reports = _department_reports(docs_path, run_date)
     _apply_daily_reader_scope(department_reports, universe)
@@ -1628,6 +1630,7 @@ def _build_reader_v3(
         one_line,
         market_matrix=market_matrix,
         evidence_rows=evidence_facts or evidence_items,
+        reference_date=run_date,
     )
     # The upstream CIO memo can fail semantic review while the deterministic
     # Reader headline, rebuilt from accepted market evidence, still closes its
@@ -1718,6 +1721,7 @@ def _reader_headline_audit(
     *,
     market_matrix: List[Dict[str, Any]],
     evidence_rows: List[Dict[str, Any]],
+    reference_date: str = "",
 ) -> Dict[str, Any]:
     """Validate the final public headline, not merely the upstream CIO draft."""
 
@@ -1751,7 +1755,7 @@ def _reader_headline_audit(
         "claimType": "scenario",
         "domain": "price",
         "evidenceIds": evidence_ids,
-    }], evidence_rows, source_agent="ReaderEditorialPolicy")
+    }], evidence_rows, source_agent="ReaderEditorialPolicy", reference_date=reference_date)
     if not validations:
         return {"headlineSafe": False, "displayable": False, "evidenceSupported": False, "status": "rejected"}
     validation = validations[0]

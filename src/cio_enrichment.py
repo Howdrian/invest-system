@@ -446,6 +446,7 @@ def _rebuild_source_health(docs: Path, run_date: str, provider_rows: List[Dict[s
         evidence_facts=evidence_rows,
         agent_origin_counts=_agent_origin_counts(docs, run_date),
         subject_symbols=load_daily_universe(docs, run_date).get("subjectSymbols") or [],
+        reference_date=run_date,
     )
     (docs / "run_status" / run_date / "source_health_v2.json").write_text(
         json.dumps(source_health, ensure_ascii=False, indent=2, sort_keys=True) + "\n",

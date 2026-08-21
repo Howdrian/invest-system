@@ -110,6 +110,7 @@ def write_daily_source_health_ledgers(
         evidence_facts=evidence_rows,
         agent_origin_counts=_agent_origin_counts(docs, run_date),
         subject_symbols=_symbols_from_universe(universe),
+        reference_date=run_date,
     )
     source_health_path.write_text(json.dumps(source_health_v2, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 

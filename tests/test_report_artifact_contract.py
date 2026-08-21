@@ -610,6 +610,7 @@ def test_daily_report_artifact_writes_source_health_and_agent_origins(tmp_path):
                 "symbol": "300308",
                 "value": "official filing",
                 "source_url": "https://www.sec.gov/Archives/example",
+                "as_of": date,
             }
         ],
     )
@@ -1757,9 +1758,9 @@ def test_reader_final_headline_is_not_overwritten_by_rejected_raw_cio():
     from src.report_artifact import _build_reader_v3
 
     evidence = [
-        {"id": "market:cn", "metric": "main_indices", "market": "cn", "provider": "test", "fact_type": "derived_fact", "value": "main indices", "measurements": {"index_sh000001_change_pct": -3.05}},
-        {"id": "market:hk", "metric": "main_indices", "market": "hk", "provider": "test", "fact_type": "derived_fact", "value": "main indices", "measurements": {"index_hsi_change_pct": 1.33}},
-        {"id": "market:us", "metric": "main_indices", "market": "us", "provider": "test", "fact_type": "derived_fact", "value": "main indices", "measurements": {"index_spx_change_pct": -0.61}},
+        {"id": "market:cn", "metric": "main_indices", "market": "cn", "provider": "test", "fact_type": "derived_fact", "value": "main indices", "measurements": {"index_sh000001_change_pct": -3.05}, "raw_path": "market.json", "as_of": "2099-01-02"},
+        {"id": "market:hk", "metric": "main_indices", "market": "hk", "provider": "test", "fact_type": "derived_fact", "value": "main indices", "measurements": {"index_hsi_change_pct": 1.33}, "raw_path": "market.json", "as_of": "2099-01-02"},
+        {"id": "market:us", "metric": "main_indices", "market": "us", "provider": "test", "fact_type": "derived_fact", "value": "main indices", "measurements": {"index_spx_change_pct": -0.61}, "raw_path": "market.json", "as_of": "2099-01-02"},
     ]
     reader = _build_reader_v3(
         run_date="2099-01-02",

@@ -1440,8 +1440,8 @@ def test_positive_curve_snapshot_does_not_prove_inversion_has_ended():
             "evidence_ids": ["fred:DGS10", "fred:DGS2"],
         }],
         [
-            {"id": "fred:DGS10", "fact_type": "verified_fact", "domain": "macro", "subject": "macro", "value": "DGS10=4.55"},
-            {"id": "fred:DGS2", "fact_type": "verified_fact", "domain": "macro", "subject": "macro", "value": "DGS2=4.13"},
+            {"id": "fred:DGS10", "fact_type": "verified_fact", "domain": "macro", "subject": "macro", "value": "DGS10=4.55", "source_url": "https://fred.example/DGS10"},
+            {"id": "fred:DGS2", "fact_type": "verified_fact", "domain": "macro", "subject": "macro", "value": "DGS2=4.13", "source_url": "https://fred.example/DGS2"},
         ],
     )[0]
 
@@ -1487,6 +1487,91 @@ def test_market_count_ratio_with_slash_is_rejected_without_breadth_evidence():
 
     assert result.status == ClaimStatus.REJECTED
     assert "market_stat_not_supported_by_cited_evidence" in result.reasons
+
+
+def _dated_price_claim(evidence: dict, *, reference_date: str = "2026-08-21"):
+    return validate_claim_dicts(
+        [{
+            "claim": "AAPL 当前价格保持在可观察区间。",
+            "claimType": "fact",
+            "subject": "AAPL",
+            "domain": "price",
+            "evidence_ids": [evidence["id"]],
+        }],
+        [evidence],
+        reference_date=reference_date,
+    )[0]
+
+
+def test_semantic_gate_rejects_source_smoke_as_claim_support():
+    result = _dated_price_claim({
+        "id": "smoke:AAPL:quote",
+        "fact_type": "derived_fact",
+        "domain": "price",
+        "subject": "AAPL",
+        "value": "price=100",
+        "raw_path": "smoke.json",
+        "as_of": "2026-08-21",
+        "evidence_scope": "source_smoke",
+    })
+
+    assert result.status == ClaimStatus.REJECTED
+    assert "non_subject_evidence_scope" in result.reasons
+
+
+def test_semantic_gate_rejects_missing_fact_as_claim_support():
+    result = _dated_price_claim({
+        "id": "missing:AAPL:quote",
+        "fact_type": "missing",
+        "domain": "price",
+        "subject": "AAPL",
+        "value": "quote unavailable",
+        "as_of": "2026-08-21",
+    })
+
+    assert result.status == ClaimStatus.REJECTED
+    assert "missing_evidence_cannot_support_claim" in result.reasons
+
+
+def test_semantic_gate_rejects_stale_and_lookahead_price_evidence():
+    stale = _dated_price_claim({
+        "id": "subject:AAPL:quote:stale",
+        "fact_type": "derived_fact",
+        "domain": "price",
+        "subject": "AAPL",
+        "value": "price=100",
+        "raw_path": "quote.json",
+        "as_of": "2026-08-01",
+    })
+    future = _dated_price_claim({
+        "id": "subject:AAPL:quote:future",
+        "fact_type": "derived_fact",
+        "domain": "price",
+        "subject": "AAPL",
+        "value": "price=100",
+        "raw_path": "quote.json",
+        "as_of": "2026-08-22",
+    })
+
+    assert stale.status == ClaimStatus.REJECTED
+    assert "stale_evidence" in stale.reasons
+    assert future.status == ClaimStatus.REJECTED
+    assert "evidence_after_claim_time" in future.reasons
+
+
+def test_semantic_gate_accepts_current_subject_evidence():
+    result = _dated_price_claim({
+        "id": "subject:AAPL:quote:current",
+        "fact_type": "derived_fact",
+        "domain": "price",
+        "subject": "AAPL",
+        "value": "price=100",
+        "raw_path": "quote.json",
+        "as_of": "2026-08-21",
+    })
+
+    assert result.status == ClaimStatus.SUPPORTED
+    assert result.accepted_evidence_ids == ("subject:AAPL:quote:current",)
 
 
 def test_single_period_growth_does_not_prove_slowdown():
