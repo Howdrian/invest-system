@@ -17,11 +17,35 @@ from data_provider.fundamental_adapter import (
     AkshareFundamentalAdapter,
     _build_dividend_payload,
     _extract_latest_row,
+    _parse_financial_abstract_wide,
     _parse_dividend_plan_to_per_share,
 )
 
 
 class TestFundamentalAdapter(unittest.TestCase):
+    def test_core_valuation_uses_generic_dated_pe_pb_series(self) -> None:
+        adapter = AkshareFundamentalAdapter()
+        dates = pd.date_range("2026-01-01", periods=30, freq="D")
+        pe = pd.DataFrame({"date": dates, "value": [10.0 + index for index in range(30)]})
+        pb = pd.DataFrame({"日期": dates, "市净率": [1.0 + index / 10 for index in range(30)]})
+        with patch.object(
+            adapter,
+            "_call_df_candidates",
+            side_effect=[
+                (pe, "stock_zh_valuation_baidu", []),
+                (pb, "stock_zh_valuation_baidu", []),
+            ],
+        ):
+            result = adapter.get_core_valuation("600519")
+
+        self.assertEqual(result["status"], "partial")
+        self.assertEqual(result["valuation"]["trailing_pe"], 39.0)
+        self.assertAlmostEqual(result["valuation"]["price_to_book"], 3.9)
+        self.assertEqual(result["valuation"]["pe_history_sample_count"], 30)
+        self.assertEqual(result["valuation"]["pe_history_percentile"], 100.0)
+        self.assertEqual(result["valuation"]["valuation_percentile_eligible"], 1.0)
+        self.assertEqual(result["valuation"]["as_of"], "2026-01-30")
+
     def test_parse_dividend_plan_to_per_share_supports_cn_patterns(self) -> None:
         self.assertAlmostEqual(_parse_dividend_plan_to_per_share("10派3元(含税)"), 0.3, places=6)
         self.assertAlmostEqual(_parse_dividend_plan_to_per_share("每10股派发2.5元"), 0.25, places=6)
@@ -127,6 +151,27 @@ class TestFundamentalAdapter(unittest.TestCase):
         self.assertEqual(len(events), 2)  # duplicate + future day filtered
         self.assertEqual(dividend_payload.get("ttm_event_count"), 1)
         self.assertAlmostEqual(dividend_payload.get("ttm_cash_dividend_per_share"), 0.3, places=6)
+
+    def test_financial_abstract_wide_computes_same_period_growth(self) -> None:
+        df = pd.DataFrame(
+            {
+                "选项": ["常用指标", "常用指标", "现金流"],
+                "指标": ["营业总收入", "归母净利润", "经营活动产生的现金流量净额"],
+                "20260331": [35277000000, 14523000000, 8721000000],
+                "20250331": [33709000000, 14096000000, 7810000000],
+            }
+        )
+
+        parsed = _parse_financial_abstract_wide(df)
+
+        self.assertAlmostEqual(parsed["growth"]["revenue_yoy"], 4.6516, places=4)
+        self.assertAlmostEqual(parsed["growth"]["net_profit_yoy"], 3.0292, places=4)
+        self.assertEqual(parsed["financial_report"]["report_date"], "2026-03-31")
+        self.assertEqual(parsed["financial_report"]["comparison_period"], "2025-03-31")
+        history = parsed["financial_history"]
+        self.assertEqual([row["report_date"] for row in history], ["2026-03-31", "2025-03-31"])
+        self.assertEqual(history[0]["revenue"], 35277000000)
+        self.assertEqual(history[1]["net_profit_parent"], 14096000000)
 
     def test_build_dividend_payload_returns_empty_when_code_not_matched(self) -> None:
         now = datetime.now().strftime("%Y-%m-%d")

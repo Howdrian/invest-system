@@ -120,7 +120,7 @@ def _build_regime(macro: Dict[str, Any]) -> Dict[str, Any]:
     fmp = components.get("fmp") if isinstance(components.get("fmp"), dict) else {}
     data = fmp.get("data") if isinstance(fmp.get("data"), list) else []
     price_map = {str(row.get("symbol") or row.get("name") or "").upper(): row for row in data if isinstance(row, dict)}
-    six_factors = {
+    market_proxy_factors = {
         "market_concentration": _factor_from_index(price_map, "^GSPC"),
         "credit_conditions": _factor_from_pair(price_map, "HYG", "LQD", "high_yield_vs_ig_credit_proxy"),
         "size_factor": _factor_from_pair(price_map, "IWM", "SPY", "small_vs_large_cap_proxy"),
@@ -128,16 +128,41 @@ def _build_regime(macro: Dict[str, Any]) -> Dict[str, Any]:
         "sector_rotation": _factor_from_pair(price_map, "XLY", "XLP", "cyclical_vs_defensive_proxy"),
         "volatility": _factor_from_index(price_map, "^VIX"),
     }
-    missing = [k for k, v in six_factors.items() if v.get("status") == "missing"]
+
+    fred = components.get("fred") if isinstance(components.get("fred"), dict) else {}
+    fred_by_factor = _fred_by_factor(fred)
+    official_macro_factors = {
+        "growth": _factor_from_fred(fred_by_factor, "growth", "增长"),
+        "inflation": _factor_from_fred(fred_by_factor, "inflation", "通胀"),
+        "liquidity_rates": _factor_from_fred(fred_by_factor, "liquidity_rates", "利率与流动性"),
+        "credit": _factor_from_fred(fred_by_factor, "credit", "信用条件"),
+        "risk_appetite": _factor_from_fred(fred_by_factor, "risk_appetite", "风险偏好"),
+        "energy_geo": _factor_from_fred(fred_by_factor, "energy_geo", "能源与地缘"),
+    }
+
+    official_missing = [k for k, v in official_macro_factors.items() if v.get("status") == "missing"]
+    proxy_missing = [k for k, v in market_proxy_factors.items() if v.get("status") == "missing"]
+    if len(official_missing) < len(proxy_missing):
+        factor_set = "official_macro_factors"
+        six_factors = official_macro_factors
+        missing = official_missing
+        boundary = "FRED 官方六类宏观因子优先；FMP/ETF 代理因子仅作可选增强。"
+    else:
+        factor_set = "market_proxy_six_factors"
+        six_factors = market_proxy_factors
+        missing = proxy_missing
+        boundary = "FMP/ETF 代理因子可用时展示；缺项不代表 FRED 官方宏观缺失。"
+
     return {
         "risk_state": risk_state,
         "confidence": confidence,
         "reason": reason,
         "classification": _classification(risk_state),
+        "factor_set": factor_set,
         "six_factor_status": "DEGRADED" if missing else "REFRESHED",
         "factors": six_factors,
         "missing_factors": missing,
-        "boundary": "六因子缺项时只作为宏观降级判断，不冒充满血 Regime。",
+        "boundary": boundary,
     }
 
 
@@ -177,6 +202,20 @@ def _factor_from_pair(price_map: Dict[str, Dict[str, Any]], numerator: str, deno
     }
 
 
+def _factor_from_fred(fred_by_factor: Dict[str, List[Dict[str, Any]]], factor: str, label: str) -> Dict[str, Any]:
+    rows = fred_by_factor.get(factor) or []
+    if not rows:
+        return {"status": "missing", "note": f"FRED {factor} missing"}
+    evidence = _fred_evidence(rows)
+    return {
+        "status": "available",
+        "source": "FRED",
+        "label": label,
+        "series": rows,
+        "evidence": evidence,
+    }
+
+
 def _to_float(value: Any) -> Optional[float]:
     try:
         return float(value)
@@ -198,26 +237,38 @@ def _build_dimensions(macro: Dict[str, Any], heat: Dict[str, Any]) -> Dict[str, 
     components = macro.get("components") if isinstance(macro.get("components"), dict) else {}
     fmp = components.get("fmp") if isinstance(components.get("fmp"), dict) else {}
     official = components.get("official_calendar") if isinstance(components.get("official_calendar"), dict) else {}
+    fred = components.get("fred") if isinstance(components.get("fred"), dict) else {}
+    fred_by_factor = _fred_by_factor(fred)
+    china_public = components.get("china_public") if isinstance(components.get("china_public"), dict) else {}
+    china_by_factor = _fred_by_factor(china_public)
+    growth_evidence = _join_evidence(
+        _fred_evidence(fred_by_factor.get("growth")),
+        _public_macro_evidence(china_by_factor.get("growth")),
+    )
+    inflation_evidence = _join_evidence(
+        _fred_evidence(fred_by_factor.get("inflation")),
+        _public_macro_evidence(china_by_factor.get("inflation")),
+    )
     return {
         "growth": {
-            "status": "degraded",
-            "signal": "unknown",
-            "evidence": "GDP/PMI/employment official extensions not yet fully wired in invest-system.",
+            "status": "available_limited" if growth_evidence else "degraded",
+            "signal": "official_and_public_series" if growth_evidence else "unknown",
+            "evidence": growth_evidence or "缺少可追源的增长和就业序列。",
         },
         "inflation": {
-            "status": "degraded",
-            "signal": "unknown",
-            "evidence": "CPI/PCE/EIA/FRED extension points pending; use original 投研 source as migration reference.",
+            "status": "available_limited" if inflation_evidence else "degraded",
+            "signal": "official_and_public_series" if inflation_evidence else "unknown",
+            "evidence": inflation_evidence or "缺少可追源的通胀序列。",
         },
         "rates_liquidity": {
-            "status": "degraded" if not official else "available_limited",
+            "status": "available_limited" if fred_by_factor.get("liquidity_rates") or official else "degraded",
             "signal": "neutral_or_unknown",
-            "evidence": official.get("note") or "Treasury/Fed/BLS details pending.",
+            "evidence": _fred_evidence(fred_by_factor.get("liquidity_rates")) or official.get("note") or "Treasury/Fed/BLS details pending.",
         },
         "energy_commodities": {
-            "status": "degraded",
+            "status": "available_limited" if fred_by_factor.get("energy_geo") else "degraded",
             "signal": "watch",
-            "evidence": "WTI/EIA/FRED not fully wired; Polymarket energy scenarios can only be optional hints.",
+            "evidence": _fred_evidence(fred_by_factor.get("energy_geo")) or "WTI/EIA/FRED not fully wired; Polymarket energy scenarios can only be optional hints.",
         },
         "usd_fx": {
             "status": "missing",
@@ -235,6 +286,39 @@ def _build_dimensions(macro: Dict[str, Any], heat: Dict[str, Any]) -> Dict[str, 
             "evidence": f"focus_items={len(heat.get('focus_items') or [])}",
         },
     }
+
+
+def _fred_by_factor(fred: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
+    series = fred.get("series") if isinstance(fred.get("series"), list) else []
+    out: Dict[str, List[Dict[str, Any]]] = {}
+    for row in series:
+        if not isinstance(row, dict):
+            continue
+        factor = str(row.get("factor") or "")
+        if not factor:
+            continue
+        out.setdefault(factor, []).append(row)
+    return out
+
+
+def _fred_evidence(rows: Optional[List[Dict[str, Any]]]) -> str:
+    if not rows:
+        return ""
+    parts = []
+    for row in rows[:3]:
+        parts.append(f"{row.get('series_id')}={row.get('value')}@{row.get('date')}")
+    return "FRED " + ", ".join(parts)
+
+
+def _public_macro_evidence(rows: Optional[List[Dict[str, Any]]]) -> str:
+    if not rows:
+        return ""
+    parts = [f"{row.get('series_id')}={row.get('value')}@{row.get('date')}" for row in rows[:3]]
+    return "中国公开宏观数据 " + ", ".join(parts)
+
+
+def _join_evidence(*items: str) -> str:
+    return "；".join(item for item in items if item)
 
 
 def _build_geopolitical_scenarios(pm: Dict[str, Any]) -> List[Dict[str, Any]]:

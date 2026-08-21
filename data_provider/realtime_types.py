@@ -98,6 +98,7 @@ class RealtimeSource(Enum):
     AKSHARE_SINA = "akshare_sina"   # 新浪财经
     AKSHARE_QQ = "akshare_qq"       # 腾讯财经
     TUSHARE = "tushare"             # Tushare Pro
+    TICKFLOW = "tickflow"           # TickFlow
     TENCENT = "tencent"             # 腾讯直连
     SINA = "sina"                   # 新浪直连
     STOOQ = "stooq"                 # Stooq 美股兜底
@@ -118,6 +119,17 @@ class UnifiedRealtimeQuote:
     code: str
     name: str = ""
     source: RealtimeSource = RealtimeSource.FALLBACK
+
+    # === 数据质量元数据（由 DataFetcherManager 统一补齐）===
+    fetched_at: Optional[str] = None             # 本系统获取时间（ISO 8601 datetime）
+    provider_timestamp: Optional[str] = None     # Provider 真实行情时间（ISO 8601 datetime）
+    is_stale: Optional[bool] = None              # provider_timestamp 超过最小 TTL 阈值时为 True
+    stale_seconds: Optional[int] = None          # provider_timestamp 距 fetched_at 的秒数
+    fallback_from: Optional[str] = None          # 整源 fallback 的失败首选源 token
+    market: Optional[str] = None                 # 市场标签（cn/hk/us/jp/kr/tw）
+    currency: Optional[str] = None               # 报价币种（JPY/KRW/TWD/USD/HKD/CNY 等）
+    data_quality: Optional[str] = None           # ok/partial/unavailable
+    missing_fields: Optional[list[str]] = None   # provider 缺失的关键字段
     
     # === 核心价格数据（几乎所有源都有）===
     price: Optional[float] = None           # 最新价
@@ -157,6 +169,8 @@ class UnifiedRealtimeQuote:
         }
         # 只添加非 None 的字段
         optional_fields = [
+            'fetched_at', 'provider_timestamp', 'is_stale', 'stale_seconds',
+            'fallback_from', 'market', 'currency', 'data_quality', 'missing_fields',
             'price', 'change_pct', 'change_amount', 'volume', 'amount',
             'volume_ratio', 'turnover_rate', 'amplitude',
             'open_price', 'high', 'low', 'pre_close',
@@ -408,6 +422,21 @@ class CircuitBreaker:
                               f"(冷却 {self.cooldown_seconds}s)")
                 if error:
                     logger.warning(f"[熔断器] 最后错误: {error}")
+
+    def record_permanent_failure(self, source: str, error: Optional[str] = None) -> None:
+        """立即熔断本轮无法自愈的权限/认证失败，避免对后续标的重复慢试。"""
+        with self._lock:
+            state = self._get_state_locked(source)
+            state['state'] = self.OPEN
+            state['failures'] = max(state['failures'] + 1, self.failure_threshold)
+            state['half_open_calls'] = 0
+            state['last_failure_time'] = time.time()
+            logger.warning(
+                f"[熔断器] {source} 权限或认证失败，立即进入熔断状态 "
+                f"(冷却 {self.cooldown_seconds}s)"
+            )
+            if error:
+                logger.warning(f"[熔断器] 最后错误: {error}")
     
     def get_status(self) -> Dict[str, str]:
         """获取所有数据源状态"""

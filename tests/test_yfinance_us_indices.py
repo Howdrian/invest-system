@@ -57,6 +57,7 @@ class TestFetchYfTickerData(unittest.TestCase):
         result = self.fetcher._fetch_yf_ticker_data(mock_yf, '^GSPC', '标普500指数', 'SPX')
 
         self.assertIsNotNone(result)
+        mock_yf.Ticker.return_value.history.assert_called_once_with(period='5d')
         self.assertEqual(result['code'], 'SPX')
         self.assertEqual(result['name'], '标普500指数')
         self.assertEqual(result['current'], 5100.0)
@@ -79,7 +80,7 @@ class TestFetchYfTickerData(unittest.TestCase):
         self.assertIsNone(result)
 
     def test_single_row_history_uses_same_as_prev(self):
-        """仅一行数据时 prev_close 等于 current，change_pct 为 0"""
+        """仅一行数据时无法计算涨跌，不能伪造 change_pct=0。"""
         mock_hist = _make_mock_hist(close=5000.0, prev_close=5000.0)
         mock_hist = mock_hist.iloc[[-1]]
         mock_yf = _make_mock_yf(mock_hist)
@@ -87,7 +88,7 @@ class TestFetchYfTickerData(unittest.TestCase):
         result = self.fetcher._fetch_yf_ticker_data(mock_yf, '^GSPC', '标普500指数', 'SPX')
 
         self.assertIsNotNone(result)
-        self.assertEqual(result['change_pct'], 0.0)
+        self.assertIsNone(result['change_pct'])
 
 
 class TestGetUsMainIndices(unittest.TestCase):

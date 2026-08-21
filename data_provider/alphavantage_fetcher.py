@@ -17,6 +17,7 @@ import requests
 
 from .base import BaseFetcher, DataFetchError, STANDARD_COLUMNS
 from .realtime_types import UnifiedRealtimeQuote, RealtimeSource
+from .safe_errors import redact_provider_error
 from .us_index_mapping import is_us_stock_code
 
 logger = logging.getLogger(__name__)
@@ -58,7 +59,9 @@ class AlphaVantageFetcher(BaseFetcher):
             resp.raise_for_status()
             data = resp.json()
         except Exception as e:
-            raise DataFetchError(f"[AlphaVantage] HTTP request failed for {symbol}: {e}") from e
+            raise DataFetchError(
+                f"[AlphaVantage] HTTP request failed for {symbol}: {redact_provider_error(e)}"
+            ) from e
 
         if 'Note' in data:
             raise DataFetchError(f"[AlphaVantage] Rate limited: {data['Note']}")
@@ -128,7 +131,11 @@ class AlphaVantageFetcher(BaseFetcher):
             resp.raise_for_status()
             data = resp.json()
         except Exception as e:
-            logger.warning(f"[AlphaVantage] Realtime quote failed for {symbol}: {e}")
+            logger.warning(
+                "[AlphaVantage] Realtime quote failed for %s: %s",
+                symbol,
+                redact_provider_error(e),
+            )
             return None
 
         gq = data.get('Global Quote', {})
@@ -172,7 +179,11 @@ class AlphaVantageFetcher(BaseFetcher):
             resp.raise_for_status()
             data = resp.json()
         except Exception as e:
-            logger.debug(f"[AlphaVantage] Symbol search failed for {symbol}: {e}")
+            logger.debug(
+                "[AlphaVantage] Symbol search failed for %s: %s",
+                symbol,
+                redact_provider_error(e),
+            )
             return None
 
         for match in data.get('bestMatches', []):

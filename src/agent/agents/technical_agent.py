@@ -16,6 +16,7 @@ from typing import Optional
 from src.agent.agents.base_agent import BaseAgent
 from src.agent.protocols import AgentContext, AgentOpinion
 from src.agent.runner import try_parse_json
+from src.agent.department_prompt import department_prompt_suffix
 
 logger = logging.getLogger(__name__)
 
@@ -55,16 +56,6 @@ output a structured JSON opinion.
 3. Analyse volume and chip distribution
 4. Identify chart patterns
 
-## Usage + Tips
-- RSI: 70/30 is a common overbought/oversold threshold, but in strong trends
-  RSI can stay extreme; never use RSI alone as a sell/buy trigger.
-- MA alignment: bullish alignment needs price structure and volume confirmation;
-  treat a single MA crossover as weak evidence if volume is shrinking.
-- Support/resistance: prefer recent swing highs/lows and high-volume nodes; do
-  not fabricate exact levels when history data is missing.
-- Chip/volume: high profit ratio or heavy volume after a sharp rise can mean
-  crowded positioning; flag chase risk instead of blindly upgrading.
-
 {baseline}
 {skills}
 ## Output Format
@@ -83,7 +74,7 @@ Return **only** a JSON object (no markdown fences):
   "volume_status": "heavy|normal|light",
   "pattern": "<detected pattern or none>"
 }}
-"""
+""" + department_prompt_suffix("Technical Analyst")
 
     def build_user_message(self, ctx: AgentContext) -> str:
         parts = [f"Perform technical analysis on stock **{ctx.stock_code}**"]
@@ -110,3 +101,4 @@ Return **only** a JSON object (no markdown fences):
             },
             raw_data=parsed,
         )
+

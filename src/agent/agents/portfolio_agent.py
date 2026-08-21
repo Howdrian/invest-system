@@ -28,6 +28,7 @@ from typing import Optional
 from src.agent.agents.base_agent import BaseAgent
 from src.agent.protocols import AgentContext, AgentOpinion
 from src.agent.runner import try_parse_json
+from src.agent.department_prompt import department_prompt_suffix
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +85,7 @@ class PortfolioAgent(BaseAgent):
             '  "summary": "Portfolio is moderately concentrated ..."\n'
             "}\n"
             "```\n"
-        )
+        ) + department_prompt_suffix("Portfolio Analyst")
 
     def build_user_message(self, ctx: AgentContext) -> str:
         # Gather per-stock opinions from context

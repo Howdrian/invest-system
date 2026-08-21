@@ -1,5 +1,33 @@
 import '@testing-library/jest-dom';
 
+class MemoryStorageMock implements Storage {
+  private readonly values = new Map<string, string>();
+
+  get length() {
+    return this.values.size;
+  }
+
+  clear() {
+    this.values.clear();
+  }
+
+  getItem(key: string) {
+    return this.values.get(key) ?? null;
+  }
+
+  key(index: number) {
+    return Array.from(this.values.keys())[index] ?? null;
+  }
+
+  removeItem(key: string) {
+    this.values.delete(key);
+  }
+
+  setItem(key: string, value: string) {
+    this.values.set(key, String(value));
+  }
+}
+
 class IntersectionObserverMock implements IntersectionObserver {
   readonly root = null;
   readonly rootMargin = '';
@@ -21,47 +49,20 @@ Object.defineProperty(globalThis, 'IntersectionObserver', {
   value: IntersectionObserverMock,
 });
 
-function installLocalStorageMockIfNeeded() {
+const hasLocalStorage = (() => {
   try {
-    if (
-      typeof globalThis.localStorage !== 'undefined' &&
-      typeof globalThis.localStorage.getItem === 'function' &&
-      typeof globalThis.localStorage.setItem === 'function' &&
-      typeof globalThis.localStorage.clear === 'function'
-    ) {
-      return;
-    }
+    return typeof globalThis.localStorage?.getItem === 'function'
+      && typeof globalThis.localStorage?.setItem === 'function'
+      && typeof globalThis.localStorage?.removeItem === 'function'
+      && typeof globalThis.localStorage?.clear === 'function';
   } catch {
-    // jsdom can throw when localStorage is unavailable. Fall through to mock.
+    return false;
   }
+})();
 
-  let store: Record<string, string> = {};
-  const storage: Storage = {
-    get length() {
-      return Object.keys(store).length;
-    },
-    clear() {
-      store = {};
-    },
-    getItem(key: string) {
-      return Object.prototype.hasOwnProperty.call(store, key) ? store[key] : null;
-    },
-    key(index: number) {
-      return Object.keys(store)[index] ?? null;
-    },
-    removeItem(key: string) {
-      delete store[key];
-    },
-    setItem(key: string, value: string) {
-      store[key] = String(value);
-    },
-  };
-
+if (!hasLocalStorage) {
   Object.defineProperty(globalThis, 'localStorage', {
     configurable: true,
-    writable: true,
-    value: storage,
+    value: new MemoryStorageMock(),
   });
 }
-
-installLocalStorageMockIfNeeded();

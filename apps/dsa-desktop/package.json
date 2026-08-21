@@ -1,7 +1,10 @@
 {
   "name": "daily-stock-analysis-desktop",
-  "version": "3.18.0",
+  "version": "3.21.0",
   "private": true,
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "main": "main.js",
   "scripts": {
     "dev": "electron .",
@@ -9,11 +12,11 @@
     "test": "node --test tests/*.test.js"
   },
   "dependencies": {
-    "electron-updater": "^6.8.3"
+    "electron-updater": "6.8.9"
   },
   "devDependencies": {
-    "electron": "^31.4.0",
-    "electron-builder": "^24.13.3"
+    "electron": "41.10.3",
+    "electron-builder": "26.15.3"
   },
   "build": {
     "appId": "com.daily-stock-analysis.desktop",
@@ -21,6 +24,7 @@
     "directories": {
       "output": "dist"
     },
+    "afterPack": "scripts/afterPackMacos.js",
     "files": [
       "main.js",
       "preload.js",
@@ -54,7 +58,26 @@
       "include": "installer.nsh"
     },
     "mac": {
+      "identity": null,
+      "hardenedRuntime": false,
       "target": "dmg"
+    }
+  },
+  "overrides": {
+    "form-data": "4.0.6",
+    "js-yaml": "4.3.1",
+    "tmp": "0.2.7",
+    "minimatch@3.1.5": {
+      "brace-expansion": "1.1.18"
+    },
+    "minimatch@5.1.9": {
+      "brace-expansion": "2.1.4"
+    },
+    "minimatch@9.0.9": {
+      "brace-expansion": "2.1.4"
+    },
+    "minimatch@10.2.6": {
+      "brace-expansion": "5.0.9"
     }
   }
 }
