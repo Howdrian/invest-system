@@ -89,9 +89,9 @@ def test_analysis_report_accepts_optional_report_artifact():
 
 
 def test_reports_router_registered_under_api_v1():
-    from api.v1.router import router
+    from api.app import create_app
 
-    paths = {route.path for route in router.routes}
+    paths = set(create_app().openapi()["paths"].keys())
 
     assert "/api/v1/reports/latest" in paths
     assert "/api/v1/reports/artifacts" in paths

@@ -1,5 +1,6 @@
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 
@@ -290,7 +291,7 @@ def test_agent_memo_cli_runs_by_file_path(tmp_path):
 
     result = subprocess.run(
         [
-            ".venv/bin/python",
+            sys.executable,
             "src/agent_memos.py",
             "--date",
             "2026-06-17",
