@@ -9,10 +9,10 @@
 | 查看当前真实进展、验证结果和剩余事项 | [当前状态](CURRENT_STATE.md) | [Reports 产品线](reports-product-line.md)、[技术债台账](TECH_DEBT_REGISTER.md) |
 | 快速了解项目能做什么 | [README](../README.md) | [完整配置与部署指南](full-guide.md) |
 | 第一次把项目跑起来 | [小白客户端安装与配置](beginner-client-setup.md) | [完整配置与部署指南](full-guide.md) |
-| 配置大模型渠道 | [LLM 配置指南](LLM_CONFIG_GUIDE.md) | [LLM 服务商配置指南](llm-providers.md) |
+| 配置大模型渠道 | [LLM 配置指南](LLM_CONFIG_GUIDE.md) | [LLM 服务商配置指南](llm-providers.md)（含 xAI Grok 直连） |
 | 配置推送通知 | [通知能力基线](notifications.md) | [完整配置与部署指南](full-guide.md) |
 | 部署到服务器或云平台 | [部署指南](DEPLOY.md) | [云端 WebUI 部署](deploy-webui-cloud.md)、[Zeabur 部署](docker/zeabur-deployment.md) |
-| 使用 Bot / IM 接入 | [Bot 命令与接入](bot-command.md) | [Bot 平台配置](bot/) |
+| 使用 Bot / IM 接入 | [Bot 命令与接入](bot-command.md) | [Bot 平台配置](bot/)、[Grok Bot 集成](grok-bot-integration.md) |
 | 排查运行问题 | [FAQ](FAQ.md) | [更新日志](CHANGELOG.md) |
 | 处理数据源失败或降级 | [数据源稳定性与故障处理图示](data-source-stability.md) | [FAQ](FAQ.md) |
 | 查看报告产品线 / 本地验收 | [Reports 产品线](reports-product-line.md) | [本地工作区边界](local-workspace.md)、[Agent SOP](research-agent-sop.md)、[数据源政策](data-source-policy.md)、[Upstream Parity Audit](UPSTREAM_PARITY_AUDIT.md)、[技术债台账](TECH_DEBT_REGISTER.md) |
@@ -37,6 +37,7 @@
 | [LLM 配置指南](LLM_CONFIG_GUIDE.md) | 大模型渠道、三层配置、Web 设置页和常见模型配置 |
 | [LLM 服务商配置指南](llm-providers.md) | Provider 预设、Actions 映射、错误分类和诊断建议 |
 | [LiteLLM YAML 示例](examples/litellm_config.example.yaml) | LiteLLM 多渠道配置示例 |
+| [Grok Bot Skill 示例](examples/grok_bot/README.md) | 给 Grok Bot 粘贴的最小 Skill，调用现有 REST |
 | [通知能力基线](notifications.md) | 企业微信、飞书、Telegram、Discord、Slack、邮件等通知渠道配置 |
 | [Tushare 股票列表指南](TUSHARE_STOCK_LIST_GUIDE.md) | Tushare 股票列表相关配置和使用说明 |
 
@@ -56,6 +57,7 @@
 | [Reports Agent SOP / Prompt 边界](research-agent-sop.md) | 部门 Agent 输入边界、Prompt 强度、女娲使用边界、ReaderV3 验收口径 |
 | [Reports 产品线与运行边界](reports-product-line.md) | Reports 作为新增产品线的架构、产物治理、Reader/Diagnostics 边界、本地验收与云端发布口径 |
 | [本地工作区边界](local-workspace.md) | 集成线真实路径、源码/生成产物边界和 Git 操作口径 |
+| [Grok Bot 集成](grok-bot-integration.md) | 2026-08-11 Grok Bot（AI teammate）与 DSA REST / DecisionSignal / Skill 的对接边界 |
 
 ## 部署与打包
 
