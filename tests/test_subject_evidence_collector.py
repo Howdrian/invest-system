@@ -162,6 +162,23 @@ def test_market_snapshot_date_prefers_provider_bar_date_and_exposes_backfill_loo
     assert _market_snapshot_date("cn", "2026-01-02", "2026-07-17T02:59:30Z") == "2026-07-17"
 
 
+def test_market_sample_records_ignores_array_values_and_normalizes_numpy_scalars():
+    import numpy as np
+
+    from src.source_health.subject_evidence import _market_sample_records
+
+    records = _market_sample_records([
+        {
+            "name": "AI",
+            "change_pct": np.float64(1.25),
+            "history": np.array([1.0, 2.0]),
+            "empty": np.array([]),
+        }
+    ])
+
+    assert records == [{"name": "AI", "change_pct": 1.25}]
+
+
 def test_subject_evidence_provider_errors_are_redacted():
     from src.source_health.subject_evidence import _timed_call
 

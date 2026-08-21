@@ -1019,14 +1019,31 @@ def _market_sample_records(value: Any, *, limit: int = 20) -> List[Dict[str, Any
         rows = _records(value)
     compact: List[Dict[str, Any]] = []
     for row in rows[: max(1, limit)]:
-        item = {
-            str(key): value
-            for key, value in row.items()
-            if value not in (None, "", [], {}) and isinstance(value, (str, int, float, bool))
-        }
+        item = {}
+        for key, raw_value in row.items():
+            scalar = _json_scalar(raw_value)
+            if scalar is not None and scalar != "":
+                item[str(key)] = scalar
         if item:
             compact.append(item)
     return compact
+
+
+def _json_scalar(value: Any) -> Any:
+    """Return a JSON-safe scalar without asking arrays for a truth value."""
+
+    if value is None:
+        return None
+    if isinstance(value, (str, int, float, bool)):
+        return value
+    scalar_item = getattr(value, "item", None)
+    if not callable(scalar_item):
+        return None
+    try:
+        scalar = scalar_item()
+    except (TypeError, ValueError):
+        return None
+    return scalar if isinstance(scalar, (str, int, float, bool)) else None
 
 
 def _records(value: Any) -> List[Dict[str, Any]]:
