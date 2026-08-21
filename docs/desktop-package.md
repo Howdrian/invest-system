@@ -7,8 +7,21 @@
 - React UI（Vite 构建）由本地 FastAPI 服务托管
 - Electron 启动时自动拉起后端服务，等待 `/api/health` 就绪后加载 UI
 - Windows 便携/安装模式下，用户配置文件 `.env` 和数据库放在 exe 同级目录；macOS 打包版使用 Electron 用户数据目录保存运行时配置
+- 桌面端会自动从本机 `8000-8100` 选择可用端口，并把实际选择的端口同步给内置后端；桌面端不依赖 `.env` 里的 `WEBUI_PORT` 来决定窗口连接地址，避免用户改端口后 Electron 仍等待旧端口导致启动超时
+- Desktop backend 默认随 `requirements.txt` 安装并冻结 `futu-api==10.8.6808`；Windows/macOS 构建脚本会在源码环境和 PyInstaller 产物中分别执行 `import futu`，防止发布包只安装但未携带 SDK。
+- 报告“分享”按钮使用 Electron 自带的隐藏 Chromium 窗口渲染本地后端输出的受限 HTML，并保存为 PNG；桌面安装包无需额外携带 `wkhtmltoimage`、`markdown-to-file` 或 Playwright 浏览器。
 
 ## 本地开发
+
+### 构建工具支持矩阵
+
+| 场景 | Node.js | Python |
+|---|---:|---:|
+| Desktop 本地开发与打包 | `>=22.12.0` | `>=3.10` |
+| PR Desktop Windows/macOS 打包门禁 | `22.12.0` | `3.12` |
+| `desktop-release` Windows/macOS 发布工作流 | `22.12.0` | `3.12` |
+
+Node 下限与 `apps/dsa-desktop/package.json` 的 `engines.node` 保持一致，PR 与发布工作流使用同一个精确版本，避免 Electron 依赖在旧 Node 环境下安装失败。已打包的桌面应用自带 Electron/Node 运行时，终端用户无需另行安装 Node.js。
 
 一键启动（开发模式）：
 
@@ -40,7 +53,7 @@ npm run dev
 
 ### 前置条件
 
-- Node.js 18+
+- Node.js 22.12.0+
 - Python 3.10+
 - 开启 Windows 开发者模式（electron-builder 需要创建符号链接）
   - 设置 -> 隐私和安全性 -> 开发者选项 -> 开发者模式
@@ -73,6 +86,32 @@ powershell -ExecutionPolicy Bypass -File scripts\build-all.ps1
   - Windows 免安装包：`daily-stock-analysis-windows-noinstall-<tag>.zip`
   - macOS Intel：`daily-stock-analysis-macos-x64-<tag>.dmg`
   - macOS Apple Silicon：`daily-stock-analysis-macos-arm64-<tag>.dmg`
+
+### macOS 提示“应用已损坏，无法打开”
+
+当前 macOS DMG 尚未使用 Apple Developer 证书签名和公证。构建配置会显式生成 unsigned 应用，在 PyInstaller 产物首次执行前清理残缺签名，并通过 electron-builder `afterPack` hook 在 DMG 创建前再次清理完整 `.app`；CI 还会检查 Electron 原始 `.app` 和 DMG 挂载后的 `.app`，阻止再次发布带有 `code has no resources but signature indicates they must be present` 等损坏签名的产物。该处理只能缓解 v3.27.0 的残缺签名缺陷，**不会让应用获得 Apple 信任**。通过浏览器下载后，macOS Gatekeeper 仍可能提示“无法验证开发者”、阻止启动，或要求用户人工确认。
+
+请按以下顺序排查：
+
+1. 只从项目的 [GitHub Releases](https://github.com/ZhuLinsen/daily_stock_analysis/releases) 下载附件，并确认安装包架构与 Mac 一致：Apple 芯片（M1/M2/M3/M4 等）使用 `daily-stock-analysis-macos-arm64-<tag>.dmg`，Intel 芯片使用 `daily-stock-analysis-macos-x64-<tag>.dmg`。不要对第三方转载或来源不明的安装包绕过 Gatekeeper。
+2. 打开 DMG，将 `Daily Stock Analysis` 拖入“应用程序”后尝试启动一次。若被拦截，进入“系统设置 -> 隐私与安全性”，在安全性提示处确认应用名称，然后点击“仍要打开”，按系统提示再次确认。较旧 macOS 的对应入口为“系统偏好设置 -> 安全性与隐私 -> 通用”。
+3. 仅当安装包确认来自上述官方 Release、且“仍要打开”仍无法放行时，打开“终端”清除该应用的下载隔离属性，然后重新启动：
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/Daily Stock Analysis.app"
+open "/Applications/Daily Stock Analysis.app"
+```
+
+如果应用不在 `/Applications`，请将命令中的路径替换为实际 `.app` 路径。不要对整个“应用程序”目录执行 `xattr`，也不要对来源不明的应用执行此命令。不同 macOS 版本可能仍拒绝 unsigned 应用，清除 quarantine 不保证能够放行。长期彻底消除该提示需要在发布流程中接入 Apple Developer 签名与 notarization（公证），不属于上述临时放行步骤。
+
+维护者可用以下命令区分“预期的 unsigned 拒绝”和“不可发布的残缺签名”：
+
+```bash
+codesign -d "/Applications/Daily Stock Analysis.app"
+spctl --assess --type execute --verbose=4 "/Applications/Daily Stock Analysis.app"
+```
+
+当前 unsigned 产物的 `codesign -d` 预期包含 `code object is not signed at all`，`spctl` 预期拒绝；如果输出 `code has no resources but signature indicates they must be present` 或其它签名损坏信息，应视为发布阻断。
 
 建议发布流程：
 
@@ -189,20 +228,21 @@ npm install
 npm run build
 ```
 
-2) 打包 Python 后端
+2) 按现有脚本打包 Python 后端（脚本会收集 DSA 选股引擎、Futu SDK 与 AkShare 数据文件）
+
+- Windows：
 
 ```bash
-pip install pyinstaller
-pip install -r requirements.txt
-python -m PyInstaller --name stock_analysis --onefile --noconsole --add-data "static;static" --hidden-import=multipart --hidden-import=multipart.multipart main.py
+powershell -ExecutionPolicy Bypass -File scripts\build-backend.ps1
 ```
 
-将生成的 exe 复制到 `dist/backend/`：
+- macOS：
 
 ```bash
-mkdir dist\backend
-copy dist\stock_analysis.exe dist\backend\stock_analysis.exe
+bash scripts/build-backend-macos.sh
 ```
+
+该脚本会在安装依赖后执行 `--collect-all src.services.screening`、`--collect-all futu` 和 `--collect-data akshare`。构建完成后会通过冻结可执行文件校验 `src.services.screening.pipeline`、`futu`、`orjson` 均可导入，核对选股策略数量，并确认 AkShare 的 `file_fold/calendar.json` 已进入冻结产物，避免发行包在选股、热点题材、Futu 持仓导入或日线增强路径中因缺少模块/package data 降级。选股实现参考 AlphaSift。PR 主 CI 在 `requirements.txt`、Futu broker、Desktop 打包入口或相关 workflow 变化时，会分别运行 `desktop-futu-package-windows` 与 `desktop-futu-package-macos` 阻断检查。
 
 3) 打包 Electron 桌面应用
 
@@ -265,10 +305,19 @@ win-unpacked/
 - 开发态 `npm run dev` 与打包态 `npm run build` / 安装包都会复用同一条版本注入链路，不再在 `preload.js` 里维护独立硬编码版本号
 - `README.md` 继续保留安装和运行入口说明；这类桌面端运行时细节统一落在本专题文档维护，避免入门文档膨胀
 
+### 局域网访问 Windows 桌面端 WebUI
+
+- 桌面端默认仍按 `WEBUI_HOST=127.0.0.1` 只允许本机访问，避免安装后无意暴露后端服务
+- 如需让同一局域网内其他设备访问，先保持 `WEBUI_HOST=127.0.0.1`、设置 `ADMIN_AUTH_ENABLED=true` 并在本机完成初始密码；再把 `WEBUI_HOST` 改为 `0.0.0.0` 并重启桌面端
+- 桌面端会自动选择 `8000-8100` 中可用端口并传给后端；常见情况下仍是 `8000`，若端口被占用，可在 `logs/desktop.log` 查看 `Using port ...` 和 `Backend launch command=...`
+- Windows 防火墙或服务器安全组仍需放行实际监听端口；非 loopback 监听对 `ADMIN_AUTH_ENABLED=true` 和已初始化密码是强制要求，不是建议项
+- 即使后端绑定 `0.0.0.0`，桌面窗口自身仍会使用本机可访问地址完成健康检查和页面加载
+
 ### 桌面端更新提醒
 
 - 应用在主界面加载完成后会后台检查 GitHub Releases 的最新正式版，并与当前 `app.getVersion()` 做语义化版本比较
 - Windows NSIS 安装版会通过内置 GitHub 更新源自动下载新版本；下载完成后弹出一次性提醒，用户确认后静默重启并安装
+- 自动更新静默安装会复用当前安装目录；如果用户安装时选择了非默认目录或带空格目录，后续自动更新仍会覆盖同一目录
 - `系统设置 -> 版本信息` 中的“桌面端更新”区域可手动检查更新；若更新已下载，会展示“重启安装”操作
 - Windows 免安装包、开发态和 macOS DMG 仍保持“提醒 + 跳转下载页”的兼容路径，不会因为网络失败而阻断桌面端启动
 - 版本检查失败、GitHub API 超时、更新元数据缺失或下载安装异常时，会记录到 `logs/desktop.log`，设置页手动检查时会展示错误状态
@@ -279,11 +328,14 @@ win-unpacked/
 
 1. 检查 `logs/desktop.log` 查看错误信息
 2. 确认 `.env` 文件存在且配置正确
-3. 确认端口 8000-8100 未被占用
+3. 确认端口 8000-8100 未被占用；桌面端会自动选择其中一个可用端口，无需通过 `.env` 手动改 `WEBUI_PORT`
+4. 如果日志里显示 Electron 等待的端口和后端实际监听端口不一致，优先升级到包含桌面端端口同步修复的版本
 
 ### 后端启动报 ModuleNotFoundError
 
-PyInstaller 打包时缺少模块，需要在 `scripts/build-backend.ps1` 中增加 `--hidden-import`。
+PyInstaller 打包时缺少模块，需要在 Windows 与 macOS 后端构建脚本中同步增加 `--hidden-import`，并对冻结产物执行运行时导入校验。当前脚本会显式安装、冻结并探测 LiteLLM 运行路径需要的 `orjson`；若日志包含 `No module named 'orjson'`，请升级到修复版本并重新构建，不能只在已发布目录中手工安装依赖。
+
+如果日志提示缺少 `akshare/file_fold/calendar.json`，说明后端冻结产物没有完整收集 AkShare package data。请使用仓库当前的 `scripts/build-backend.ps1` 或 `scripts/build-backend-macos.sh` 重新构建；脚本会在生成桌面包前检查该文件，缺失时直接终止构建。
 
 ### UI 加载空白
 

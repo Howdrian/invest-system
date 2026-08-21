@@ -3,14 +3,9 @@
 DecisionAgent — final synthesis and decision-making specialist.
 
 Responsible for:
-- Aggregating opinions from technical + intel + risk + governance agents
+- Aggregating opinions from technical + intel + risk + skill agents
 - Producing the final Decision Dashboard JSON
 - Generating actionable buy/hold/sell recommendations with price levels
-
-When governance layer (RedBlueAgent, ScoringAgent, CioAgent) is present:
-- If CIO status is BLOCKED_BY_FATAL or NEEDS_EVIDENCE: NO buy/sell output
-- If ScoringAgent gate is BLOCKED: NO buy/sell output
-- DecisionAgent must include governance verdict in the dashboard
 """
 
 from __future__ import annotations
@@ -22,6 +17,7 @@ from typing import List, Optional
 from src.agent.agents.base_agent import BaseAgent
 from src.agent.protocols import AgentContext, AgentOpinion, normalize_decision_signal
 from src.report_language import normalize_report_language
+from src.agent.department_prompt import department_prompt_suffix
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +52,8 @@ Requirements:
 """
             if report_language == "en":
                 return prompt + "\nAlways answer in English.\n"
+            if report_language == "ko":
+                return prompt + "\n항상 한국어로 답변하세요.\n"
             return prompt + "\n默认使用中文回答。\n"
 
         skills = ""
@@ -70,25 +68,9 @@ You will receive:
 1. Structured opinions from a Technical Agent and an Intel Agent
 2. Any risk flags raised by a Risk Agent
         3. Skill evaluation results (if applicable)
-        4. Governance review results: Red-Blue debate, Scoring Card, CIO verdict (if pipeline is in governed mode)
 
 Your task: synthesise all inputs into a single, actionable Decision Dashboard.
 {skills}
-## Governance Layer Rules (HARD — when present)
-The governance layer (RedBlueAgent → ScoringAgent → CioAgent) provides a
-structured review. When these results are present in the context:
-
-1. **CioAgent status BLOCKED_BY_FATAL**: decision_type MUST be "hold".
-   Include the fatal objections in risk_warning.
-2. **ScoringAgent gate BLOCKED (score < 6.0)**: decision_type MUST be "hold".
-   Include "评分门控阻断: score X.X/10" in the dashboard.
-3. **CioAgent status NEEDS_EVIDENCE**: decision_type should be "hold".
-   Note missing evidence in analysis_summary.
-4. **CioAgent status WAIT_ENTRY**: decision_type may be "hold".
-   Note "等待入场确认" in analysis_summary.
-5. **CioAgent status READY_FOR_REVIEW**: normal dashboard output.
-   The governance verdict is advisory, not a trading order.
-
 ## Core Principles
 1. **Core conclusion first** — one sentence, ≤30 chars
 2. **Split advice** — different for no-position vs has-position
@@ -102,7 +84,6 @@ structured review. When these results are present in the context:
 - Intel / sentiment weight: ~30%
 - Risk flags weight: ~30% (negative override: any high-severity risk caps signal at "hold")
 - If a skill opinion is present, blend it at 20% weight (reducing others proportionally)
-- If governance layer is present, its verdict overrides the weighted signal
 
 ## Scoring
 - 80-100: buy (all conditions met, high conviction)
@@ -129,7 +110,29 @@ Important: ``decision_type`` must stay within the existing enum
 ``buy|hold|sell``. Express stronger conviction via ``confidence_level``,
 ``sentiment_score``, and the natural-language fields instead of inventing
 new decision_type values.
-"""
+
+The nested ``dashboard`` object must include ``phase_decision`` with these
+keys: ``phase_context``, ``action_window``, ``immediate_action``,
+``watch_conditions``, ``next_check_time``, ``confidence_reason``,
+``data_limitations``. For intraday/lunch-break/near-close phases, describe the
+current action, watch conditions, and next check point. For pre-market,
+non-trading, or unknown phases, do not invent today's intraday movement. If
+quote, daily bars, or technical data is stale, fallback, missing, fetch_failed,
+partial, or estimated, ``confidence_level`` must not be High/高 and the
+limitation must be reflected in ``confidence_reason`` or ``data_limitations``.
+
+The nested ``dashboard`` object should include optional ``signal_attribution`` when
+the available evidence supports attribution, with these keys: ``technical_indicators``, ``news_sentiment``, ``fundamentals``,
+``market_conditions``, ``strongest_bullish_signal``, ``strongest_bearish_signal``.
+The first four keys are contribution weights (0-100). Non-zero valid weights
+should sum to 100; all-zero means no effective signal and must not be faked.
+``technical_indicators`` explains the impact of technical signals on the recommendation.
+``news_sentiment`` explains the impact of news/sentiment on the recommendation.
+``fundamentals`` explains the impact of fundamental factors (valuation, earnings, financials) on the recommendation.
+``market_conditions`` explains the impact of overall market environment on the recommendation.
+``strongest_bullish_signal`` is the name of the strongest bullish signal (e.g., MACD golden cross, earnings surprise, low valuation).
+``strongest_bearish_signal`` is the name of the strongest bearish signal (e.g., MA death cross, earnings warning, high valuation).
+""" + department_prompt_suffix("CIO Editor")
         if report_language == "en":
             return prompt + """
 
@@ -137,6 +140,14 @@ new decision_type values.
 - Keep every JSON key unchanged.
 - `decision_type` must remain `buy|hold|sell`.
 - Write all human-readable JSON values in English.
+"""
+        if report_language == "ko":
+            return prompt + """
+
+## Output Language
+- Keep every JSON key unchanged.
+- `decision_type` must remain `buy|hold|sell`.
+- Write all human-readable JSON values in Korean (한국어).
 """
         return prompt + """
 
@@ -162,9 +173,12 @@ new decision_type values.
                 "",
             ]
 
-        # Feed prior opinions
+        # Feed prior opinions — Orchestrator已在 _partition_skill_opinions 中完成
+        # skill 观点的分拣，ctx.opinions 中不再含 invalid skill opinion；
+        # invalid skill 观点存于 ctx.meta["invalid_opinions"]。
+        # DecisionAgent 直接消费，不再二次过滤。
         if ctx.opinions:
-            parts.append("## Agent Opinions")
+            parts.append("## Agent Opinions (Evidence Chain)")
             for op in ctx.opinions:
                 parts.append(f"\n### {op.agent_name}")
                 parts.append(f"Signal: {op.signal} | Confidence: {op.confidence:.2f}")
@@ -173,10 +187,36 @@ new decision_type values.
                     parts.append(f"Key levels: {json.dumps(op.key_levels)}")
                 if op.raw_data:
                     extra_keys = {k: v for k, v in op.raw_data.items()
-                                  if k not in ("signal", "confidence", "reasoning", "key_levels")}
+                                  if k not in ("signal", "confidence", "reasoning", "key_levels", "invalid_signal")}
                     if extra_keys:
                         parts.append(f"Extra data: {json.dumps(extra_keys, ensure_ascii=False, default=str)}")
                 parts.append("")
+
+        invalid_opinions = ctx.meta.get("invalid_opinions") or []
+        if invalid_opinions:
+            reason_labels = {
+                "skill_timeout": "执行超时",
+                "skill_error": "执行异常或未产出结构化观点",
+                "missing_signal": "signal 缺失",
+                "unrecognized_signal": "signal 无法识别",
+            }
+            reason_counts = {}
+            for item in invalid_opinions:
+                if not isinstance(item, dict):
+                    continue
+                reason = str(item.get("reason") or "unrecognized_signal")
+                reason_counts[reason] = reason_counts.get(reason, 0) + 1
+            reason_summary = "、".join(
+                f"{reason_labels.get(reason, reason)} {count} 个"
+                for reason, count in reason_counts.items()
+            )
+            parts.append("## Invalid Skill Opinions (Diagnostics only — not in evidence chain)")
+            parts.append(
+                f"共 {len(invalid_opinions)} 个 skill 观点未进入证据链"
+                f"（{reason_summary or '原因未分类'}）；"
+                f"仅供你在 data_limitations 中标注，不得作为决策依据。"
+            )
+            parts.append("")
 
         # Feed risk flags
         if ctx.risk_flags:
@@ -185,28 +225,10 @@ new decision_type values.
                 parts.append(f"- [{rf.get('severity', 'medium')}] {rf.get('category', '')}: {rf.get('description', '')}")
             parts.append("")
 
-        # Feed governance results (governed mode)
-        cio = ctx.get_data("cio_result")
-        scoring = ctx.get_data("scoring_result")
-        rb = ctx.get_data("red_blue_result")
-        if cio or scoring or rb:
-            parts.append("## Governance Layer Results")
-            parts.append("The following structured review was performed. Honor its verdict.\n")
-            if rb:
-                arb = rb.get("arbitration", {}) if isinstance(rb, dict) else {}
-                parts.append(f"Red-Blue Debate: {arb.get('stronger_side', 'unknown')} side stronger. {arb.get('verdict', '')}")
-            if scoring:
-                parts.append(f"Scoring Card: {scoring.get('total_score', '?')}/10 — GATE: {scoring.get('gate_result', '?')}")
-                parts.append(f"Position range: {scoring.get('position_size_range', '0%')}")
-            if cio:
-                parts.append(f"CIO Verdict: **{cio.get('status', '?')}** — {cio.get('headline', '')}")
-                parts.append(f"Next action: {cio.get('next_user_action', '')}")
-                trade_plan = cio.get("trade_plan")
-                if isinstance(trade_plan, dict):
-                    parts.append(
-                        "CIO manual trade plan: "
-                        f"{json.dumps(trade_plan, ensure_ascii=False, default=str)}"
-                    )
+        disagreement_summary = ctx.meta.get("agent_disagreement_summary")
+        if isinstance(disagreement_summary, dict) and disagreement_summary:
+            parts.append("## Agent Disagreement Summary")
+            parts.append(json.dumps(disagreement_summary, ensure_ascii=False, default=str))
             parts.append("")
 
         # Skill meta

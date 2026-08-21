@@ -65,6 +65,16 @@ FastAPI 会自动托管 `static/` 目录下的前端资源。前端打包输出�
 Dockerfile 已采用多阶段构建，前端会在镜像构建时自动打包。
 如需覆盖默认静态资源，可在宿主机手动构建并挂载到容器内 `/app/static`。
 
+### 2.5 资源配置建议
+
+Zeabur 服务建议从 `1G` 内存起步；`512M` 仅适合轻量 Web/API、单股、低并发场景，并建议设置 `MAX_WORKERS=1`。
+
+- 最低可尝试：`512M`，不要同时运行多个重型任务。
+- 推荐：`1G`，适合单服务常规分析。
+- 高负载：`2G+`，适合同时运行 Web/API 与定时分析、多股票、大盘复盘、新闻扩展、图片报告或选股。
+
+如果只能使用 `512M`，请避免同时部署等价于 `server + analyzer` 的多服务组合，并关闭非必要的大盘复盘、新闻扩展和图片报告能力。
+
 ## 3. 配置启动命令
 
 ### 3.1 支持的启动模式
@@ -89,6 +99,8 @@ Dockerfile 已采用多阶段构建，前端会在镜像构建时自动打包。
     - 启动定时任务：`python main.py --schedule`
 5. 点击「保存」
 6. 重启服务
+
+> Zeabur 的非 loopback FastAPI 模式必须同时满足 `ADMIN_AUTH_ENABLED=true` 和已持久化的管理员密码。先在受控终端对同一数据卷执行 `python -m src.auth reset_password`；公网首访不允许初始化密码。
 
 ## 4. Discord 机器人部署
 
@@ -153,8 +165,8 @@ Dockerfile 已采用多阶段构建，前端会在镜像构建时自动打包。
 | `BOCHA_API_KEYS` | Bocha API 密钥（用逗号分隔） |
 | `BRAVE_API_KEYS` | Brave Search API 密钥（用逗号分隔） |
 | `MINIMAX_API_KEYS` | MiniMax API 密钥（用逗号分隔） |
-| `SEARXNG_BASE_URLS` | SearXNG 实例地址（逗号分隔，无配额兜底，需在 settings.yml 启用 format: json）；留空时默认自动发现公共实例 |
-| `SEARXNG_PUBLIC_INSTANCES_ENABLED` | 是否在 `SEARXNG_BASE_URLS` 为空时自动从 `searx.space` 获取公共实例（默认 `true`） |
+| `SEARXNG_BASE_URLS` | SearXNG 实例地址（逗号分隔，无配额兜底，需在 settings.yml 启用 format: json）；留空时仅在显式启用公共实例发现后使用 `searx.space` |
+| `SEARXNG_PUBLIC_INSTANCES_ENABLED` | 是否在 `SEARXNG_BASE_URLS` 为空时自动从 `searx.space` 获取公共实例（默认 `false`） |
 
 ### 5.4 配置方法
 
@@ -200,15 +212,16 @@ Dockerfile 已采用多阶段构建，前端会在镜像构建时自动打包。
 
 - WebUI 模式：检查 `http://localhost:8000/health` 端点
 - FastAPI 模式：检查 `http://localhost:8000/api/health` 端点
-- 非服务模式：始终返回健康状态
+- 非服务模式：只在容器 PID 1 仍存活时返回健康状态
 
 健康检查配置如下：
 
 ```dockerfile
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:8000/api/health || curl -f http://localhost:8000/health \
-    || python -c "import sys; sys.exit(0)"
+    CMD ["/usr/local/bin/docker-healthcheck.sh"]
 ```
+
+API 模式的 HTTP 探测失败会把容器标为 unhealthy，不再用无条件成功掩盖服务故障。
 
 ## 8. 常见问题
 
@@ -331,6 +344,7 @@ zeabur exec <服务名> python -c "import requests; print(requests.get('https://
 4. **定期备份数据**：定期下载 `/app/data` 目录的内容进行备份
 5. **使用合适的启动模式**：根据需求选择合适的启动命令
 6. **监控服务状态**：定期检查服务状态和日志
+7. **按负载配置内存**：完整分析推荐 `1G` 起步；`512M` 低配环境设置 `MAX_WORKERS=1`，高负载场景使用 `2G+`
 
 ## 14. 联系方式
 

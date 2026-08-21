@@ -113,6 +113,20 @@ class TestAlphaVantageFetcherFetchRaw(unittest.TestCase):
         with self.assertRaises(DataFetchError):
             self.fetcher._fetch_raw_data('AAPL', '2024-06-10', '2024-06-11')
 
+    @patch('data_provider.alphavantage_fetcher.requests.get')
+    def test_fetch_raw_http_error_redacts_apikey_url(self, mock_get):
+        from data_provider.base import DataFetchError
+        mock_get.side_effect = Exception(
+            "429 Client Error: Too Many Requests for url: "
+            "https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&apikey=secret-key-123"
+        )
+        with self.assertRaises(DataFetchError) as ctx:
+            self.fetcher._fetch_raw_data('AAPL', '2024-06-10', '2024-06-11')
+
+        message = str(ctx.exception)
+        self.assertIn("apikey=<redacted>", message)
+        self.assertNotIn("secret-key-123", message)
+
 
 class TestAlphaVantageFetcherRealtimeQuote(unittest.TestCase):
     """Test get_realtime_quote with mocked HTTP."""

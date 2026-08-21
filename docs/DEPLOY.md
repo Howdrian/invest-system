@@ -59,6 +59,16 @@ docker-compose -f ./docker/docker-compose.yml ps
 
 > 不知道怎么访问？→ [云服务器 Web 界面访问指南](deploy-webui-cloud.md)
 
+### 3.1 资源建议
+
+默认 `docker/docker-compose.yml` 为每个服务设置 `limits.memory: 1G`、`reservations.memory: 512M`，这是完整分析场景的推荐起点。
+
+- 最低可尝试：`512M`，仅适合轻量 Web/API、单股、低并发场景，建议设置 `MAX_WORKERS=1`。
+- 推荐：`1G`，适合单独运行 `server` 或 `analyzer` 的常规分析。
+- 高负载：`2G+`，适合同时启动 `server + analyzer`、多股票、默认 `MAX_WORKERS=3`、大盘复盘、新闻扩展、图片报告或选股。
+
+如果只能使用 `512M`，请避免同时启动 `server` 和 `analyzer`，并关闭非必要的大盘复盘、新闻扩展和图片报告能力。
+
 ### 4. 常用管理命令
 
 ```bash
@@ -135,12 +145,14 @@ python main.py --schedule
 # 后台运行（使用 nohup）
 nohup python main.py --schedule > /dev/null 2>&1 &
 
-# 启动 Web 管理界面（云服务器需先在 .env 中设置 WEBUI_HOST=0.0.0.0）
+# 启动 Web 管理界面（云服务器先按下方要求启用认证、设密，再设 WEBUI_HOST=0.0.0.0）
 python main.py --webui-only
 
 # 启动 Web 界面（启动时执行一次分析；需每日定时请加 --schedule 或设 SCHEDULE_ENABLED=true）
 python main.py --webui
 ```
+
+> 非 loopback 监听必须先设置 `ADMIN_AUTH_ENABLED=true`，并在服务器本机执行 `python -m src.auth reset_password`。否则服务会 fail-closed 拒绝启动。
 
 > 不知道怎么访问？→ [云服务器 Web 界面访问指南](deploy-webui-cloud.md)
 
@@ -300,13 +312,17 @@ rm /opt/stock-analyzer/data/*.lock
 
 ### 4. 内存不足
 
-调整 `docker-compose.yml` 中的内存限制：
+默认 Compose 已推荐 `1G`。如果仍出现 OOM 或平台杀掉容器，请提高 `docker-compose.yml` 中的内存限制；同时跑 `server + analyzer`、多股票、大盘复盘、图片报告或选股时建议 `2G+`：
 ```yaml
 deploy:
   resources:
     limits:
       memory: 1G
+    reservations:
+      memory: 512M
 ```
+
+低配环境只能使用 `512M` 时，建议设置 `MAX_WORKERS=1`，只启动 `server` 或 `analyzer` 其中一个服务，并减少非必要的大盘复盘、新闻扩展和图片报告任务。
 
 ### 5. WebUI 打开后 UI 元素异常变大 / 布局错乱
 
@@ -420,8 +436,8 @@ git push -u origin main
 | `BOCHA_API_KEYS` | 博查搜索 API Key | 可选 |
 | `BRAVE_API_KEYS` | Brave Search API Key | 可选 |
 | `MINIMAX_API_KEYS` | MiniMax Coding Plan Web Search | 可选 |
-| `SEARXNG_BASE_URLS` | SearXNG 自建实例（无配额兜底，需在 settings.yml 启用 format: json）；留空时默认自动发现公共实例 | 可选 |
-| `SEARXNG_PUBLIC_INSTANCES_ENABLED` | 是否在 `SEARXNG_BASE_URLS` 为空时自动从 `searx.space` 获取公共实例（默认 `true`） | 可选 |
+| `SEARXNG_BASE_URLS` | SearXNG 自建实例（无配额兜底，需在 settings.yml 启用 format: json）；留空时仅在显式启用公共实例发现后使用 `searx.space` | 可选 |
+| `SEARXNG_PUBLIC_INSTANCES_ENABLED` | 是否在 `SEARXNG_BASE_URLS` 为空时自动从 `searx.space` 获取公共实例（默认 `false`） | 可选 |
 | `TUSHARE_TOKEN` | Tushare Token | 可选 |
 | `GEMINI_MODEL` | 模型名称（默认 gemini-2.0-flash） | 可选 |
 

@@ -17,6 +17,7 @@ from typing import Optional
 from src.agent.agents.base_agent import BaseAgent
 from src.agent.protocols import AgentContext, AgentOpinion
 from src.agent.runner import try_parse_json
+from src.agent.department_prompt import department_prompt_suffix
 
 logger = logging.getLogger(__name__)
 
@@ -37,8 +38,7 @@ You are an **Intelligence & Sentiment Agent** specialising in A-shares, \
 HK, and US equities.
 
 Your task: gather the latest news, announcements, and risk signals for \
-the given stock, discover catalysts and industry-chain spillovers, then \
-produce a structured JSON opinion.
+the given stock, then produce a structured JSON opinion.
 
 ## Workflow
 1. Search latest stock news (earnings, announcements, insider activity)
@@ -47,20 +47,7 @@ announcements (公司公告), market analysis, risk checks, and earnings outlook
 3. For A-share stocks, call get_capital_flow to obtain main-force (主力) \
 capital inflow/outflow data and include it in your analysis
 4. Classify positive catalysts and risk alerts
-5. Check market_heat_context when present: hot sectors, abnormal watchlist
-items, event windows, and whether the stock is a direct or second-order
-beneficiary
-6. Assess overall sentiment
-
-## Catalyst & Industry-Chain Usage + Tips
-- Catalyst must answer: what happened / when it matters / which listed company
-  is directly exposed / what evidence confirms it.
-- Industry-chain logic: distinguish direct beneficiary, supplier/customer
-  spillover, peer valuation repricing, and unrelated thematic hype.
-- Hot board or market-heat signals are discovery inputs only; they do not
-  override announcements, fundamentals, or risk flags.
-- Treat unsourced social/rumour signals as weak; mark the data gap instead of
-  inventing confirmation.
+5. Assess overall sentiment
 
 ## Risk Detection Priorities
 - Insider / major shareholder sell-downs (减持)
@@ -90,7 +77,7 @@ Return **only** a JSON object:
     {"title": "...", "impact": "positive|negative|neutral"}
   ]
 }
-"""
+""" + department_prompt_suffix("News and Intelligence Analyst")
 
     def build_user_message(self, ctx: AgentContext) -> str:
         parts = [f"Gather intelligence and assess sentiment for stock **{ctx.stock_code}**"]
@@ -102,14 +89,8 @@ Return **only** a JSON object:
             "(公司公告), risk events, and earnings outlook.\n"
             "2. Call get_capital_flow to obtain main-force (主力) capital flow data "
             "(A-share only; skip for HK/US).\n"
-            "3. Use market_heat_context if present to identify catalyst/sector links.\n"
-            "4. Output the JSON opinion including capital_flow_signal."
+            "3. Output the JSON opinion including capital_flow_signal."
         )
-        if ctx.get_data("market_heat_context"):
-            parts.append("\n[Market heat / 今日关注摘要]")
-            import json
-
-            parts.append(json.dumps(ctx.get_data("market_heat_context"), ensure_ascii=False, default=str))
         return "\n".join(parts)
 
     def post_process(self, ctx: AgentContext, raw_text: str) -> Optional[AgentOpinion]:

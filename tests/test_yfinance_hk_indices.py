@@ -129,6 +129,18 @@ class TestGetHkMainIndices(unittest.TestCase):
         expected_amplitude = ((20200.0 - 19700.0) / 19800.0) * 100
         self.assertAlmostEqual(item['amplitude'], expected_amplitude)
 
+    def test_one_row_payload_keeps_level_but_does_not_fake_zero_change(self):
+        one_row = _make_mock_hist(close=5200.0, prev_close=5100.0).tail(1)
+        mock_yf = _make_mock_yf(one_row)
+
+        result = self.fetcher._get_hk_main_indices(mock_yf)
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result[0]['current'], 5200.0)
+        self.assertIsNone(result[0]['prev_close'])
+        self.assertIsNone(result[0]['change'])
+        self.assertIsNone(result[0]['change_pct'])
+
     def test_handles_partial_failure(self):
         """部分指数 history 为空时仍返回能取到数据的指数"""
         call_count = [0]

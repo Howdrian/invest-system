@@ -13,7 +13,6 @@ import argparse
 import json
 import shutil
 import sys
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
@@ -22,6 +21,8 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from src.evidence_pack import build_evidence_pack, source_attempts_from_tool_calls
+from src.core.run_context import resolve_analysis_run_date
+from src.report_markdown import CSS, markdown_to_html
 
 
 AGENT_MEMO_SCHEMA = "agent_memo_v1"
@@ -74,8 +75,6 @@ def _write_text(path: Path, text: str) -> None:
 
 
 def _html_page(title: str, markdown: str) -> str:
-    from src.render_report_html import CSS, markdown_to_html
-
     return (
         "<!doctype html><html lang='zh-CN'><head><meta charset='utf-8'>"
         "<meta name='viewport' content='width=device-width, initial-scale=1'>"
@@ -159,6 +158,7 @@ def _memo(
         "schema": AGENT_MEMO_SCHEMA,
         "agent": agent,
         "scope": scope,
+        "subject": symbol or scope,
         "symbol": symbol,
         "status": normalized_status,
         "origin": normalized_origin,
@@ -170,6 +170,18 @@ def _memo(
         "source_refs": normalized_refs,
         "fatal_objection": bool(fatal_objection),
         "next_step": next_step,
+        "summary_for_reader": readable_summary or _readable_summary(normalized_origin, normalized_status, conclusion, bool(limited_report) or (isinstance(pack, dict) and bool(pack.get("limited_report")))),
+        "key_claims": [str(block.get("claim")) for block in blocks if isinstance(block, dict) and block.get("claim")],
+        "evidence_ids": _memo_evidence_ids(normalized_refs, blocks),
+        "counterpoints": normalized_missing[:3] if normalized_missing else ([] if normalized_status == "PASS" else [conclusion or "需要反证复核"]),
+        "data_gaps": normalized_missing,
+        "next_action": next_step,
+        "claims": _memo_claims(blocks, normalized_refs, normalized_missing),
+        "decision": {
+            "action": "block" if normalized_status == "BLOCKED" else ("review" if normalized_status == "PASS" else "observe"),
+            "can_score": normalized_status != "BLOCKED",
+            "can_position_sizing": False,
+        },
         "readable_summary": readable_summary or _readable_summary(normalized_origin, normalized_status, conclusion, bool(limited_report) or (isinstance(pack, dict) and bool(pack.get("limited_report")))),
         "evidence_blocks": blocks,
         "audit_detail": audit_detail
@@ -193,6 +205,43 @@ def _memo(
         payload["source_attempts"] = attempts
         payload["limited_report"] = bool(limited_report)
     return payload
+
+
+def _memo_evidence_ids(refs: List[str], blocks: List[Dict[str, Any]]) -> List[str]:
+    ids: List[str] = []
+    for ref in refs:
+        if ref and ref not in ids:
+            ids.append(ref)
+    for block in blocks:
+        if not isinstance(block, dict):
+            continue
+        value = str(block.get("id") or block.get("evidence_id") or block.get("source") or "").strip()
+        if value and value != "UNKNOWN" and value not in ids:
+            ids.append(value)
+    return ids[:12]
+
+
+def _memo_claims(blocks: List[Dict[str, Any]], refs: List[str], gaps: List[str]) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+    default_refs = refs[:3]
+    for block in blocks:
+        if not isinstance(block, dict):
+            continue
+        claim = str(block.get("claim") or "").strip()
+        if not claim:
+            continue
+        evidence_id = str(block.get("id") or block.get("evidence_id") or block.get("source") or "").strip()
+        evidence_ids = [evidence_id] if evidence_id and evidence_id != "UNKNOWN" else default_refs
+        out.append({
+            "claim": claim,
+            "claim_type": "observation",
+            "evidence_ids": evidence_ids,
+            "allowed_fact_types": ["verified_fact", "derived_fact"],
+            "confidence": "medium" if evidence_ids else "low",
+            "missing_domains": gaps,
+            "blockers": ["missing_evidence"] if not evidence_ids else [],
+        })
+    return out[:8]
 
 
 def _origin_label(origin: str, limited: bool = False) -> str:
@@ -967,7 +1016,7 @@ def _infer_failure_reason(raw_status: str, warnings: List[str]) -> str:
     joined = " ".join(warnings).lower()
     if raw_status in {"AVAILABLE", "REFRESHED", "OK", "SUCCESS"} and not warnings:
         return ""
-    if "missing_key" in joined or "fmp_unavailable" in joined or "needs_key" in joined:
+    if "missing_key" in joined or "fred_key_missing" in joined or "fmp_unavailable" in joined or "needs_key" in joined:
         return "missing_key"
     if "permission" in joined or "402" in joined or "403" in joined:
         return "permission_limited"
@@ -1061,10 +1110,10 @@ def _source_gap_plan(inventory: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 def _where_to_collect(domain: str) -> List[str]:
     mapping = {
-        "macro": ["FMP", "FRED", "BEA", "EIA", "Treasury", "NY Fed", "BLS"],
+        "macro": ["FRED", "BEA", "EIA", "Treasury", "NY Fed", "BLS"],
         "geo": ["Polymarket Gamma/Data/CLOB"],
         "a_share": ["Eastmoney", "CNINFO", "SSE/SZSE", "Gov.cn", "CSRC", "NDRC", "PBOC", "Tushare", "AKShare", "efinance"],
-        "us_stock": ["SEC EDGAR APIs", "SEC Company Facts", "Yahoo", "Nasdaq", "FMP"],
+        "us_stock": ["SEC EDGAR APIs", "SEC Company Facts", "Yahoo", "Nasdaq"],
         "news": ["Google News RSS", "GDELT", "Tavily", "Company IR"],
         "reports": ["Google News RSS", "Tavily", "Company IR", "公开研报页面"],
         "portfolio": ["invest-system DB", "PORTFOLIO_HOLDINGS", "持仓导出文件"],
@@ -1076,9 +1125,9 @@ def _where_to_collect(domain: str) -> List[str]:
 
 def _probe_tasks() -> List[Dict[str, Any]]:
     return [
-        {"task": "macro_probe", "goal": "验证 FMP/FRED/BEA/EIA 能否生成增长、通胀、利率、美元、能源、信用六因子。", "sources": _where_to_collect("macro")},
+        {"task": "macro_probe", "goal": "验证 FRED/BEA/EIA/Treasury 能否生成增长、通胀、利率、美元、能源、信用六因子。", "sources": _where_to_collect("macro")},
         {"task": "a_share_probe", "goal": "验证 Eastmoney/CNINFO/Tushare/AKShare/efinance 的行情、公告、财务字段。", "sources": _where_to_collect("a_share")},
-        {"task": "us_stock_probe", "goal": "验证 SEC submissions、company facts、Yahoo/FMP 财务快照。", "sources": _where_to_collect("us_stock")},
+        {"task": "us_stock_probe", "goal": "验证 SEC submissions、company facts、Yahoo 财务快照。", "sources": _where_to_collect("us_stock")},
         {"task": "news_report_probe", "goal": "验证 Tavily/Google News/GDELT/IR 的新闻、研报、公告原文链接。", "sources": _where_to_collect("news")},
         {"task": "polymarket_probe", "goal": "把地缘四场景映射到可用市场，输出质量分和权重。", "sources": _where_to_collect("geo")},
         {"task": "portfolio_probe", "goal": "验证持仓行情、成本、浮盈亏、公告、板块联动。", "sources": _where_to_collect("portfolio")},
@@ -1242,6 +1291,7 @@ def _cell(value: Any) -> str:
 def _market_memos(
     run_date: str,
     health: Dict[str, Any],
+    source_health_v2: Dict[str, Any],
     macro: Dict[str, Any],
     queue: Dict[str, Any],
     strategy: Dict[str, Any],
@@ -1250,13 +1300,23 @@ def _market_memos(
     inventory = build_source_inventory(health)
     source_attempts = _source_attempts_from_inventory(inventory)
     macro_attempts = _source_attempts_from_inventory(inventory, domains=["macro", "geo"])
+    source_mode = str(source_health_v2.get("overallMode") or "")
+    source_score = source_health_v2.get("overallScore")
+    source_domains = source_health_v2.get("domains") if isinstance(source_health_v2.get("domains"), dict) else {}
+    macro_domain = source_domains.get("macro") if isinstance(source_domains.get("macro"), dict) else {}
+    macro_domain_status = str(macro_domain.get("status") or "").lower()
+    source_blockers = [str(item) for item in (source_health_v2.get("blockingReasons") or []) if str(item)]
     candidates = queue.get("candidates") or []
     auto = queue.get("auto_governed_candidates") or []
     portfolio = next((row for row in (health.get("rows") or []) if isinstance(row, dict) and row.get("component") == "portfolio_holdings"), {})
-    source_warn = str(health.get("usability_verdict") or "").lower() not in {"usable", "available"}
-    macro_warn = str(macro.get("status") or "").upper() != "REFRESHED"
-    source_missing = [item["component"] for item in inventory if item.get("status") != "REFRESHED"]
-    macro_missing = list(macro.get("data_gaps") or []) or [item["source"] for item in inventory if item.get("domain") in {"macro", "geo"} and item.get("status") != "REFRESHED"]
+    source_warn = (
+        source_mode != "FULL_REVIEW"
+        if source_mode
+        else str(health.get("usability_verdict") or "").lower() not in {"usable", "available"}
+    )
+    macro_warn = macro_domain_status in {"missing", "degraded", "blocked"} or (not macro_domain_status and str(macro.get("status") or "").upper() != "REFRESHED")
+    source_missing = source_blockers or [item["component"] for item in inventory if item.get("status") != "REFRESHED"]
+    macro_missing = list(macro_domain.get("blockers") or []) or list(macro.get("data_gaps") or []) or [item["source"] for item in inventory if item.get("domain") in {"macro", "geo"} and item.get("status") != "REFRESHED"]
     candidate_missing = [] if auto else ["no_auto_governed_candidates", "non_hot_rank_evidence_required"]
     source_pack = build_evidence_pack(scope="market", source_attempts=source_attempts, evidence_items=[f"source_count={len(inventory)}"], missing_evidence=source_missing, critical_missing=source_warn)
     macro_pack = build_evidence_pack(scope="market", source_attempts=macro_attempts, evidence_items=[macro.get("headline") or "macro review"], missing_evidence=macro_missing, critical_missing=macro_warn)
@@ -1282,14 +1342,16 @@ def _market_memos(
             facts=[
                 f"source_health={health.get('usability_verdict', 'UNKNOWN')}",
                 f"trade_review_usability={health.get('trade_review_usability', 'UNKNOWN')}",
+                f"source_health_v2={source_mode or 'UNKNOWN'}",
+                f"overall_score={source_score if source_score is not None else 'UNKNOWN'}",
                 f"source_count={len(inventory)}",
             ],
             reasoning=["critical unavailable 才阻断交易审查；optional/supporting failure 只降权。"],
-            conclusion="本轮可读但需按 source health 降权。" if source_warn else "本轮源状态可读。",
+            conclusion="本轮源状态可支撑完整复盘。" if source_mode == "FULL_REVIEW" and not source_warn else "本轮可读但需按 source health 降权。",
             missing_data=[item["component"] for item in inventory if item.get("status") != "REFRESHED"],
-            source_refs=["market_cycle/%s/13_source_health.json" % run_date],
+            source_refs=["market_cycle/%s/13_source_health.json" % run_date, "run_status/%s/source_health_v2.json" % run_date],
             next_step="查看 sources/01_source_gap_plan，优先修 critical 或 macro 降级源。",
-            origin="RAW_AGENT",
+            origin="DERIVED_FROM_ARTIFACT",
             source_attempts=source_attempts,
             limited_report=bool(source_pack.get("limited_report")),
             evidence_pack=source_pack,
@@ -1300,16 +1362,17 @@ def _market_memos(
             status=_status_from_blockers(warn=macro_warn),
             facts=[
                 f"macro_status={macro.get('status', 'UNKNOWN')}",
+                f"source_health_macro={macro_domain_status or 'UNKNOWN'}",
                 f"confidence={macro.get('confidence', 'UNKNOWN')}",
                 f"headline={macro.get('headline', 'UNKNOWN')}",
                 f"prediction_market_status={macro.get('prediction_market_status', 'UNKNOWN')}",
             ],
             reasoning=["宏观/地缘只做背景约束；Polymarket 只做概率校准，不能单独触发交易。"],
-            conclusion="宏观降级，维持观察。" if macro_warn else "宏观上下文已刷新，可作为市场背景。",
+            conclusion="宏观证据已进入证据池，可作为市场背景。" if not macro_warn else "宏观降级，维持观察。",
             missing_data=list(macro.get("data_gaps") or []),
-            source_refs=["market_cycle/%s/01_macro_review.json" % run_date],
-            next_step="补 FMP/FRED/BEA/EIA 与六因子缺项，再提高宏观置信度。",
-            origin="RAW_AGENT",
+            source_refs=["market_cycle/%s/01_macro_review.json" % run_date, "run_status/%s/source_health_v2.json" % run_date],
+            next_step="补 FRED/BEA/EIA/Treasury 与六因子缺项，再提高宏观置信度。",
+            origin="DERIVED_FROM_ARTIFACT",
             source_attempts=macro_attempts,
             limited_report=bool(macro_pack.get("limited_report")),
             evidence_pack=macro_pack,
@@ -1345,7 +1408,7 @@ def _market_memos(
             missing_data=[] if auto else ["no_auto_governed_candidates"],
             source_refs=["market_cycle/%s/11_deep_review_queue.json" % run_date],
             next_step="只让 DEEP_REVIEW_NOW 或持仓异常进入个股 governed 深评。",
-            origin="RAW_AGENT",
+            origin="DERIVED_FROM_ARTIFACT",
             source_attempts=candidate_attempts,
             limited_report=bool(candidate_pack.get("limited_report")),
             evidence_pack=candidate_pack,
@@ -1399,7 +1462,7 @@ def _stock_memos(run_date: str, row: Dict[str, Any]) -> Dict[str, Dict[str, Any]
             missing_data=["raw_stock_source_refs", "agent_tool_trace_memos"],
             source_refs=common_refs,
             next_step="后续从 pipeline ctx.opinions/stage_results 直接持久化。",
-            origin="RAW_AGENT",
+            origin="DERIVED_FROM_ARTIFACT",
             source_attempts=stock_source_attempts,
             limited_report=True,
             evidence_pack=stock_source_pack,
@@ -1427,7 +1490,7 @@ def _stock_memos(run_date: str, row: Dict[str, Any]) -> Dict[str, Dict[str, Any]
             missing_data=["financial_statement_refs", "valuation_peer_refs", "report_refs"],
             source_refs=common_refs,
             next_step="新增 FundamentalReportsAgent 或持久化现有基本面上下文。",
-            origin="RAW_AGENT",
+            origin="DERIVED_FROM_ARTIFACT",
             source_attempts=fundamental_attempts,
             limited_report=True,
             evidence_pack=fundamental_pack,
@@ -1555,6 +1618,7 @@ def generate_daily_agent_memos(
     market_dir = reports / "market_cycle" / run_date
     health = _read_json(market_dir / "13_source_health.json") or {}
     macro = _read_json(market_dir / "01_macro_review.json") or {}
+    source_health_v2 = _read_json(reports / "run_status" / run_date / "source_health_v2.json") or {}
     health_for_sources = _health_with_macro_signal(health, macro)
     queue = _read_json(market_dir / "11_deep_review_queue.json") or {}
     strategy = _read_json(market_dir / "14_market_strategy.json") or {}
@@ -1575,7 +1639,7 @@ def generate_daily_agent_memos(
                 shutil.rmtree(child)
 
     generated: List[str] = []
-    for rel, memo in _market_memos(run_date, health_for_sources, macro, queue, strategy, governed_rows).items():
+    for rel, memo in _market_memos(run_date, health_for_sources, source_health_v2, macro, queue, strategy, governed_rows).items():
         generated.extend(_write_memo_triplet(out, rel, memo))
 
     inventory = build_source_inventory(health_for_sources)
@@ -1727,7 +1791,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--output-dir", default="")
     args = parser.parse_args(argv)
 
-    run_date = args.date or datetime.now().strftime("%Y-%m-%d")
+    run_date = resolve_analysis_run_date(args.date or None)
     output_dir = Path(args.output_dir) if args.output_dir else Path(args.reports_dir) / "daily" / run_date
     generated = generate_daily_agent_memos(run_date, reports_dir=Path(args.reports_dir), output_dir=output_dir)
     print(f"agent_memos: generated {len(generated)} files for {run_date}")

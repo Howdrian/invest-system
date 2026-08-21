@@ -27,6 +27,7 @@ import logging
 import multiprocessing
 import os
 import random
+import threading
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -94,6 +95,16 @@ _etf_realtime_cache: Dict[str, Any] = {
     'ttl': 1200  # 20分钟缓存有效期
 }
 
+# 港股实时行情缓存。stock_hk_spot_em() 返回全市场数据，单次调用成本较高。
+_hk_realtime_cache: Dict[str, Any] = {
+    'data': None,
+    'timestamp': 0,
+    'ttl': 1200,  # 20分钟缓存有效期
+    'failure_ttl': 30,
+    'last_result': None,
+}
+_hk_realtime_cache_lock = threading.Lock()
+
 
 def _is_etf_code(stock_code: str) -> bool:
     """
@@ -119,8 +130,13 @@ def _is_hk_code(stock_code: str) -> bool:
     判断代码是否为港股
 
     港股代码规则：
-    - 5位数字代码，如 '00700' (腾讯控股)
+    - 4-5 位数字代码，如 '00700' (腾讯控股)、'0001' (长和)、'0941' (中国移动)
     - 部分港股代码可能带有前缀，如 'hk00700', 'hk1810'
+
+    与 ``data_provider.base._is_hk_market`` 以及
+    ``YfinanceFetcher._convert_stock_code`` / ``LongbridgeFetcher._is_hk_code``
+    对裸港股码的位数范围 (4-5 位) 保持一致，避免 ``DataFetcherManager``
+    路由层判 HK 后被 ``AkshareFetcher`` 内部拒绝造成的调用链断口。
 
     Args:
         stock_code: 股票代码
@@ -137,8 +153,8 @@ def _is_hk_code(stock_code: str) -> bool:
         # 带 hk 前缀的一定是港股，去掉前缀后应为纯数字（1-5位）
         numeric_part = code[2:]
         return numeric_part.isdigit() and 1 <= len(numeric_part) <= 5
-    # 无前缀时，5位纯数字才视为港股（避免误判 A 股代码）
-    return code.isdigit() and len(code) == 5
+    # 无前缀时，4-5位纯数字才视为港股（A 股 / BSE 全部为 6 位，不冲突）
+    return code.isdigit() and 4 <= len(code) <= 5
 
 
 def _normalize_tencent_volume(fields: List[str]) -> Optional[int]:
@@ -1472,10 +1488,6 @@ class AkshareFetcher(BaseFetcher):
         em_key = "akshare_hk_em"
         sina_key = "akshare_hk_sina"
 
-        # 防封禁策略
-        self._set_random_user_agent()
-        self._enforce_rate_limit()
-
         # 确保代码格式正确（5位数字）
         raw_code = stock_code.strip().lower()
         if raw_code.endswith('.hk'):
@@ -1484,53 +1496,135 @@ class AkshareFetcher(BaseFetcher):
             raw_code = raw_code[2:]
         code = raw_code.zfill(5)
 
-        # --- 主数据源：东方财富 ---
-        if circuit_breaker.is_available(em_key):
+        def build_em_quote(df: pd.DataFrame) -> Optional[UnifiedRealtimeQuote]:
+            if df.empty:
+                logger.info(f"[API返回] 港股实时行情数据为空 (stock_hk_spot_em)")
+                return None
+
+            row = df[df['代码'] == code]
+            if row.empty:
+                logger.info(f"[API返回] 未找到港股 {code} 的实时行情 (stock_hk_spot_em)")
+                return None
+
+            row = row.iloc[0]
+            quote = UnifiedRealtimeQuote(
+                code=stock_code,
+                name=str(row.get('名称', '')),
+                source=RealtimeSource.AKSHARE_EM,
+                price=safe_float(row.get('最新价')),
+                change_pct=safe_float(row.get('涨跌幅')),
+                change_amount=safe_float(row.get('涨跌额')),
+                volume=safe_int(row.get('成交量')),
+                amount=safe_float(row.get('成交额')),
+                volume_ratio=safe_float(row.get('量比')),
+                turnover_rate=safe_float(row.get('换手率')),
+                amplitude=safe_float(row.get('振幅')),
+                pe_ratio=safe_float(row.get('市盈率')),
+                pb_ratio=safe_float(row.get('市净率')),
+                total_mv=safe_float(row.get('总市值')),
+                circ_mv=safe_float(row.get('流通市值')),
+                high_52w=safe_float(row.get('52周最高')),
+                low_52w=safe_float(row.get('52周最低')),
+            )
+            logger.info(
+                f"[港股实时行情] {stock_code} {quote.name}: 价格={quote.price}, "
+                f"涨跌={quote.change_pct}%, 换手率={quote.turnover_rate}%"
+            )
+            return quote
+
+        def read_cached_em_quote() -> Tuple[bool, Optional[UnifiedRealtimeQuote]]:
+            current_time = time.time()
+            cache_data = _hk_realtime_cache['data']
+            cache_age = current_time - _hk_realtime_cache['timestamp']
+            if (
+                _hk_realtime_cache.get('last_result') == 'failure'
+                and cache_age < _hk_realtime_cache.get('failure_ttl', 0)
+            ):
+                logger.debug(
+                    f"[缓存命中] 港股实时行情(东财) - 复用最近失败结果 "
+                    f"{int(cache_age)}s/{_hk_realtime_cache.get('failure_ttl', 0)}s"
+                )
+                return True, None
+
+            if cache_data is None or cache_age >= _hk_realtime_cache['ttl']:
+                return False, None
+
+            logger.debug(
+                f"[缓存命中] 港股实时行情(东财) - 缓存年龄 "
+                f"{int(cache_age)}s/{_hk_realtime_cache['ttl']}s"
+            )
             try:
-                logger.info(f"[API调用] ak.stock_hk_spot_em() 获取港股实时行情...")
-                import time as _time
-                api_start = _time.time()
+                return True, build_em_quote(cache_data)
+            except Exception as e:
+                logger.warning(
+                    f"[缓存错误] 港股实时行情缓存无法解析: {e}，"
+                    "尝试 stock_hk_spot 备用接口"
+                )
+                return True, None
 
-                df = ak.stock_hk_spot_em()
+        cache_hit, quote = read_cached_em_quote()
+        if quote is not None:
+            return quote
 
-                api_elapsed = _time.time() - api_start
-                logger.info(f"[API返回] ak.stock_hk_spot_em 成功: 返回 {len(df)} 只港股, 耗时 {api_elapsed:.2f}s")
-                circuit_breaker.record_success(em_key)
-
-                # 查找指定港股
-                row = df[df['代码'] == code]
-                if row.empty:
-                    logger.info(f"[API返回] 未找到港股 {code} 的实时行情 (stock_hk_spot_em)")
-                else:
-                    row = row.iloc[0]
-                    quote = UnifiedRealtimeQuote(
-                        code=stock_code,
-                        name=str(row.get('名称', '')),
-                        source=RealtimeSource.AKSHARE_EM,
-                        price=safe_float(row.get('最新价')),
-                        change_pct=safe_float(row.get('涨跌幅')),
-                        change_amount=safe_float(row.get('涨跌额')),
-                        volume=safe_int(row.get('成交量')),
-                        amount=safe_float(row.get('成交额')),
-                        volume_ratio=safe_float(row.get('量比')),
-                        turnover_rate=safe_float(row.get('换手率')),
-                        amplitude=safe_float(row.get('振幅')),
-                        pe_ratio=safe_float(row.get('市盈率')),
-                        pb_ratio=safe_float(row.get('市净率')),
-                        total_mv=safe_float(row.get('总市值')),
-                        circ_mv=safe_float(row.get('流通市值')),
-                        high_52w=safe_float(row.get('52周最高')),
-                        low_52w=safe_float(row.get('52周最低')),
-                    )
-                    logger.info(f"[港股实时行情] {stock_code} {quote.name}: 价格={quote.price}, 涨跌={quote.change_pct}%, "
-                                f"换手率={quote.turnover_rate}%")
+        # --- 主数据源：东方财富 ---
+        if not cache_hit:
+            # 组合快照会并发查询多个 symbol；锁内二次检查保证同一进程仅一次冷拉取。
+            with _hk_realtime_cache_lock:
+                cache_hit, quote = read_cached_em_quote()
+                if quote is not None:
                     return quote
 
-            except Exception as e:
-                logger.warning(f"[API错误] ak.stock_hk_spot_em 获取港股 {stock_code} 失败: {e}，尝试 stock_hk_spot 备用接口")
-                circuit_breaker.record_failure(em_key, str(e))
-        else:
-            logger.info(f"[熔断] 数据源 {em_key} 处于熔断状态，尝试使用备用链路")
+                if circuit_breaker.is_available(em_key) and not cache_hit:
+                    try:
+                        # 仅在真正发起网络请求前执行防封禁策略；热缓存命中不等待。
+                        self._set_random_user_agent()
+                        self._enforce_rate_limit()
+
+                        logger.info(f"[API调用] ak.stock_hk_spot_em() 获取港股实时行情...")
+                        import time as _time
+                        api_start = _time.time()
+
+                        df = ak.stock_hk_spot_em()
+
+                        api_elapsed = _time.time() - api_start
+                        logger.info(
+                            f"[API返回] ak.stock_hk_spot_em 成功: 返回 {len(df)} 只港股, "
+                            f"耗时 {api_elapsed:.2f}s"
+                        )
+
+                        if not isinstance(df, pd.DataFrame):
+                            raise TypeError("stock_hk_spot_em 未返回 DataFrame")
+                        if '代码' not in df.columns:
+                            raise KeyError("stock_hk_spot_em 返回结果缺少 代码 列")
+                        if df.empty:
+                            raise ValueError("stock_hk_spot_em 返回空市场快照")
+
+                        _hk_realtime_cache['data'] = df
+                        _hk_realtime_cache['timestamp'] = time.time()
+                        _hk_realtime_cache['last_result'] = 'success'
+                        logger.info(
+                            f"[缓存更新] 港股实时行情(东财) 缓存已刷新，"
+                            f"TTL={_hk_realtime_cache['ttl']}s"
+                        )
+
+                        quote = build_em_quote(df)
+                        circuit_breaker.record_success(em_key)
+                        if quote is not None:
+                            return quote
+
+                    except Exception as e:
+                        _hk_realtime_cache['data'] = None
+                        _hk_realtime_cache['timestamp'] = time.time()
+                        _hk_realtime_cache['last_result'] = 'failure'
+                        logger.warning(
+                            f"[API错误] ak.stock_hk_spot_em 获取港股 {stock_code} "
+                            f"失败: {e}，尝试 stock_hk_spot 备用接口"
+                        )
+                        circuit_breaker.record_failure(em_key, str(e))
+                elif not cache_hit:
+                    logger.info(
+                        f"[熔断] 数据源 {em_key} 处于熔断状态，尝试使用备用链路"
+                    )
 
         # --- 备用数据源：新浪 ---
         if not circuit_breaker.is_available(sina_key):
@@ -1538,6 +1632,9 @@ class AkshareFetcher(BaseFetcher):
             return None
 
         try:
+            self._set_random_user_agent()
+            self._enforce_rate_limit()
+
             logger.info(f"[API调用] ak.stock_hk_spot() 获取港股实时行情（备用）...")
             import time as _time
             api_start = _time.time()
@@ -1685,8 +1782,13 @@ class AkshareFetcher(BaseFetcher):
 
     def get_main_indices(self, region: str = "cn") -> Optional[List[Dict[str, Any]]]:
         """
-        获取主要指数实时行情 (新浪接口)，仅支持 A 股
+        获取主要指数实时行情。
+
+        A 股使用新浪指数接口；港股使用东方财富公开指数行情。
+        两者都不需要 key，失败时由 DataFetcherManager 继续 fallback。
         """
+        if region == "hk":
+            return self._get_hk_main_indices()
         if region != "cn":
             return None
         import akshare as ak
@@ -1724,6 +1826,18 @@ class AkshareFetcher(BaseFetcher):
                         high = safe_float(row.get('最高', 0))
                         low = safe_float(row.get('最低', 0))
 
+                        # 新浪指数接口在收盘后偶尔把“涨跌额/涨跌幅”置 0，
+                        # 但最新价和昨收仍然有效。不要把这种字段漂移写进报告。
+                        change = safe_float(row.get('涨跌额', 0))
+                        change_pct = safe_float(row.get('涨跌幅', 0))
+                        if current > 0 and prev_close > 0 and abs(current - prev_close) > 1e-9:
+                            computed_change = current - prev_close
+                            computed_change_pct = computed_change / prev_close * 100
+                            if abs(change) < 1e-9:
+                                change = computed_change
+                            if abs(change_pct) < 1e-9:
+                                change_pct = computed_change_pct
+
                         # 计算振幅
                         amplitude = 0.0
                         if prev_close > 0:
@@ -1733,8 +1847,8 @@ class AkshareFetcher(BaseFetcher):
                             'code': code,
                             'name': name,
                             'current': current,
-                            'change': safe_float(row.get('涨跌额', 0)),
-                            'change_pct': safe_float(row.get('涨跌幅', 0)),
+                            'change': change,
+                            'change_pct': change_pct,
                             'open': safe_float(row.get('今开', 0)),
                             'high': high,
                             'low': low,
@@ -1747,6 +1861,62 @@ class AkshareFetcher(BaseFetcher):
 
         except Exception as e:
             logger.error(f"[Akshare] 获取指数行情失败: {e}")
+            return None
+
+    def _get_hk_main_indices(self) -> Optional[List[Dict[str, Any]]]:
+        """获取恒指、恒生科技和国企指数，排除其他港股指数。"""
+        import akshare as ak
+
+        names = {
+            "HSI": "恒生指数",
+            "HSTECH": "恒生科技指数",
+            "HSCEI": "国企指数",
+        }
+        try:
+            self._set_random_user_agent()
+            self._enforce_rate_limit()
+            df = ak.stock_hk_index_spot_em()
+            if df is None or df.empty:
+                return None
+            results: List[Dict[str, Any]] = []
+            for code, display_name in names.items():
+                normalized_codes = df["代码"].astype(str).str.upper().str.replace("HK", "", regex=False)
+                row = df[normalized_codes == code]
+                if row.empty:
+                    row = df[df["名称"].astype(str).str.contains(display_name, regex=False)]
+                if row.empty:
+                    continue
+                item = row.iloc[0]
+                current = safe_float(item.get("最新价", 0))
+                prev_close = safe_float(item.get("昨收", 0))
+                change = safe_float(item.get("涨跌额", 0))
+                change_pct = safe_float(item.get("涨跌幅", 0))
+                if current > 0 and prev_close > 0 and abs(current - prev_close) > 1e-9:
+                    computed_change = current - prev_close
+                    computed_change_pct = computed_change / prev_close * 100
+                    if abs(change) < 1e-9:
+                        change = computed_change
+                    if abs(change_pct) < 1e-9:
+                        change_pct = computed_change_pct
+                high = safe_float(item.get("最高", 0))
+                low = safe_float(item.get("最低", 0))
+                results.append({
+                    "code": code,
+                    "name": display_name,
+                    "current": current,
+                    "change": change,
+                    "change_pct": change_pct,
+                    "open": safe_float(item.get("今开", 0)),
+                    "high": high,
+                    "low": low,
+                    "prev_close": prev_close,
+                    "volume": safe_float(item.get("成交量", 0)),
+                    "amount": safe_float(item.get("成交额", 0)),
+                    "amplitude": (high - low) / prev_close * 100 if prev_close > 0 else 0.0,
+                })
+            return results or None
+        except Exception as exc:
+            logger.warning(f"[Akshare] 获取港股主要指数失败: {exc}")
             return None
 
     def get_market_stats(self) -> Optional[Dict[str, Any]]:
@@ -1764,24 +1934,60 @@ class AkshareFetcher(BaseFetcher):
             self._set_random_user_agent()
             self._enforce_rate_limit()
 
-            logger.info("[API调用] ak.stock_zh_a_spot_em() 获取市场统计...")
+            started_at = time.monotonic()
+            logger.info(
+                "[MarketStats] component=market_stats provider=AkshareFetcher "
+                "api=ak.stock_zh_a_spot_em action=request_start"
+            )
             df = ak.stock_zh_a_spot_em()
+            elapsed = time.monotonic() - started_at
+            logger.info(
+                "[MarketStats] component=market_stats provider=AkshareFetcher "
+                "api=ak.stock_zh_a_spot_em action=request_complete elapsed=%.2fs",
+                elapsed,
+            )
             if df is not None and not df.empty:
                 return self._calc_market_stats(df)
+            logger.warning(
+                "[MarketStats] component=market_stats provider=AkshareFetcher "
+                "api=ak.stock_zh_a_spot_em action=parse status=empty"
+            )
         except Exception as e:
-            logger.warning(f"[Akshare] 东财接口获取市场统计失败: {e}，尝试新浪接口")
+            logger.warning(
+                "[MarketStats] component=market_stats provider=AkshareFetcher "
+                "api=ak.stock_zh_a_spot_em action=failed error=%s fallback=ak.stock_zh_a_spot",
+                e,
+            )
 
         # 东财失败后，尝试新浪接口
         try:
             self._set_random_user_agent()
             self._enforce_rate_limit()
 
-            logger.info("[API调用] ak.stock_zh_a_spot() 获取市场统计(新浪)...")
+            started_at = time.monotonic()
+            logger.info(
+                "[MarketStats] component=market_stats provider=AkshareFetcher "
+                "api=ak.stock_zh_a_spot action=request_start"
+            )
             df = ak.stock_zh_a_spot()
+            elapsed = time.monotonic() - started_at
+            logger.info(
+                "[MarketStats] component=market_stats provider=AkshareFetcher "
+                "api=ak.stock_zh_a_spot action=request_complete elapsed=%.2fs",
+                elapsed,
+            )
             if df is not None and not df.empty:
                 return self._calc_market_stats(df)
+            logger.warning(
+                "[MarketStats] component=market_stats provider=AkshareFetcher "
+                "api=ak.stock_zh_a_spot action=parse status=empty"
+            )
         except Exception as e:
-            logger.error(f"[Akshare] 新浪接口获取市场统计也失败: {e}")
+            logger.error(
+                "[MarketStats] component=market_stats provider=AkshareFetcher "
+                "api=ak.stock_zh_a_spot action=failed error=%s",
+                e,
+            )
 
         return None
 

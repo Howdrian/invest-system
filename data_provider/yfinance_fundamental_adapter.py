@@ -28,7 +28,7 @@ mark the block as ``partial`` when only some fields are populated.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
@@ -108,6 +108,52 @@ def _yoy_from_row(row: Optional[pd.Series]) -> Optional[float]:
     return round((latest - prev_year) / abs(prev_year) * 100.0, 4)
 
 
+def _statement_history(
+    income_df: Optional[pd.DataFrame],
+    cashflow_df: Optional[pd.DataFrame],
+    *,
+    currency: Optional[str],
+    limit: int = 12,
+) -> List[Dict[str, Any]]:
+    """Normalize online statement history for deterministic local comparison."""
+
+    if income_df is None or income_df.empty:
+        return []
+    columns = list(income_df.columns)
+    try:
+        columns = sorted(columns, key=lambda value: pd.Timestamp(value), reverse=True)
+    except Exception:
+        pass
+    revenue_row = _pick_row(income_df, _INCOME_REVENUE_KEYS)
+    net_profit_row = _pick_row(income_df, _INCOME_NET_PROFIT_KEYS)
+    cashflow_row = _pick_row(cashflow_df, _CASHFLOW_OP_KEYS) if cashflow_df is not None else None
+    rows: List[Dict[str, Any]] = []
+    for column in columns[: max(1, limit)]:
+        timestamp = pd.to_datetime(column, errors="coerce")
+        if pd.isna(timestamp):
+            continue
+
+        def value_at(series: Optional[pd.Series]) -> Optional[float]:
+            if series is None:
+                return None
+            try:
+                return _safe_float(series.get(column))
+            except Exception:
+                return None
+
+        row = {
+            "report_date": timestamp.date().isoformat(),
+            "revenue": value_at(revenue_row),
+            "net_profit_parent": value_at(net_profit_row),
+            "operating_cash_flow": value_at(cashflow_row),
+            "currency": currency,
+        }
+        normalized = {key: value for key, value in row.items() if value not in (None, "")}
+        if any(normalized.get(key) is not None for key in ("revenue", "net_profit_parent", "operating_cash_flow")):
+            rows.append(normalized)
+    return rows
+
+
 def _epoch_to_date(value: Any) -> Optional[str]:
     raw = _safe_float(value)
     if raw is None:
@@ -131,12 +177,19 @@ def _convert_to_yf_symbol(stock_code: str) -> str:
         return f"{digits.zfill(4)}.HK"
     if "." in code:
         return code
-    # Assume US ticker by default for non-HK / non-CN callers
+    if code.isdigit() and len(code) == 6:
+        if code.startswith(("5", "6", "9")):
+            return f"{code}.SS"
+        if code.startswith(("0", "1", "2", "3")):
+            return f"{code}.SZ"
+        if code.startswith(("4", "8")):
+            return f"{code}.BJ"
+    # Assume US ticker by default for non-HK / non-CN callers.
     return code
 
 
 class YfinanceFundamentalAdapter:
-    """HK/US fundamental adapter backed by yfinance.
+    """A/H/US fundamental adapter backed by yfinance.
 
     Returns the same bundle keys as :class:`AkshareFundamentalAdapter` so the
     aggregation in :func:`data_provider.base.get_fundamental_context` can stay
@@ -146,6 +199,7 @@ class YfinanceFundamentalAdapter:
     def get_fundamental_bundle(self, stock_code: str) -> Dict[str, Any]:
         result: Dict[str, Any] = {
             "status": "not_supported",
+            "valuation": {},
             "growth": {},
             "earnings": {},
             "institution": {},
@@ -182,6 +236,27 @@ class YfinanceFundamentalAdapter:
         # renderer can suffix per-block currency tags correctly.
         financial_currency = str(info.get("financialCurrency") or info.get("currency") or "").upper() or None
         dividend_currency = str(info.get("currency") or info.get("financialCurrency") or "").upper() or None
+        # Capture the UTC calendar date once so every dated field in this
+        # bundle uses the same observation point, even if execution crosses
+        # midnight while yfinance calls are in flight.
+        as_of_date = datetime.now(timezone.utc).date()
+
+        # Current valuation is a generic public snapshot.  It is deliberately
+        # not called a historical percentile: the daily research layer builds
+        # time comparisons only from retained dated snapshots.
+        valuation_payload = {
+            "trailing_pe": _safe_float(info.get("trailingPE")),
+            "forward_pe": _safe_float(info.get("forwardPE")),
+            "price_to_book": _safe_float(info.get("priceToBook")),
+            "enterprise_to_revenue": _safe_float(info.get("enterpriseToRevenue")),
+            "enterprise_to_ebitda": _safe_float(info.get("enterpriseToEbitda")),
+            "market_cap": _safe_float(info.get("marketCap")),
+            "currency": dividend_currency,
+            "as_of": as_of_date.isoformat(),
+        }
+        if any(value is not None for key, value in valuation_payload.items() if key not in {"currency", "as_of"}):
+            result["valuation"] = valuation_payload
+            result["source_chain"].append("valuation:yfinance.info")
 
         # ---------------- growth block ----------------
         growth_payload: Dict[str, Any] = {
@@ -266,6 +341,15 @@ class YfinanceFundamentalAdapter:
             result.setdefault("earnings", {})["financial_report"] = financial_report
             result["source_chain"].append("earnings.financial_report:yfinance")
 
+        financial_history = _statement_history(
+            income_df,
+            cashflow_df,
+            currency=financial_currency,
+        )
+        if financial_history:
+            result.setdefault("earnings", {})["financial_history"] = financial_history
+            result["source_chain"].append("earnings.financial_history:yfinance")
+
         # ---------------- dividend block ----------------
         events: List[Dict[str, Any]] = []
         try:
@@ -274,32 +358,43 @@ class YfinanceFundamentalAdapter:
             result["errors"].append(f"dividends:{type(exc).__name__}")
             div_series = None
         if div_series is not None and not div_series.empty:
+            # yfinance 1.2.x returns Ticker.dividends as a single-column DataFrame, not a
+            # Series; coerce so `.items()` yields (timestamp, value) rather than
+            # (column_name, Series). Otherwise every event is dropped (`_safe_float(Series)`
+            # -> None) and TTM silently falls back to the annual-rate estimate.
+            if hasattr(div_series, "columns"):
+                div_series = div_series.iloc[:, 0]
             try:
-                # Index is timezone-aware (ex-dividend date)
-                cutoff = pd.Timestamp.now(tz=div_series.index.tz) - pd.Timedelta(days=365)
+                event_candidates: List[tuple[Dict[str, Any], date]] = []
                 for ts, value in div_series.items():
                     per_share = _safe_float(value)
                     if per_share is None or per_share <= 0:
                         continue
                     try:
-                        event_date = pd.Timestamp(ts).date().isoformat()
+                        event_ts = pd.Timestamp(ts)
+                        if pd.isna(event_ts):
+                            continue
+                        event_calendar_date = event_ts.date()
+                        event_date = event_calendar_date.isoformat()
                     except Exception:
                         continue
-                    events.append({
+                    event = {
                         "event_date": event_date,
                         "ex_dividend_date": event_date,
                         "record_date": None,
                         "announcement_date": None,
                         "cash_dividend_per_share": per_share,
                         "is_pre_tax": True,
-                    })
+                    }
+                    events.append(event)
+                    event_candidates.append((event, event_calendar_date))
                 ttm_events = []
-                for item in events:
-                    try:
-                        event_ts = pd.Timestamp(item["event_date"]).tz_localize(div_series.index.tz)
-                    except Exception:
-                        continue
-                    if event_ts >= cutoff:
+                cutoff_date = as_of_date - timedelta(days=365)
+                for item, event_date in event_candidates:
+                    # Dividend events are day-granularity facts. Compare their
+                    # local calendar date, not their timestamp, so an event later
+                    # on the as-of day is included for both aware and naive indexes.
+                    if cutoff_date <= event_date <= as_of_date:
                         ttm_events.append(item)
             except Exception as exc:
                 result["errors"].append(f"dividend_window:{type(exc).__name__}")
@@ -319,7 +414,7 @@ class YfinanceFundamentalAdapter:
                 "ttm_cash_dividend_per_share": round(ttm_cash, 6) if ttm_cash is not None else None,
                 "coverage": "cash_dividend_pre_tax",
                 "currency": dividend_currency,
-                "as_of": datetime.now(timezone.utc).date().isoformat(),
+                "as_of": as_of_date.isoformat(),
             }
 
             # Yield: prefer recomputing from TTM cash / latest price so the
@@ -360,7 +455,8 @@ class YfinanceFundamentalAdapter:
             result["source_chain"].append("belong_boards:yfinance.info")
 
         has_content = bool(
-            result.get("growth")
+            result.get("valuation")
+            or result.get("growth")
             or result.get("earnings")
             or result.get("belong_boards")
         )
