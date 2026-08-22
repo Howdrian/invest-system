@@ -1473,7 +1473,65 @@ def test_model_selection_prefers_first_smoke_success(monkeypatch):
     selection = _select_agent_model(config, model_policy='best')
 
     assert selection['selectedModel'] == 'vertex_ai/gemini-2.5-pro'
+    assert selection['usableModels'] == ['vertex_ai/gemini-2.5-pro']
     assert calls[:3] == ['gemini/gemini-3.5-flash', 'vertex_ai/gemini-3.5-flash', 'vertex_ai/gemini-2.5-pro']
+
+
+def test_model_selection_uses_configured_deepseek_before_lower_quality_fallback(monkeypatch):
+    config = SimpleNamespace(
+        agent_litellm_model='gemini/gemini-3-flash-preview',
+        litellm_model='gemini/gemini-3-flash-preview',
+        litellm_fallback_models=['gemini/gemini-2.5-flash'],
+        deepseek_api_keys=['configured'],
+    )
+    calls = []
+
+    def fake_smoke(model, _config):
+        calls.append(model)
+        return {
+            'model': model,
+            'status': 'success' if model == 'deepseek/deepseek-v4-flash' else 'failed',
+        }
+
+    monkeypatch.setattr('src.daily_department_llm._smoke_agent_model', fake_smoke)
+
+    selection = _select_agent_model(config, model_policy='best')
+
+    assert selection['selectedModel'] == 'deepseek/deepseek-v4-flash'
+    assert selection['usableModels'] == ['deepseek/deepseek-v4-flash']
+    assert calls[-3:] == [
+        'gemini/gemini-3-flash-preview',
+        'deepseek/deepseek-v4-flash',
+        'gemini/gemini-2.5-flash',
+    ]
+
+
+def test_model_selection_keeps_a_smoke_verified_runtime_fallback(monkeypatch):
+    config = SimpleNamespace(
+        agent_litellm_model='gemini/gemini-3-flash-preview',
+        litellm_model='gemini/gemini-3-flash-preview',
+        litellm_fallback_models=['gemini/gemini-2.5-flash'],
+        deepseek_api_keys=['configured'],
+    )
+
+    monkeypatch.setattr(
+        'src.daily_department_llm._smoke_agent_model',
+        lambda model, _config: {
+            'model': model,
+            'status': 'success' if model in {
+                'deepseek/deepseek-v4-flash',
+                'gemini/gemini-2.5-flash',
+            } else 'failed',
+        },
+    )
+
+    selection = _select_agent_model(config, model_policy='best')
+
+    assert selection['selectedModel'] == 'deepseek/deepseek-v4-flash'
+    assert selection['usableModels'] == [
+        'deepseek/deepseek-v4-flash',
+        'gemini/gemini-2.5-flash',
+    ]
 
 
 def test_cio_enrichment_reuses_existing_portfolio_evidence(tmp_path):
