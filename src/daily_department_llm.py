@@ -432,6 +432,8 @@ def run_llm_daily_department_agents(
             backend, model_selection = build_default_llm_backend_with_selection(model_policy=model_policy)
     except Exception as exc:  # noqa: BLE001 - recorded as diagnostics, fallback handles report
         backend_error = _error_text(exc)
+        if isinstance(exc, GenerationError) and isinstance(exc.details.get("modelSelection"), Mapping):
+            model_selection = dict(exc.details["modelSelection"])
     model_selection.update({"runDate": run_date})
     (run_status / "agent_model_selection.json").write_text(
         json.dumps(model_selection, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
@@ -613,9 +615,17 @@ def build_default_llm_backend_with_selection(*, model_policy: str = "best") -> t
             fallbackable=True,
             backend=LITELLM_BACKEND_ID,
             provider=LITELLM_BACKEND_ID,
-            details={"reason": "no_agent_model_smoke_succeeded"},
+            details={
+                "reason": "no_agent_model_smoke_succeeded",
+                "modelSelection": selection,
+            },
         )
-    config = _load_lightweight_llm_config(agent_model_override=selected, fallback_models_override=[])
+    usable_models = [str(item).strip() for item in selection.get("usableModels") or [] if str(item).strip()]
+    runtime_fallbacks = [model for model in usable_models if model != selected]
+    config = _load_lightweight_llm_config(
+        agent_model_override=selected,
+        fallback_models_override=runtime_fallbacks,
+    )
     backend_id = resolve_agent_generation_backend_id(config)
     if backend_id != LITELLM_BACKEND_ID:
         raise GenerationError(
@@ -643,18 +653,24 @@ def _select_agent_model(config: Any, *, model_policy: str = "best") -> Dict[str,
         candidates = list(DEFAULT_MODEL_CANDIDATES)
         if configured and configured not in candidates:
             candidates.append(configured)
+        if getattr(config, "deepseek_api_keys", None):
+            candidates.append("deepseek/deepseek-v4-flash")
+        candidates.extend(getattr(config, "litellm_fallback_models", None) or [])
+        candidates = list(dict.fromkeys(str(item).strip() for item in candidates if str(item).strip()))
     rows: List[Dict[str, Any]] = []
-    selected = ""
+    usable_models: List[str] = []
     for model in [item for item in candidates if item]:
         row = _smoke_agent_model(model, config)
         rows.append(row)
         if row.get("status") == "success":
-            selected = model
-            break
+            usable_models.append(model)
+            if len(usable_models) >= 2:
+                break
     return {
         "schema": MODEL_SELECTION_SCHEMA,
         "policy": policy,
-        "selectedModel": selected,
+        "selectedModel": usable_models[0] if usable_models else "",
+        "usableModels": usable_models,
         "candidates": rows,
     }
 
@@ -667,7 +683,7 @@ def _smoke_agent_model(model: str, base_config: Any) -> Dict[str, Any]:
             "只输出一个 JSON object：{\"ok\": true}",
             {"temperature": 0, "max_output_tokens": 48, "response_format": "json_object", "timeout": 45},
             system_prompt="只输出 JSON。",
-            response_validator=None,
+            response_validator=_validate_model_smoke_response,
             config=config,
         )
         return {
@@ -682,6 +698,12 @@ def _smoke_agent_model(model: str, base_config: Any) -> Dict[str, Any]:
             "durationSeconds": _round_seconds(time.perf_counter() - start),
             "error": _clip(_error_text(exc), 260),
         }
+
+
+def _validate_model_smoke_response(text: str) -> None:
+    payload = _parse_json_object(text)
+    if payload.get("ok") is not True:
+        raise ValueError("model_smoke_invalid_payload")
 
 
 def _load_lightweight_llm_config(
