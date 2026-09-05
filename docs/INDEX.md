@@ -4,6 +4,8 @@
 
 ## 按场景选择
 
+Mac/Codex 部署改造：[实施与验收规划](codex-local-production-plan.md)、[配置说明](codex-research-runtime.md)。
+
 | 我想要 | 先看 | 继续看 |
 | --- | --- | --- |
 | 查看当前真实进展、验证结果和剩余事项 | [当前状态](CURRENT_STATE.md) | [Reports 产品线](reports-product-line.md)、[技术债台账](TECH_DEBT_REGISTER.md) |

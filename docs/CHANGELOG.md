@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [新功能] Reports 部门文本生成可显式选择已有 Codex/其他本地 CLI 后端，不再强制 LiteLLM；Codex 模型与思考强度可独立配置，保留原 API 后端选择能力。
+- [改进] Codex 原分析与 Reports 增加受控模型参数、独立配置运行及请求元信息；指定本地后端时不执行 Gemini/Vertex 候选 smoke。尚未完成整份日报与定时生产验收。
+
 - [修复] Reports 证据门拒绝 source-smoke、缺失、无来源、过期和未来穿越证据；SourceHealth 按日报日期计算新鲜度，过期数据不再获得完整覆盖或支撑 Agent/CIO 结论。
 - [修复] `main.py`、`server.py`、`webui.py` 与 API middleware 统一公网 bind guard；非 loopback 必须启用管理员认证并预先初始化密码，运行时关闭认证在公网监听下被拒绝。
 - [修复] 关闭管理员认证即使已有有效 session 也必须重新输入当前密码；通用 System Config 不再允许绕过专用认证入口修改只读开关。
@@ -2351,3 +2354,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - 原系统 `DataFetcherManager` subject evidence 参与日报 artifact。
 - Reader 文案去掉“禁用”口径，改成“未生成仓位建议”。
 - 本地生成并验证 2026-07-01 日报：`FULL_REVIEW`，health `0.901`，verified facts `25`。
+
+
+### 2026-09-05 Codex 本地实跑发现的回归
+
+- 修复跨市场复盘中指数涨跌幅 None/NaN 导致 prompt/表格/模板崩溃，未知不冒充零涨跌。
+- 部门断点恢复绑定实际输入/SOP/模型/思考强度/实现指纹，并支持 partial checkpoint。
+- Codex 本地入口新增 OS 生命周期运行锁；市场 context 单测锁不再干扰真实日报。
+- 项目专用 Codex 0.153.4 真实高/低思考强度 canary 通过；App Server Gate A 真实工具/多轮/隔离探针通过。不是五日生产验收。

@@ -206,7 +206,7 @@ class MarketAnalyzer:
         return f"{amount_raw:.0f}"
 
     def _get_index_change_arrow(self, change_pct: float) -> str:
-        if change_pct == 0:
+        if change_pct is None or pd.isna(change_pct) or change_pct == 0:
             return "⚪"
         color_scheme = getattr(getattr(self, "config", None), "market_review_color_scheme", "green_up")
         if color_scheme == "red_up":
@@ -1075,7 +1075,7 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
                 reasons.append(f"上涨家数占比 {up_ratio:.0%}，亏钱效应较强")
             else:
                 reasons.append(f"上涨家数占比 {up_ratio:.0%}，市场分化")
-        index_changes = [idx.change_pct for idx in overview.indices if idx.change_pct is not None]
+        index_changes = [idx.change_pct for idx in overview.indices if idx.change_pct is not None and not pd.isna(idx.change_pct)]
         if index_changes:
             avg_change = sum(index_changes) / len(index_changes)
             reasons.append(f"主要指数平均涨跌幅 {avg_change:+.2f}%")
@@ -1098,7 +1098,7 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
                 reasons.append(f"advancers ratio {up_ratio:.0%}, downside pressure dominates")
             else:
                 reasons.append(f"advancers ratio {up_ratio:.0%}, breadth is mixed")
-        index_changes = [idx.change_pct for idx in overview.indices if idx.change_pct is not None]
+        index_changes = [idx.change_pct for idx in overview.indices if idx.change_pct is not None and not pd.isna(idx.change_pct)]
         if index_changes:
             avg_change = sum(index_changes) / len(index_changes)
             reasons.append(f"average major-index change {avg_change:+.2f}%")
@@ -1129,7 +1129,7 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
             amount_raw = idx.amount or 0.0
             amount_str = self._format_turnover_value(amount_raw)
             lines.append(
-                f"| {idx.name} | {idx.current:.2f} | {arrow} {idx.change_pct:+.2f}% | "
+                f"| {idx.name} | {self._format_optional_number(idx.current)} | {arrow} {self._format_signed_pct(idx.change_pct)} | "
                 f"{self._format_optional_number(idx.open)} | {self._format_optional_number(idx.high)} | "
                 f"{self._format_optional_number(idx.low)} | {self._format_optional_pct(idx.amplitude)} | {amount_str} |"
             )
@@ -1240,7 +1240,7 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
             numeric_value = float(value)
         except (TypeError, ValueError):
             return "N/A"
-        return f"{numeric_value:+.2f}%"
+        return "N/A" if pd.isna(numeric_value) else f"{numeric_value:+.2f}%"
 
     @classmethod
     def _format_ranking_summary(cls, rows: List[Dict], limit: int = 3) -> str:
@@ -1277,7 +1277,7 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
         if breadth_available:
             breadth_score = int(overview.up_count / participants * 100)
 
-        index_changes = [idx.change_pct for idx in overview.indices if idx.change_pct is not None]
+        index_changes = [idx.change_pct for idx in overview.indices if idx.change_pct is not None and not pd.isna(idx.change_pct)]
         index_available = bool(overview.indices and index_changes)
         index_score = 50
         if index_available:
@@ -1423,8 +1423,13 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
         # 指数行情信息（简洁格式，不用emoji）
         indices_text = ""
         for idx in overview.indices:
-            direction = "↑" if idx.change_pct > 0 else "↓" if idx.change_pct < 0 else "-"
-            indices_text += f"- {idx.name}: {idx.current:.2f} ({direction}{abs(idx.change_pct):.2f}%)\n"
+            change = idx.change_pct
+            if change is None or pd.isna(change):
+                change_text = "N/A"
+            else:
+                direction = "↑" if change > 0 else "↓" if change < 0 else "-"
+                change_text = f"{direction}{abs(change):.2f}%"
+            indices_text += f"- {idx.name}: {self._format_optional_number(idx.current)} ({change_text})\n"
         
         # 板块信息
         top_sectors_text = self._format_ranking_summary(overview.top_sectors)
@@ -1668,7 +1673,7 @@ Output the report content directly, no extra commentary.
             ),
             None,
         )
-        if mood_index:
+        if mood_index and mood_index.change_pct is not None and not pd.isna(mood_index.change_pct):
             if mood_index.change_pct > 1:
                 market_mood = self._get_market_mood_text("strong_up", template_language)
             elif mood_index.change_pct > 0:
@@ -1684,7 +1689,7 @@ Output the report content directly, no extra commentary.
         indices_text = ""
         for idx in overview.indices[:4]:
             marker = self._get_index_change_arrow(idx.change_pct)
-            indices_text += f"- **{idx.name}**: {idx.current:.2f} ({marker} {idx.change_pct:+.2f}%)\n"
+            indices_text += f"- **{idx.name}**: {self._format_optional_number(idx.current)} ({marker} {self._format_signed_pct(idx.change_pct)})\n"
         
         # 板块信息
         separator = ", " if template_language == "en" else "、"

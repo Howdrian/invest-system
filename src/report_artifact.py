@@ -1483,12 +1483,22 @@ def _build_reader_v3(
             **scenario_adjudication,
             "judgment": _product_copy(reader_brief.get("finalConclusion")),
         }
-    scenario_adjudication = _reader_scope_adjudication(
-        scenario_adjudication,
-        market_matrix=market_matrix,
-    )
+    # Reader renders validated analysis; deterministic editorial fallbacks must
+    # not silently replace genuine LLM conclusions or their evidence bindings.
+    llm_agents = {str(row.get("agent") or "") for row in visible
+                  if row.get("agentRuntime") == "LLM" and row.get("llmStatus") == "success"}
+    if "CIOAgent" not in llm_agents:
+        scenario_adjudication = _reader_scope_adjudication(
+            scenario_adjudication,
+            market_matrix=market_matrix,
+        )
+    if "CIOAgent" in llm_agents and scenario_adjudication.get("judgment"):
+        for card in cards:
+            if card.get("agent") == "CIOAgent":
+                card["conclusion"] = _reader_adjudication_judgment(scenario_adjudication["judgment"])
+    fallback_cards = [card for card in cards if card.get("agent") not in llm_agents]
     _curate_reader_v3_cards(
-        cards,
+        fallback_cards,
         market_matrix=market_matrix,
         stock_matrix=stock_matrix,
         evidence_rows=evidence_facts or evidence_items,
@@ -1497,7 +1507,7 @@ def _build_reader_v3(
         adjudication=scenario_adjudication,
     )
     _rebind_curated_reader_evidence(
-        cards,
+        fallback_cards,
         evidence_rows=evidence_facts or evidence_items,
         evidence_items=evidence_items,
     )
@@ -1584,7 +1594,7 @@ def _build_reader_v3(
         ],
     )
     next_steps = [_reader_institutional_copy(item) for item in next_steps]
-    if market_level_count >= 3:
+    if market_level_count >= 3 and "CIOAgent" not in llm_agents:
         pressured_markets = [
             str(row.get("scopeLabel") or row.get("market") or "").replace("市场", "")
             for row in market_matrix
@@ -2016,6 +2026,8 @@ def _reader_no_portfolio_copy(value: Any) -> Any:
 
 def _align_reader_no_portfolio_language(cards: List[Dict[str, Any]]) -> None:
     for card in cards:
+        if card.get("agent") in {"PortfolioAgent", "PortfolioReviewAgent"}:
+            card["label"] = "自选股观察（未接入持仓）"
         for key in ("conclusion", "keyClaims", "counterpoints", "dataGaps", "nextAction", "nextActions"):
             if key in card:
                 card[key] = _reader_no_portfolio_copy(card[key])
@@ -2767,10 +2779,19 @@ def _rebind_curated_reader_evidence(
 
 def _reader_cn_headline_short(headline: str) -> str:
     pairs = dict(re.findall(r"(上证指数|深证成指|创业板指|科创50|上证50|沪深300)\s*([+-]\d+(?:\.\d+)?)%", headline))
-    growth = [f"{name} {pairs[name]}%" for name in ("科创50", "创业板指") if name in pairs]
-    if growth:
-        return "主要指数同步下跌，" + "、".join(growth) + "领跌"
-    return headline
+    if not pairs:
+        return headline
+    changes = {name: float(value) for name, value in pairs.items()}
+    if all(value < 0 for value in changes.values()):
+        label, ending = "所列指数同步下跌", "跌幅居前"
+        names = sorted(changes, key=changes.get)[:2]
+    elif all(value > 0 for value in changes.values()):
+        label, ending = "所列指数同步上涨", "涨幅居前"
+        names = sorted(changes, key=changes.get, reverse=True)[:2]
+    else:
+        label, ending = "所列指数涨跌分化", ""
+        names = sorted(changes, key=lambda name: abs(changes[name]), reverse=True)[:2]
+    return label + "，" + "、".join(f"{name} {pairs[name]}%" for name in names) + ending
 
 
 def _reader_market_headline_short(row: Mapping[str, Any]) -> str:
@@ -3308,6 +3329,8 @@ def _public_reader_v3_department_card(card: Dict[str, Any]) -> Dict[str, Any]:
     row = dict(card)
     agent_key = str(card.get("agent") or "")
     label = _DEPARTMENT_LABELS.get(agent_key) or str(card.get("label") or "")
+    if agent_key in {"PortfolioAgent", "PortfolioReviewAgent"} and card.get("label") == "自选股观察（未接入持仓）":
+        label = "自选股观察（未接入持仓）"
     if not label:
         label = re.sub(r"Agent$", "", agent_key) or "分析部门"
     row["agent"] = _product_copy(label)

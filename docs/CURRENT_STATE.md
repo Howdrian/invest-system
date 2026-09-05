@@ -1,5 +1,15 @@
 # invest-system 当前状态
 
+## 2026-09-05 更新：Codex 单次本地闭环通过，生产运行未验收
+
+当前开发分支为 `codex/codex-local-runtime-20260905`。新增 Reports 后端选择、Codex 模型/思考强度覆盖与设置页配置项；本机 CLI 0.144.4 被模型服务拒绝，独立安装的 0.153.4 已通过真实合成材料 canary，未替换全局 CLI。
+
+恢复了 linked release-candidate 环境中缺失的 8 项数据源配置到当前 ignored `.env`（只复制数据源项，无模型 API key）。原分析/Reports 已配置 Codex，API fallback 禁用。2026-09-05 真实日报已完成：原四标的及三市场分析、11 个部门 LLM 成功、最终输出 fallback=0。报告为 LIMITED_REVIEW，不是所有源满血。后端 6291 passed / 501 subtests；Web 1109 passed、2 skipped，lint/build 通过。最终 Reader/Pages 语义校验与 API 同 artifact 校验通过。未安装定时任务、未发布、未完成五日运行观察。
+
+实施范围及验收以 [本地生产规划](codex-local-production-plan.md) 和 [配置说明](codex-research-runtime.md) 为准。**下方 2026-08-19 内容是历史验收快照，其 Git/云端状态不得当成今天事实。**
+
+---
+
 > Document status: `CURRENT_TRUTH`
 > Last verified: 2026-08-19 21:11 CST
 > Active repo: `/Users/hac/AI-Studio/投研/invest-system-upstream-sync-20260812`

@@ -2134,6 +2134,11 @@ class LocalCliGenerationBackend(GenerationBackend):
             "concurrency_limit": concurrency_limit,
         }
 
+        if self._preset.preset_id == CODEX_CLI_BACKEND_ID:
+            diagnostics["requested_model"] = str(getattr(self._config, "codex_cli_model", "") or "")
+            diagnostics["reasoning_effort"] = str(getattr(self._config, "codex_cli_reasoning_effort", "") or "")
+            diagnostics["actual_model"] = None  # Final text alone cannot establish the resolved model.
+            diagnostics["isolated_config"] = bool(getattr(self._config, "codex_cli_isolated", False))
         stdout = ""
         stderr = ""
         text = ""
@@ -2569,6 +2574,11 @@ class LocalCliGenerationBackend(GenerationBackend):
         argv: list[str],
         prompt_path: Optional[Path],
     ) -> list[str]:
+        if self._preset.preset_id == CODEX_CLI_BACKEND_ID:
+            extra = self._codex_options()
+            if argv and argv[-1] == "-":
+                return [*argv[:-1], *extra, argv[-1]]
+            return [*argv, *extra]
         if self._preset.preset_id != OPENCODE_CLI_BACKEND_ID:
             return argv
         model = self._get_opencode_cli_model()
@@ -2597,6 +2607,30 @@ class LocalCliGenerationBackend(GenerationBackend):
                 *runtime_argv[insert_at:],
             ]
         return runtime_argv
+
+    def _codex_options(self) -> list[str]:
+        """Pass typed model settings, never arbitrary CLI arguments or shell text."""
+        model = str(getattr(self._config, "codex_cli_model", "") or "").strip()
+        effort = str(getattr(self._config, "codex_cli_reasoning_effort", "") or "").strip()
+        if ((model and not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:/-]*", model))
+                or effort not in {"", "none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"}):
+            raise self._error(
+                GenerationErrorCode.UNSAFE_CONFIG, stage="configuration",
+                retryable=False, fallbackable=False,
+                details={"reason": "invalid_codex_model_or_reasoning_effort"},
+            )
+        args: list[str] = []
+        if getattr(self._config, "codex_cli_isolated", False):
+            args.extend(["--ignore-user-config", "-c", 'model_provider="openai"',
+                         "-c", "features.shell_tool=false", "-c", "features.apps=false",
+                         "-c", "features.plugins=false", "-c", "features.hooks=false",
+                         "-c", "features.multi_agent=false", "-c", "features.skip_host_skill_discovery=true",
+                         "-c", 'web_search="disabled"'])
+        if model:
+            args.extend(["--model", model])
+        if effort:
+            args.extend(["-c", f'model_reasoning_effort="{effort}"'])
+        return args
 
     def _get_opencode_cli_model(self) -> str:
         model = str(getattr(self._config, "opencode_cli_model", "") or "").strip()
@@ -2714,7 +2748,10 @@ class LocalCliGenerationBackend(GenerationBackend):
         elif "login" in combined or "authentication" in combined or "not authenticated" in combined:
             code = GenerationErrorCode.LOGIN_REQUIRED
             reason = "login_required"
-        elif "approval" in combined or "approve" in combined or "permission" in combined:
+        elif any(marker in combined for marker in (
+            "approval required", "requires approval", "approval denied", "permission denied",
+            "approve this", "approval_required",
+        )):
             code = GenerationErrorCode.APPROVAL_REQUIRED
             reason = "approval_required"
         elif "tty" in combined or "interactive" in combined or "prompt" in combined:
@@ -2725,7 +2762,8 @@ class LocalCliGenerationBackend(GenerationBackend):
             stage="execution",
             retryable=False,
             fallbackable=True,
-            details={**diagnostics, "reason": reason, "returncode": returncode},
+            details={**diagnostics, "reason": reason, "returncode": returncode,
+                     "stderr_tail": redact_diagnostic_text(stderr[-1600:], limit=1600)},
         )
 
     def _output_file_error(

@@ -202,7 +202,10 @@ def test_run_llm_daily_department_agents_writes_llm_memos_and_runtime_ledger(tmp
     assert section_titles[:7] == ['市场状态', '宏观与地缘', '行业/风格', '候选观察', '重点个股', '持仓影响', '风险和反证']
 
 
-def test_run_llm_daily_department_agents_resumes_only_failed_downstream_agents(tmp_path):
+def test_run_llm_daily_department_agents_resumes_only_failed_downstream_agents(tmp_path, monkeypatch):
+    # Resume means unchanged inputs, not a second run after live enrichment
+    # has rebuilt source health. Keep this offline fixture immutable.
+    monkeypatch.setattr('src.daily_department_llm.run_cio_enrichment', lambda *a: {'requested': False})
     docs, reports, date = _daily_agent_fixture(tmp_path)
     first_backend = FakeDepartmentBackend()
     run_llm_daily_department_agents(
@@ -1563,3 +1566,18 @@ def test_cio_enrichment_reuses_existing_portfolio_evidence(tmp_path):
     assert not any(row.get('origin') == 'CIO_REQUESTED' for row in rows)
     assert (run / 'cio_data_requests.json').exists()
     assert (run / 'cio_enrichment_runs.jsonl').exists()
+
+
+def test_department_resume_uses_interrupted_partial_log(tmp_path, monkeypatch):
+    monkeypatch.setattr('src.daily_department_llm.run_cio_enrichment', lambda *a: {'requested': False})
+    docs, reports, date = _daily_agent_fixture(tmp_path)
+    run_llm_daily_department_agents(docs, date, runtime_reports_dir=reports,
+                                    backend_factory=FakeDepartmentBackend, require_all_llm=True)
+    # Simulate interruption after per-agent checkpoints, before final log write.
+    (docs / 'run_status' / date / 'llm_agent_runs.jsonl').unlink()
+    retry = FakeDepartmentBackend()
+    result = run_llm_daily_department_agents(docs, date, runtime_reports_dir=reports,
+                                            backend_factory=lambda: retry, require_all_llm=True,
+                                            resume_successful=True)
+    assert result['resumedSuccessCount'] == len(DEPARTMENT_SPECS)
+    assert retry.calls == []

@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import json
+
+import pytest
 from datetime import date, datetime
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -14,6 +16,15 @@ from src.services.daily_market_context import (
     DailyMarketContextService,
     format_daily_market_context_prompt_section,
 )
+
+
+@pytest.fixture(autouse=True)
+def isolate_market_review_lock(tmp_path, monkeypatch):
+    """Offline tests must not wait on a live report process in the workspace."""
+    monkeypatch.setattr(
+        "src.core.market_review_lock.market_review_lock_path",
+        lambda config: tmp_path / "market_review.lock",
+    )
 
 
 def _history_record(

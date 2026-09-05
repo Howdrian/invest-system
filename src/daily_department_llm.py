@@ -11,6 +11,7 @@ fallback memos are explicitly marked so they cannot be mistaken for LLM output.
 from __future__ import annotations
 
 import json
+import hashlib
 import multiprocessing
 import os
 import re
@@ -36,7 +37,9 @@ from src.daily_department_agents import (
     run_daily_department_agents,
 )
 from src.llm.backend_factory import create_generation_backend
-from src.llm.backend_registry import LITELLM_BACKEND_ID, resolve_agent_generation_backend_id
+from src.llm.backend_registry import (
+    LITELLM_BACKEND_ID, LOCAL_CLI_GENERATION_BACKEND_IDS, resolve_agent_generation_backend_id,
+)
 from src.llm.generation_backend import GenerationBackend, GenerationError, GenerationErrorCode, GenerationResult
 from src.cio_enrichment import run_cio_enrichment
 from src.department_data_profiles import department_profile_payload, filter_original_refs_for_agent
@@ -404,6 +407,7 @@ def run_llm_daily_department_agents(
     """Run LLM department agents with deterministic fallback memos."""
 
     stage_started = time.perf_counter()
+    implementation_hash = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
     docs = Path(docs_dir)
     runtime_reports = Path(runtime_reports_dir)
     out = docs / "agent_memos" / run_date
@@ -448,10 +452,23 @@ def run_llm_daily_department_agents(
     downstream = [spec for spec in DEPARTMENT_SPECS if spec.depends_on and spec.agent != "CIOAgent"]
     cio_spec = next(spec for spec in DEPARTMENT_SPECS if spec.agent == "CIOAgent")
 
+    def input_fingerprint(spec: DepartmentSpec) -> str:
+        dependencies = previous_outputs if spec.depends_on else {}
+        refs = _valid_refs_for_spec(context, spec, dependencies)
+        prompt = _department_prompt(spec, context, dependencies, refs, previous_error="")
+        config = getattr(backend, "_config", None)
+        routing = {name: getattr(config, name, None) for name in (
+            "codex_cli_model", "codex_cli_reasoning_effort", "codex_cli_isolated",
+            "agent_litellm_model", "opencode_cli_model",
+        )}
+        routing["implementationHash"] = implementation_hash
+        return _department_input_fingerprint(prompt, _system_prompt(), routing, model_selection)
+
     def record(result: Mapping[str, Any]) -> None:
         memo = result["memo"]
         run_row = result["run"]
         spec = result["spec"]
+        run_row["inputFingerprint"] = input_fingerprint(spec)
         _write_memo(out, spec.rel, memo)
         previous_outputs[spec.agent] = memo
         runs.append(run_row)
@@ -461,6 +478,9 @@ def run_llm_daily_department_agents(
     def restore(spec: DepartmentSpec) -> bool:
         state = resumed.get(spec.agent)
         if not state:
+            return False
+        if state["run"].get("inputFingerprint") != input_fingerprint(spec):
+            rerun_agents.add(spec.agent)
             return False
         if any(dependency in rerun_agents for dependency in spec.depends_on):
             rerun_agents.add(spec.agent)
@@ -536,6 +556,9 @@ def run_llm_daily_department_agents(
             "selectedModel": model_selection.get("selectedModel") or "",
             "modelSelection": model_selection,
             "cioEnrichment": enrichment_summary,
+            "preliminaryCioRun": dict(initial_cio["run"]) if initial_cio is not None and enrichment_summary.get("requested") else None,
+            "generationCallCount": sum(int(row.get("attempt") or 1) for row in runs if not row.get("resumed")) + (int(initial_cio["run"].get("attempt") or 1) if initial_cio is not None and enrichment_summary.get("requested") else 0),
+            "usageScope": "accepted_department_outputs_only; preliminary and failed attempts are not billing totals",
             "maxConcurrency": max_concurrency,
             "resumedSuccessCount": sum(1 for row in runs if row.get("resumed")),
         }
@@ -550,23 +573,40 @@ def run_llm_daily_department_agents(
     return summary
 
 
+
+def _department_input_fingerprint(prompt: str, system_prompt: str, routing: Mapping[str, Any], selection: Mapping[str, Any]) -> str:
+    """Hash effective inputs, never credentials or noisy smoke timestamps."""
+    try:
+        prompt_value = json.loads(prompt)
+    except (ValueError, TypeError):
+        prompt_value = prompt
+    payload = {
+        "version": 1, "prompt": prompt_value, "system": system_prompt, "routing": dict(routing),
+        "selection": {key: selection.get(key) for key in (
+            "policy", "backend", "requestedModel", "selectedModel", "reasoningEffort",
+        )},
+    }
+    return hashlib.sha256(json.dumps(payload, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+
+
 def _load_resumable_successes(out: Path, run_status: Path) -> Dict[str, Dict[str, Dict[str, Any]]]:
     """Load explicitly requested same-date LLM successes for a failed local rerun.
 
-    Resume is opt-in because the caller owns the guarantee that universe/evidence
-    inputs have not changed since the interrupted attempt.
+    Resume is opt-in. The caller additionally checks the exact prompt, system
+    instructions and configured model fingerprint before restoring each memo.
     """
 
+    logs = [run_status / name for name in ("llm_agent_runs.jsonl", "llm_agent_runs.partial.jsonl")]
+    logs = sorted((path for path in logs if path.exists()), key=lambda path: path.stat().st_mtime_ns)
     run_rows = {
         str(row.get("agent") or ""): row
-        for row in _load_jsonl(run_status / "llm_agent_runs.jsonl")
-        if row.get("status") == "success"
+        for path in logs for row in _load_jsonl(path)
     }
     states: Dict[str, Dict[str, Dict[str, Any]]] = {}
     for spec in DEPARTMENT_SPECS:
         run_row = run_rows.get(spec.agent)
         memo = _read_json(out / f"{spec.rel}.json")
-        if not run_row or memo.get("agent") != spec.agent:
+        if not run_row or run_row.get("status") != "success" or memo.get("agent") != spec.agent:
             continue
         if memo.get("agentRuntime") != "LLM" or memo.get("llm_status") != "success":
             continue
@@ -584,6 +624,8 @@ def build_default_llm_backend() -> GenerationBackend:
 
     config = _load_lightweight_llm_config()
     backend_id = resolve_agent_generation_backend_id(config)
+    if backend_id in LOCAL_CLI_GENERATION_BACKEND_IDS:
+        return create_generation_backend(backend_id, config=config)
     if backend_id != LITELLM_BACKEND_ID:
         raise GenerationError(
             error_code=GenerationErrorCode.BACKEND_NOT_CONFIGURED,
@@ -605,6 +647,17 @@ def build_default_llm_backend_with_selection(*, model_policy: str = "best") -> t
     """Select the best usable Agent model, then build the LiteLLM backend."""
 
     base_config = _load_lightweight_llm_config()
+    backend_id = resolve_agent_generation_backend_id(base_config)
+    if backend_id in LOCAL_CLI_GENERATION_BACKEND_IDS:
+        return create_generation_backend(backend_id, config=base_config), {
+            "schema": MODEL_SELECTION_SCHEMA,
+            "policy": "configured_local_backend",
+            "backend": backend_id,
+            "requestedModel": getattr(base_config, "codex_cli_model", ""),
+            "selectedModel": "",
+            "reasoningEffort": getattr(base_config, "codex_cli_reasoning_effort", ""),
+            "candidates": [],
+        }
     selection = _select_agent_model(base_config, model_policy=model_policy)
     selected = str(selection.get("selectedModel") or "").strip()
     if not selected:
@@ -820,7 +873,17 @@ def _load_lightweight_llm_config(
         if env(key).strip()
     }
     return SimpleNamespace(
-        agent_generation_backend=env("AGENT_GENERATION_BACKEND", "auto").strip().lower() or "auto",
+        agent_generation_backend=(env("RESEARCH_GENERATION_BACKEND").strip()
+                                  or env("AGENT_GENERATION_BACKEND", "auto").strip()).lower() or "auto",
+        codex_cli_model=env("RESEARCH_CODEX_MODEL").strip() or env("CODEX_CLI_MODEL").strip(),
+        codex_cli_reasoning_effort=(env("RESEARCH_CODEX_REASONING_EFFORT").strip()
+                                    or env("CODEX_CLI_REASONING_EFFORT").strip()),
+        codex_cli_isolated=True,
+        generation_backend_timeout_seconds=env("GENERATION_BACKEND_TIMEOUT_SECONDS", "300"),
+        generation_backend_max_output_bytes=env("GENERATION_BACKEND_MAX_OUTPUT_BYTES", "1048576"),
+        generation_backend_max_concurrency=env("GENERATION_BACKEND_MAX_CONCURRENCY", "1"),
+        local_cli_backend_max_concurrency=env("LOCAL_CLI_BACKEND_MAX_CONCURRENCY", "1"),
+        opencode_cli_model=env("OPENCODE_CLI_MODEL"),
         agent_litellm_model=agent_model,
         litellm_model=primary_model,
         litellm_fallback_models=fallback_models,
@@ -2427,9 +2490,15 @@ def _run_row(
 def _summarize_runs(runs: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
     success = sum(1 for row in runs if row.get("status") == "success")
     fallback = sum(1 for row in runs if row.get("status") != "success")
-    prompt_tokens = sum(_int_usage(row, "prompt_tokens") for row in runs)
-    completion_tokens = sum(_int_usage(row, "completion_tokens") for row in runs)
-    total_tokens = sum(_int_usage(row, "total_tokens") for row in runs)
+    def observed_total(key: str) -> Optional[int]:
+        observed = [row for row in runs if isinstance(row.get("usage"), Mapping)
+                    and isinstance(row["usage"].get(key), int) and not isinstance(row["usage"].get(key), bool)]
+        # An incomplete count is not the total; do not report missing usage as 0.
+        return sum(_int_usage(row, key) for row in observed) if len(observed) == len(runs) and observed else None
+
+    prompt_tokens = observed_total("prompt_tokens")
+    completion_tokens = observed_total("completion_tokens")
+    total_tokens = observed_total("total_tokens")
     total_attempts = sum(int(row.get("attempt") or 1) for row in runs)
     llm_elapsed = sum(float(row.get("durationSeconds") or 0.0) for row in runs)
     return {
