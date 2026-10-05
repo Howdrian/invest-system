@@ -80,3 +80,18 @@ def test_semantic_quality_audit_accepts_conditional_scenario(tmp_path):
 
     assert result["ok"] is True
     assert result["conditionalClaims"] == 11
+
+
+def test_audit_does_not_veto_research_opinions_by_keyword_or_sample_number(tmp_path):
+    test_semantic_quality_audit_accepts_conditional_scenario(tmp_path)
+    path = tmp_path / 'docs/reports/2026-07-12.artifact.json'
+    artifact = json.loads(path.read_text())
+    artifact['readerV3']['adjudication']['strongestAlternative'] = '若业绩下修或市场系统性走弱，则退出。'
+    artifact['readerV3']['adjudication']['judgment'] = '股价主要受持续股份回购支撑是本期研究解释。'
+    # Distinct metrics may have opposite signs; a hardcoded number is not a
+    # substitute for the existing per-claim measurement verification.
+    artifact['departmentReports'] = [{'detail': '利润同比-21.28%'}]
+    artifact['readerV3']['keyReasons'] = ['另一业务收入同比21.28%']
+    path.write_text(json.dumps(artifact, ensure_ascii=False))
+    result = audit_semantic_quality(tmp_path / 'docs', '2026-07-12')
+    assert result['ok'] is True, result['errors']

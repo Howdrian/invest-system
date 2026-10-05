@@ -11,7 +11,7 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, List, Mapping, Sequence, Set, Tuple
 
-from .daily_universe import load_daily_universe
+from .daily_universe import load_daily_universe, integrate_discovered_candidates
 from .provider_ledger import write_provider_ledger
 from .evidence_ledger import write_evidence_ledger
 from .temporal import date_part, first_timestamp, utc_now_iso
@@ -49,7 +49,7 @@ def collect_subject_evidence(
 
     docs = Path(docs_dir)
     universe = load_daily_universe(docs, run_date)
-    all_subject_symbols = list(symbols or universe.get("subjectSymbols") or [])
+    all_subject_symbols = list(dict.fromkeys([*(symbols or []), *universe.get("subjectSymbols", [])]))
     subject_symbols = list(all_subject_symbols)
     if max_symbols is not None and max_symbols >= 0:
         subject_symbols = subject_symbols[:max_symbols]
@@ -87,6 +87,16 @@ def collect_subject_evidence(
             indices_only=market_only,
         ))
     if not market_only:
+        for market_region in market_regions:
+            if market_region in {"us", "hk"}:
+                provider_rows.extend(_collect_sector_performance(mgr, run_date, market_region, evidence_rows))
+        universe = integrate_discovered_candidates(universe, evidence_rows)
+        subject_symbols = list(dict.fromkeys([*all_subject_symbols, *universe.get("subjectSymbols", [])]))
+        if max_symbols is not None and max_symbols >= 0:
+            subject_symbols = subject_symbols[:max_symbols]
+        universe_path = docs / "run_status" / run_date / "daily_universe.json"
+        universe_path.parent.mkdir(parents=True, exist_ok=True)
+        universe_path.write_text(json.dumps(universe, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         for symbol in subject_symbols:
             provider_rows.extend(_collect_symbol_scope(mgr, run_date, str(symbol), evidence_rows))
         universe_comparison = _universe_price_comparison_evidence(run_date, evidence_rows)
@@ -122,6 +132,44 @@ def collect_subject_evidence(
         encoding="utf-8",
     )
     return summary
+
+
+def _collect_sector_performance(
+    mgr: Any, run_date: str, market: str, evidence_rows: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    payload, run = _timed_call(
+        "sector_performance", lambda: mgr.get_sector_performance(market, run_date), timeout_seconds=180,
+    )
+    if not isinstance(payload, Mapping):
+        return [_provider_row(f"market_{market}", "DataFetcherManager", "news_sentiment",
+                              "sector_performance", run, record_count=0)]
+    providers = []
+    for item in payload.get("provider_runs") or []:
+        providers.append({
+            **dict(item), "market": market, "domain": "news_sentiment", "data_type": "news_sentiment",
+            "operation": "sector_performance", "success": item.get("status") == "success",
+            "source_scope": "subject_evidence",
+        })
+    records = list(payload.get("records") or [])
+    if records:
+        parts = []
+        for row in records:
+            measurements = '; '.join(f'{k}={v}' for k, v in row.items()
+                                     if k.startswith(('return_', 'relative_')))
+            parts.append(f"{row['name']}({row['code']}): {measurements}")
+        evidence_rows.append({
+            "id": f"subject:market_{market}:sector_performance:{run_date}",
+            "domain": "news_sentiment", "subject": f"market_{market}", "market": market,
+            "metric": "sector_performance", "value": payload["scope"] + ' ' + ' | '.join(parts),
+            "records": records, "coverage": {"actual": len(records), "expected": payload["expected_count"]},
+            "scope": payload["scope"], "benchmark": payload["benchmark"],
+            "as_of": min(str(row['as_of']) for row in records), "time_basis": "source",
+            "fetched_at": run.get("observed_at"),
+            "provider": "YfinanceFetcher" if market == "us" else "AkshareSinaIndex",
+            "raw_path": f"run_status/{run_date}/subject_evidence.jsonl",
+            "confidence": "medium", "fact_type": "derived_fact", "evidence_scope": "subject_evidence",
+        })
+    return providers
 
 
 def load_subject_provider_runs(docs_dir: str | Path, run_date: str) -> List[Dict[str, Any]]:
@@ -313,6 +361,7 @@ def _collect_market_scope(
     for operation, domain, fn in operations:
         timeout_seconds = 60 if operation == "market_stats" else 30
         payload, run = _timed_call(operation, fn, timeout_seconds=timeout_seconds)
+        payload = _usable_market_payload(operation, payload)
         count = _market_record_count(payload)
         rows.append(_provider_row(subject, "DataFetcherManager", domain, operation, run, record_count=count))
         if count > 0:
@@ -332,6 +381,7 @@ def _collect_market_scope(
                         source_date=_market_payload_date(payload),
                     ),
                     "fetched_at": run.get("observed_at"),
+                    "time_basis": "source" if _market_payload_date(payload) else "fetched",
                     "provider": "DataFetcherManager",
                     "raw_path": f"run_status/{run_date}/subject_provider_runs.jsonl",
                     "confidence": "medium",
@@ -351,10 +401,37 @@ def _market_regions(primary: str, symbols: Iterable[str]) -> List[str]:
     from src.core.trading_calendar import get_market_for_stock
 
     ordered: List[str] = []
-    for candidate in [str(primary or "cn").lower(), *(get_market_for_stock(str(symbol)) for symbol in symbols)]:
+    from src.utils.market_review_region import normalize_market_review_region_lenient
+
+    configured = normalize_market_review_region_lenient(primary) or str(primary or "cn").lower()
+    for candidate in [*configured.split(","), *(get_market_for_stock(str(symbol)) for symbol in symbols)]:
         if candidate in {"cn", "hk", "us", "jp", "kr", "tw"} and candidate not in ordered:
             ordered.append(candidate)
     return ordered or ["cn"]
+
+
+def _usable_market_payload(operation: str, payload: Any) -> Any:
+    """Ignore provider placeholders, not investment opinions or neutral returns."""
+    if operation == "main_indices":
+        return [row for row in _records(payload)
+                if (price := _first_number(row, "current", "close", "最新价", "收盘")) is not None
+                and math.isfinite(price) and price > 0]
+    if operation == "market_stats":
+        values = _market_measurements(operation, payload)
+        if values and not any(value > 0 for value in values.values()):
+            return None
+    if operation in {"sector_rankings", "concept_rankings"}:
+        if not _has_ranking_signal(_market_sample_records(payload)):
+            return None
+    return payload
+
+
+def _has_ranking_signal(rows: Sequence[Mapping[str, Any]]) -> bool:
+    changes = [_first_number(row, "change_pct", "涨跌幅") for row in rows]
+    numeric = [value for value in changes if value is not None and math.isfinite(value)]
+    # An all-zero ranked table has no directional ranking. Do not turn its
+    # provider/alphabetical order into leading industries or repeated winners.
+    return not numeric or any(value != 0 for value in numeric)
 
 
 def _market_snapshot_date(
@@ -366,7 +443,7 @@ def _market_snapshot_date(
 ) -> str:
     """Prefer the provider's bar date and never relabel current data as a backtest date."""
 
-    from datetime import datetime
+    from datetime import datetime, timedelta
 
     normalized_source_date = date_part(source_date, "")
     if normalized_source_date:
@@ -386,11 +463,9 @@ def _market_snapshot_date(
         local = observed.astimezone(ZoneInfo(zones.get(market, "UTC")))
         effective = local.date()
         if local.hour < 9:
-            from datetime import timedelta
-
             effective -= timedelta(days=1)
-            while effective.weekday() >= 5:
-                effective -= timedelta(days=1)
+        while effective.weekday() >= 5:
+            effective -= timedelta(days=1)
         return effective.isoformat()
     except (KeyError, TypeError, ValueError):
         return run_date
@@ -553,6 +628,7 @@ def _quote_evidence(symbol: str, run_date: str, quote: Any) -> Dict[str, Any]:
         "as_of": date_part(event_time or fetched_at, run_date),
         "event_time": event_time,
         "fetched_at": fetched_at,
+        "time_basis": "source" if event_time else "fetched",
         "market": phase.market,
         "session_phase": phase.phase.value,
         "is_partial_bar": phase.is_partial_bar,
@@ -1095,10 +1171,16 @@ def _price_series_summary(rows: List[Dict[str, Any]], *, operation: str) -> str:
             parts.extend(
                 [
                     f"sma20={round(sum(window20) / 20, 4)}",
-                    f"high20={_compact_number(max(window20))}",
-                    f"low20={_compact_number(min(window20))}",
+                    f"close_high20={_compact_number(max(window20))}",
+                    f"close_low20={_compact_number(min(window20))}",
                 ]
             )
+            highs = [_number(_first_present(row, "high", "最高", "最高价")) for row in ordered[-20:]]
+            lows = [_number(_first_present(row, "low", "最低", "最低价")) for row in ordered[-20:]]
+            if len(highs) == 20 and all(value is not None for value in highs):
+                parts.append(f"high20={_compact_number(max(highs))}")
+            if len(lows) == 20 and all(value is not None for value in lows):
+                parts.append(f"low20={_compact_number(min(lows))}")
     volumes = [_number(_first_present(row, "volume", "vol", "成交量")) for row in ordered[-20:]]
     volumes = [value for value in volumes if value is not None]
     latest_volume = _number(_first_present(latest, "volume", "vol", "成交量"))
@@ -1197,6 +1279,48 @@ def _universe_price_comparison_evidence(run_date: str, facts: Iterable[Mapping[s
     }
 
 
+def _distinct_local_snapshots(
+    snapshots: Sequence[Tuple[str, Mapping[str, Any], Any]],
+) -> List[Tuple[str, Any]]:
+    """Deduplicate newest-first captures without inventing trading dates.
+
+    Explicit source dates identify sessions (latest capture wins). For legacy
+    or fetch-dated data, adjacent identical payloads are only one observation.
+    Equal values on two explicitly dated sessions remain two observations.
+    Raw run files are retained; only the analytical sample is deduplicated.
+    """
+
+    def signature(payload: Any) -> str:
+        # Provider row order is not a new observation; rank fields still count.
+        if isinstance(payload, list):
+            return json.dumps(sorted(signature(row) for row in payload))
+        return json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str)
+
+    distinct: List[Tuple[str, Any]] = []
+    seen_source_dates: Set[str] = set()
+    last_signature = last_source_date = ""
+    for observed_date, fact, payload in snapshots:
+        source_date = (
+            date_part(fact.get("as_of"), "")
+            if fact.get("time_basis") == "source"
+            else ""
+        )
+        if source_date and source_date in seen_source_dates:
+            continue
+        payload_signature = signature(payload)
+        if source_date:
+            seen_source_dates.add(source_date)
+        if distinct and payload_signature == last_signature and not (source_date and last_source_date):
+            if source_date:
+                # A dated copy identifies the retained sample, not a new day.
+                distinct[-1] = (source_date, payload)
+                last_source_date = source_date
+            continue
+        distinct.append((source_date or observed_date, payload))
+        last_signature, last_source_date = payload_signature, source_date
+    return distinct
+
+
 def _sector_history_evidence(
     docs: Path,
     run_date: str,
@@ -1206,7 +1330,7 @@ def _sector_history_evidence(
 ) -> Dict[str, Any] | None:
     """Build sector persistence from locally retained daily online snapshots."""
 
-    snapshots: List[Tuple[str, List[Dict[str, Any]]]] = []
+    captures: List[Tuple[str, Mapping[str, Any], Any]] = []
     current = next(
         (
             row
@@ -1217,7 +1341,7 @@ def _sector_history_evidence(
         None,
     )
     if current:
-        snapshots.append((run_date, [dict(row) for row in current.get("records") or [] if isinstance(row, Mapping)]))
+        captures.append((run_date, current, [dict(row) for row in current.get("records") or [] if isinstance(row, Mapping)]))
     run_root = docs / "run_status"
     if run_root.exists():
         prior_dates = sorted(
@@ -1240,9 +1364,12 @@ def _sector_history_evidence(
                 None,
             )
             if prior:
-                snapshots.append(
-                    (prior_date, [dict(row) for row in prior.get("records") or [] if isinstance(row, Mapping)])
+                captures.append(
+                    (prior_date, prior, [dict(row) for row in prior.get("records") or [] if isinstance(row, Mapping)])
                 )
+    snapshots = _distinct_local_snapshots([
+        capture for capture in captures if _has_ranking_signal(capture[2])
+    ])
     if len(snapshots) < 2:
         return None
     counts: Dict[str, Dict[str, int]] = {}
@@ -1272,7 +1399,7 @@ def _sector_history_evidence(
     leaders = [row for row in ranked if row["top"] > row["bottom"]][:5]
     laggards = [row for row in ranked if row["bottom"] > row["top"]][:5]
     value = (
-        f"local_sector_history days={len(snapshots)}; "
+        f"local_sector_history distinct_observations={len(snapshots)}; "
         f"repeated_leaders={', '.join(row['name'] for row in leaders) or 'none'}; "
         f"repeated_laggards={', '.join(row['name'] for row in laggards) or 'none'}"
     )
@@ -1304,7 +1431,7 @@ def _market_stats_history_evidence(
 ) -> Dict[str, Any] | None:
     """Compare locally retained A-share breadth snapshots across daily runs."""
 
-    snapshots: List[Tuple[str, Dict[str, float]]] = []
+    captures: List[Tuple[str, Mapping[str, Any], Any]] = []
 
     def add_snapshot(observed_date: str, facts: Sequence[Mapping[str, Any]]) -> None:
         row = next(
@@ -1329,8 +1456,8 @@ def _market_stats_history_evidence(
         total = (up or 0.0) + (down or 0.0) + flat
         if up is not None and down is not None and total > 0:
             numeric["advancers_pct"] = round(up / total * 100.0, 2)
-        if numeric:
-            snapshots.append((observed_date, numeric))
+        if numeric and any(value > 0 for value in numeric.values()):
+            captures.append((observed_date, row, numeric))
 
     add_snapshot(run_date, current_facts)
     run_root = docs / "run_status"
@@ -1340,7 +1467,7 @@ def _market_stats_history_evidence(
             reverse=True,
         )[: max(0, lookback_runs - 1)]:
             add_snapshot(prior_date, _read_jsonl(run_root / prior_date / "subject_evidence.jsonl"))
-    snapshots = sorted({date: values for date, values in snapshots}.items())
+    snapshots = sorted(_distinct_local_snapshots(captures), key=lambda item: item[0])
     if len(snapshots) < 2:
         return None
 
@@ -1393,7 +1520,8 @@ def _valuation_history_evidence(
 
     This is intentionally a local run-history comparison, not a claimed
     multi-year market percentile.  Percentiles are emitted only after at least
-    20 dated observations exist for the same symbol and metric.
+    20 distinct observations exist for the same symbol and metric; repeated
+    fetches without an explicit source date are not independent sessions.
     """
 
     snapshots: List[Tuple[str, Sequence[Mapping[str, Any]]]] = [(run_date, current_facts)]
@@ -1410,7 +1538,7 @@ def _valuation_history_evidence(
         for prior_date in prior_dates:
             snapshots.append((prior_date, _read_jsonl(run_root / prior_date / "subject_evidence.jsonl")))
 
-    by_symbol: Dict[str, List[Dict[str, Any]]] = {}
+    by_symbol: Dict[str, List[Tuple[str, Mapping[str, Any], Any]]] = {}
     for observed_date, facts in snapshots:
         seen_symbols: Set[str] = set()
         for fact in facts:
@@ -1424,17 +1552,19 @@ def _valuation_history_evidence(
             pb = _first_number(measurements, "price_to_book", "pb_ratio", "pb")
             if pe is None and pb is None:
                 continue
-            by_symbol.setdefault(symbol, []).append({
-                "date": observed_date,
-                "as_of": str(fact.get("as_of") or observed_date),
-                "pe": pe,
-                "pb": pb,
-            })
+            by_symbol.setdefault(symbol, []).append((observed_date, fact, {"pe": pe, "pb": pb}))
             seen_symbols.add(symbol)
 
     output: List[Dict[str, Any]] = []
-    for symbol, observations in by_symbol.items():
-        observations.sort(key=lambda row: row["date"])
+    for symbol, captures in by_symbol.items():
+        source_by_date: Dict[str, Mapping[str, Any]] = {}
+        for day, fact, _values in captures:
+            source_date = date_part(fact.get("as_of"), "") if fact.get("time_basis") == "source" else ""
+            source_by_date.setdefault(source_date or day, fact)
+        observations = [
+            {"date": day, "as_of": str(source_by_date[day].get("as_of") or day), **values}
+            for day, values in sorted(_distinct_local_snapshots(captures), key=lambda item: item[0])
+        ]
         if len(observations) < 2:
             continue
         latest = observations[-1]

@@ -199,11 +199,13 @@ def evidence_from_macro_context(docs: Path, run_date: str) -> List[Dict[str, Any
 
 def _macro_history_comparison(series_id: str, history: List[Any]) -> Dict[str, Any]:
     numeric: List[float] = []
+    labels: List[str] = []
     for item in history:
         if not isinstance(item, Mapping):
             continue
         try:
             numeric.append(float(item.get("value")))
+            labels.append(str(item.get("date") or ""))
         except (TypeError, ValueError):
             continue
     if len(numeric) < 2:
@@ -213,6 +215,8 @@ def _macro_history_comparison(series_id: str, history: List[Any]) -> Dict[str, A
         "latest": round(latest, 4),
         "delta_prev_observation": round(latest - numeric[1], 4),
         "history_observations": len(numeric),
+        "sample_start": labels[-1],
+        "sample_end": labels[0],
     }
     if len(numeric) >= 13:
         comparison["delta_12_observations"] = round(latest - numeric[12], 4)

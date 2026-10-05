@@ -8,6 +8,7 @@ hits into verified facts.  Official filing/disclosure portals can create
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import re
 import ssl
@@ -16,10 +17,12 @@ import urllib.request
 from functools import lru_cache
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Sequence
 from urllib.error import HTTPError
 
+from src.source_health.filing_content import extract_filing_text, financial_excerpt
 from src.safe_diagnostics import sanitize_diagnostic_text
 from src.source_health.temporal import iso_timestamp, utc_now_iso
 
@@ -43,6 +46,8 @@ SEC_COMPANYFACT_CONCEPTS = (
     "Revenues",
     "RevenueFromContractWithCustomerExcludingAssessedTax",
     "NetIncomeLoss",
+    "NetCashProvidedByUsedInOperatingActivities",
+    "PaymentsToAcquirePropertyPlantAndEquipment",
     "OperatingIncomeLoss",
     "Assets",
     "CommonStockSharesOutstanding",
@@ -65,6 +70,26 @@ class OfficialEventSourceResult:
     provider_runs: List[Dict[str, Any]]
     evidence_facts: List[Dict[str, Any]]
     raw: Dict[str, Any]
+
+
+_OFFICIAL_DOCUMENT_HOSTS = {"www.sec.gov", "static.cninfo.com.cn", "www.cninfo.com.cn",
+                            "www.sse.com.cn", "www.szse.cn", "disc.static.szse.cn",
+                            "www1.hkexnews.hk", "www.hkexnews.hk"}
+
+
+def _official_document_url(url: str) -> bool:
+    parsed = urllib.parse.urlsplit(url)
+    return (parsed.scheme in {"http", "https"} and parsed.hostname in _OFFICIAL_DOCUMENT_HOSTS
+            and parsed.port in {None, 80, 443} and not parsed.username and not parsed.password)
+
+
+class _OfficialDocumentRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        if not _official_document_url(newurl):
+            raise ValueError("unapproved_document_redirect")
+        if urllib.parse.urlsplit(req.full_url).hostname != urllib.parse.urlsplit(newurl).hostname:
+            raise ValueError("cross_host_document_redirect")
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
 class OfficialEventSourceClient:
@@ -105,7 +130,6 @@ class OfficialEventSourceClient:
 
         subject_terms = [str(item).strip() for item in (query_terms or symbols) if str(item).strip()]
         geo_terms = _geo_query_terms(subject_terms)
-        mixed_search_terms = [*subject_terms[:4], *geo_terms[:4]]
         raw["queryScopes"] = {"subject": subject_terms, "geopolitical": geo_terms}
 
         gdelt = self.fetch_gdelt_events(query_terms=geo_terms, run_date=run_date)
@@ -113,10 +137,13 @@ class OfficialEventSourceClient:
         evidence_facts.extend(gdelt.evidence_facts)
         raw["gdelt"] = gdelt.raw
 
-        tavily = self.fetch_tavily_search(query_terms=mixed_search_terms, run_date=run_date)
-        provider_runs.extend(tavily.provider_runs)
-        evidence_facts.extend(tavily.evidence_facts)
-        raw["tavily"] = tavily.raw
+        # Separate budgets: a popular stock must not crowd global policy/news
+        # out of the only search response available to the geo department.
+        for scope, terms in (("subject", subject_terms), ("geopolitical", geo_terms)):
+            tavily = self.fetch_tavily_search(query_terms=terms, run_date=run_date, query_scope=scope)
+            provider_runs.extend(tavily.provider_runs)
+            evidence_facts.extend(tavily.evidence_facts)
+            raw["tavily" if scope == "subject" else "tavilyGeopolitical"] = tavily.raw
 
         reliefweb = self.fetch_reliefweb_reports(query_terms=geo_terms, run_date=run_date)
         provider_runs.extend(reliefweb.provider_runs)
@@ -128,6 +155,35 @@ class OfficialEventSourceClient:
         evidence_facts.extend(ofac.evidence_facts)
         raw["ofac"] = ofac.raw
 
+        # Read relevant official documents before department analysis. A title
+        # remains a title if fetch/parse fails; never claim full-document review.
+        counts: Dict[str, int] = {}
+        ordered = sorted(evidence_facts, key=lambda row: not bool(re.search(
+            r"半年度报告|年度报告|季度报告|10-Q|10-K", str(row.get("value") or ""))))
+        for fact in ordered:
+            url = str(fact.get("source_url") or "")
+            symbol = str(fact.get("symbol") or "")
+            parsed = urllib.parse.urlsplit(url)
+            if (not symbol or fact.get("domain") != "filings_events"
+                    or not _official_document_url(url)
+                    or not parsed.path.lower().endswith((".pdf", ".htm", ".html", ".xml"))
+                    or counts.get(symbol, 0) >= 2):
+                continue
+            counts[symbol] = counts.get(symbol, 0) + 1
+            try:
+                content = self._get_document(url, headers=self._sec_headers() if parsed.hostname == "www.sec.gov" else None)
+                text = extract_filing_text(content)
+                excerpt = financial_excerpt(text)
+                if len(excerpt.strip()) < 80:
+                    raise ValueError("empty_document_text")
+                fact.update({"document_excerpt": excerpt, "document_status": "excerpt_available",
+                             "document_sha256": hashlib.sha256(content).hexdigest(),
+                             "document_scope": "text excerpt, first 40 PDF pages at most; not exhaustive review"})
+                provider_runs.append(_provider_run(str(fact.get("provider")), "filings_events", "filing_document", True, 1))
+            except Exception as exc:
+                fact["document_status"] = "unavailable"
+                provider_runs.append(_provider_run(str(fact.get("provider")), "filings_events", "filing_document", False, 0,
+                                                   _error_type(exc), _sanitize_error(exc)))
         return OfficialEventSourceResult(provider_runs=provider_runs, evidence_facts=evidence_facts, raw=raw)
 
     def fetch_sec_filings(self, *, symbols: Sequence[str], run_date: str, max_filings_per_symbol: int = 3) -> OfficialEventSourceResult:
@@ -180,7 +236,7 @@ class OfficialEventSourceClient:
         )
         return OfficialEventSourceResult([run], evidence, {"symbols": raw_symbols})
 
-    def fetch_sec_companyfacts(self, *, symbols: Sequence[str], run_date: str, max_facts_per_symbol: int = 4) -> OfficialEventSourceResult:
+    def fetch_sec_companyfacts(self, *, symbols: Sequence[str], run_date: str, max_facts_per_symbol: int = 8) -> OfficialEventSourceResult:
         us_symbols = [symbol.upper() for symbol in symbols if _is_us_ticker(symbol)]
         if not us_symbols:
             return _single_provider_result("SEC_EDGAR", "fundamentals", "sec_companyfacts", False, "not_supported", "no_us_symbols")
@@ -283,7 +339,9 @@ class OfficialEventSourceClient:
         )
         return OfficialEventSourceResult([run], evidence, {"query": query, "dateWindow": f"{start}~{end}", "url": url, "articles": rows[:max_records]})
 
-    def fetch_tavily_search(self, *, query_terms: Sequence[str], run_date: str, max_records: int = 6) -> OfficialEventSourceResult:
+    def fetch_tavily_search(
+        self, *, query_terms: Sequence[str], run_date: str, max_records: int = 6, query_scope: str = "subject",
+    ) -> OfficialEventSourceResult:
         """Fetch Tavily search results as discovery evidence.
 
         Tavily is an AI/search discovery source. Its results never become
@@ -298,11 +356,18 @@ class OfficialEventSourceClient:
         if not terms:
             return _single_provider_result("Tavily", "news_sentiment", "tavily_search", False, "not_supported", "no_query_terms")
         query = _or_query(_search_term(term) for term in terms[:8])
+        if query_scope == "geopolitical":
+            # Tavily accepts natural-language queries. Quoting eight long
+            # exact phrases yields sparse, often monthly review matches.
+            query = "Latest geopolitical developments affecting financial markets: " + "; ".join(terms[:8])
+        start, end = _date_window(run_date, days=7)
         body = json.dumps(
             {
                 "query": query,
                 "topic": "news",
                 "search_depth": "basic",
+                "start_date": start,
+                "end_date": end,
                 "max_results": max_records,
                 "include_answer": False,
                 "include_raw_content": False,
@@ -327,20 +392,31 @@ class OfficialEventSourceClient:
                 continue
             rows = payload.get("results") if isinstance(payload, Mapping) else []
             results = [row for row in rows if isinstance(row, Mapping)]
-            evidence = [
-                {
-                    "id": f"tavily:{idx}:{_safe_id(row.get('url') or row.get('title') or idx)}",
+            fetched_at = utc_now_iso()
+            evidence = []
+            for idx, row in enumerate(results[:max_records]):
+                published = _news_timestamp(row.get("published_date"))
+                # An undated search hit is not a current-day event. Keep it
+                # visible as undated discovery, with the fetch time separate.
+                if published and not start <= published[:10] <= end:
+                    continue
+                title = str(row.get("title") or row.get("url") or "Tavily result")
+                snippet = str(row.get("content") or "").strip()
+                evidence.append({
+                    "id": f"tavily:{query_scope}:{idx}:{_safe_id(row.get('url') or row.get('title') or idx)}",
                     "domain": "news_sentiment",
                     "symbol": "",
-                    "value": str(row.get("title") or row.get("content") or row.get("url") or "Tavily result"),
-                    "as_of": _iso_date(row.get("published_date")) or run_date,
+                    "value": title + (f" — {snippet[:1800]}" if snippet and snippet != title else ""),
+                    "as_of": published[:10] if published else "",
+                    "published_at": published or "",
+                    "fetched_at": fetched_at,
+                    "time_basis": "published" if published else "unknown",
+                    "query_scope": query_scope,
                     "provider": "Tavily",
                     "source_url": str(row.get("url") or "https://api.tavily.com/search"),
                     "confidence": "low",
                     "fact_type": "discovery",
-                }
-                for idx, row in enumerate(results[:max_records])
-            ]
+                })
             run = _provider_run(
                 "Tavily",
                 "news_sentiment",
@@ -350,7 +426,11 @@ class OfficialEventSourceClient:
                 None if evidence else "empty",
                 None if evidence else "empty_response",
             )
-            return OfficialEventSourceResult([run], evidence, {"query": query, "results": results[:max_records]})
+            run["query_scope"] = query_scope
+            return OfficialEventSourceResult([run], evidence, {
+                "query": query, "queryScope": query_scope, "dateWindow": f"{start}~{end}",
+                "results": results[:max_records],
+            })
 
         error_type = "failed"
         if errors and all("429" in error or "rate" in error.lower() for error in errors):
@@ -479,7 +559,7 @@ class OfficialEventSourceClient:
             stock_param = _cninfo_stock_param(symbol)
             form = urllib.parse.urlencode({
                 "pageNum": "1",
-                "pageSize": str(max_records_per_symbol),
+                "pageSize": str(max_records_per_symbol * 4),
                 "column": "szse",
                 "tabName": "fulltext",
                 "plate": _cninfo_plate(symbol),
@@ -512,6 +592,8 @@ class OfficialEventSourceClient:
                 "announcements": accepted_rows,
                 "filteredOut": max(0, len(rows) - len(accepted_rows)),
             }
+            accepted_rows.sort(key=lambda row: not bool(re.search(
+                r"半年度报告|年度报告|季度报告", str(row.get("announcementTitle") or ""))))
             for idx, row in enumerate(accepted_rows[:max_records_per_symbol]):
                 adjunct = str(row.get("adjunctUrl") or "")
                 source_url = urllib.parse.urljoin(CNINFO_STATIC_BASE, adjunct) if adjunct else CNINFO_QUERY_URL
@@ -696,6 +778,20 @@ class OfficialEventSourceClient:
         with _urlopen(request, timeout_s=self.timeout_s) as response:  # nosec - read-only public sources
             return json.loads(response.read(2_000_000).decode("utf-8", errors="replace"))
 
+    def _get_document(self, url: str, *, headers: Mapping[str, str] | None = None) -> bytes:
+        # Validate every redirect too; this read-only fetch cannot reach local
+        # services through a document link or carry SEC headers to another host.
+        if not _official_document_url(url):
+            raise ValueError("unapproved_document_host")
+        opener = urllib.request.build_opener(
+            _OfficialDocumentRedirect(), urllib.request.HTTPSHandler(context=_ssl_context()))
+        request = urllib.request.Request(url, headers=dict(headers or {"User-Agent": "Mozilla/5.0"}))
+        with opener.open(request, timeout=self.timeout_s) as response:
+            content = response.read(12 * 1024 * 1024 + 1)
+            if len(content) > 12 * 1024 * 1024:
+                raise ValueError("document_too_large")
+            return content
+
     def _get_text(self, url: str, *, headers: Mapping[str, str] | None = None) -> str:
         request = urllib.request.Request(url, headers=dict(headers or {"User-Agent": "invest-system/0.1"}))
         with _urlopen(request, timeout_s=self.timeout_s) as response:  # nosec - read-only public sources
@@ -808,7 +904,7 @@ def _sec_recent_filings(payload: Any, *, symbol: str, cik: str, run_date: str, l
     primary_docs = list(recent.get("primaryDocument") or [])
     rows: List[Dict[str, Any]] = []
     cik_no_zeros = str(int(cik)) if str(cik).isdigit() else cik.lstrip("0")
-    for idx, form in enumerate(forms[: max(limit * 4, limit)]):
+    for idx, form in enumerate(forms[:100]):
         filing_date = _list_get(dates, idx)
         if filing_date and not _is_on_or_before(filing_date, run_date):
             continue
@@ -827,9 +923,14 @@ def _sec_recent_filings(payload: Any, *, symbol: str, cik: str, run_date: str, l
             "primaryDocument": primary_doc,
             "sourceUrl": source_url,
         })
-        if len(rows) >= limit:
-            break
-    return rows
+    # Keep a financial filing alongside fresh events. Insider forms otherwise
+    # fill every slot, leaving the company analyst with titles but no 10-Q.
+    rows.sort(key=lambda row: str(row.get("filingDate") or ""), reverse=True)
+    financial = next((row for row in rows if str(row["form"]).upper() in {"10-Q", "10-K", "20-F"}
+                      and _days_between(row["filingDate"], run_date) <= 420), None)
+    selected = ([financial] if financial and limit > 0 else [])
+    selected.extend(row for row in rows if row is not financial and _days_between(row["filingDate"], run_date) <= 31)
+    return selected[:max(0, limit)]
 
 
 def _sec_companyfacts(payload: Any, *, symbol: str, run_date: str, limit: int) -> List[Dict[str, Any]]:
@@ -970,6 +1071,17 @@ def _iso_date(value: Any) -> str:
     text = str(value or "")
     match = re.match(r"(\d{4}-\d{2}-\d{2})", text)
     return match.group(1) if match else ""
+
+
+def _news_timestamp(value: Any) -> str:
+    """Search APIs may use ISO dates or RFC 2822 (not a missing date)."""
+    normalized = iso_timestamp(value)
+    if normalized or not value:
+        return normalized
+    try:
+        return iso_timestamp(parsedate_to_datetime(str(value)))
+    except (ValueError, TypeError, OverflowError):
+        return ""
 
 
 def _safe_id(value: Any) -> str:

@@ -15,6 +15,52 @@ from typing import Any, Dict, Iterable, List, Mapping, Sequence
 _STATUS_KEYS = ("supported", "partial", "hypothesis", "disputed", "rejected")
 
 
+def build_claim_assessment(
+    report: Mapping[str, Any], *, challenge_verdicts: Sequence[Mapping[str, Any]] = (),
+) -> Dict[str, Any]:
+    """Describe support for each retained claim, not a forecast probability.
+
+    Rejected draft text stays in Diagnostics; model self-confidence is neither
+    upgraded nor overwritten. Conditional next actions are not current claims.
+    """
+    semantic = report.get("semanticValidation") or report.get("semantic_validation") or {}
+    if not isinstance(semantic, Mapping):
+        semantic = {}
+    verdict_by_id = {str(row.get("targetClaimId") or ""): row.get("verdict")
+                     for row in challenge_verdicts
+                     if row.get("department") == report.get("agent")}
+    mappings = {
+        str(row.get("claimId") or ""): row
+        for row in report.get("claimEvidence") or report.get("claim_evidence") or []
+        if isinstance(row, Mapping)
+    }
+    labels = {"supported": "有据支持", "partial": "部分支持",
+              "hypothesis": "研究判断", "disputed": "存在争议"}
+    claims: List[Dict[str, Any]] = []
+    counts = {label: 0 for label in labels.values()}
+    for row in semantic.get("claims") or []:
+        if not isinstance(row, Mapping):
+            continue
+        status = str(row.get("status") or "")
+        claim_id = str(row.get("claimId") or "")
+        verdict = verdict_by_id.get(claim_id)
+        if verdict == "withdrawn":
+            continue
+        if verdict == "challenged" and status != "rejected":
+            status = "disputed"
+        mapping = mappings.get(claim_id) or {}
+        text = _text(row.get("safeText") or mapping.get("claim"))
+        if status not in labels or not text:
+            continue
+        label = labels[status]
+        counts[label] += 1
+        claims.append({"claimId": claim_id, "text": text, "label": label,
+                       "evidenceIds": list(row.get("acceptedEvidenceIds") or
+                                           mapping.get("evidence_ids") or mapping.get("evidenceIds") or [])})
+    return {"schema": "claim_assessment_v1", "claims": claims,
+            "summary": " · ".join(f"{count}条{label}" for label, count in counts.items() if count) or "论据尚未评估"}
+
+
 def build_research_reliability(
     department_reports: Sequence[Mapping[str, Any]],
 ) -> Dict[str, Any]:
@@ -25,6 +71,7 @@ def build_research_reliability(
     reader_claims = 0
     warnings: List[str] = []
     audited_reports = 0
+    scenario_items = 0
     cio_report = _first_agent(department_reports, {"CIOAgent", "DecisionReportAgent"})
 
     for report in department_reports:
@@ -34,13 +81,17 @@ def build_research_reliability(
         audited_reports += 1
         input_claims += _as_int(semantic.get("inputClaimCount"))
         reader_claims += _as_int(semantic.get("readerClaimCount"))
-        for collection in ("claims", "counterpoints", "nextActions"):
-            for row in semantic.get(collection) or []:
-                if not isinstance(row, Mapping):
-                    continue
-                status = str(row.get("status") or "").lower()
-                if status in counts:
-                    counts[status] += 1
+        for row in semantic.get("claims") or []:
+            if not isinstance(row, Mapping):
+                continue
+            status = str(row.get("status") or "").lower()
+            if status in counts:
+                counts[status] += 1
+        scenario_items += sum(
+            1 for collection in ("counterpoints", "nextActions")
+            for row in semantic.get(collection) or []
+            if isinstance(row, Mapping) and row.get("status") in {"hypothesis", "disputed"}
+        )
 
     cio_semantic = {}
     if isinstance(cio_report, Mapping):
@@ -48,15 +99,19 @@ def build_research_reliability(
         if isinstance(value, Mapping):
             cio_semantic = dict(value)
     audited = audited_reports > 0
-    headline_safe = bool(cio_semantic) and _as_int(cio_semantic.get("readerClaimCount")) > 0
+    accepted_statuses = {"supported", "partial", "hypothesis", "disputed"}
+    headline_safe = False
     summary_validation = cio_semantic.get("summary")
-    if isinstance(summary_validation, Mapping):
-        headline_safe = str(summary_validation.get("status") or "").lower() in {
-            "supported",
-            "partial",
-            "hypothesis",
-            "disputed",
-        }
+    if isinstance(summary_validation, Mapping) and summary_validation:
+        headline_safe = str(summary_validation.get("status") or "").lower() in accepted_statuses
+    elif isinstance(cio_report, Mapping):
+        # The runtime can use an already-audited atomic claim as its summary
+        # and leave the separate summary audit empty. An empty object is not
+        # a rejection, but other accepted claims must not bless unrelated text.
+        summary = _text(cio_report.get("summaryForReader") or cio_report.get("summary_for_reader"))
+        headline_safe = bool(summary) and summary in _validated_claim_texts(
+            cio_report, statuses=accepted_statuses, limit=100,
+        )
 
     if not audited:
         warnings.append("旧报告未执行结论语义相关性检查。")
@@ -68,18 +123,18 @@ def build_research_reliability(
     if audited and not headline_safe:
         warnings.append("CIO 总结尚未通过语义可靠性检查。")
 
-    decisive = counts["supported"] + counts["partial"] + conditional_count
-    supported_ratio = counts["supported"] / decisive if decisive else 0.0
     if not audited:
         label = "待语义复核"
     elif not headline_safe:
         label = "结论不足"
-    elif counts["rejected"] or conditional_count:
-        label = "可用，含待确认情景"
-    elif supported_ratio >= 0.75:
-        label = "较高可信"
+    elif conditional_count and (counts["supported"] or counts["partial"]):
+        label = "结论有据，含推演"
+    elif conditional_count:
+        label = "以情景推演为主"
+    elif counts["partial"]:
+        label = "结论有据，部分待证"
     else:
-        label = "中等可信"
+        label = "论据较充分"
 
     return {
         "schema": "research_reliability_v1",
@@ -93,6 +148,7 @@ def build_research_reliability(
         "hypothesisClaims": counts["hypothesis"],
         "disputedClaims": counts["disputed"],
         "rejectedClaims": counts["rejected"],
+        "scenarioItems": scenario_items,
         "warnings": warnings,
     }
 
@@ -177,7 +233,8 @@ def build_scenario_adjudication(
                 "why",
                 fallback=model_adjudication.get("why"),
             )
-            if _adjudication_field_is_clean(adjudication_audit, "why")
+            if (_adjudication_field_is_clean(adjudication_audit, "why")
+                or _adjudication_field_has_safe_text(adjudication_audit, "why"))
             else "；".join(validated_cio_reasons)
         ) or why
         triggers = _adjudication_field_texts(
@@ -348,6 +405,7 @@ def _adjudication_field_texts(
         _text(row.get("safeText") or row.get("text"))
         for row in rows
         if str(row.get("status") or "") != "rejected"
+        and (field != "sharedFacts" or str(row.get("status") or "") in {"supported", "partial"})
     ]
     clean = [value for value in values if value]
     # Once field-level validation exists it is the trust boundary. Falling back

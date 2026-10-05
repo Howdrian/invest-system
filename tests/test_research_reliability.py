@@ -44,8 +44,46 @@ def test_reliability_separates_supported_hypothesis_and_rejected_claims():
     assert reliability["hypothesisClaims"] == 1
     assert reliability["rejectedClaims"] == 1
     assert reliability["headlineSafe"] is True
-    assert reliability["label"] == "可用，含待确认情景"
+    assert reliability["label"] == "结论有据，含推演"
     assert any("移除" in item for item in reliability["warnings"])
+
+
+def test_empty_summary_audit_uses_exact_validated_claim_not_claim_count():
+    cio = _report("CIOAgent", [("c1", "supported", "三地市场表现分化。")],
+                  summary="三地市场表现分化。")
+    cio["semanticValidation"]["summary"] = {}
+    assert build_research_reliability([cio])["headlineSafe"] is True
+    cio["summaryForReader"] = "资金必然外逃。"
+    assert build_research_reliability([cio])["headlineSafe"] is False
+
+
+def test_explicit_rejected_summary_does_not_reuse_accepted_claim():
+    cio = _report("CIOAgent", [("c1", "supported", "三地市场表现分化。")],
+                  summary="三地市场表现分化。")
+    cio["semanticValidation"]["summary"] = {"status": "rejected"}
+    assert build_research_reliability([cio])["headlineSafe"] is False
+
+
+def test_future_conditions_do_not_reduce_current_conclusion_assessment():
+    cio = _report("CIOAgent", [("c1", "supported", "市场表现分化。")], summary="市场表现分化。")
+    before = build_research_reliability([cio])
+    cio["semanticValidation"]["counterpoints"] = [{"status": "hypothesis"}]
+    cio["semanticValidation"]["nextActions"] = [{"status": "hypothesis"}]
+    after = build_research_reliability([cio])
+    assert after["label"] == before["label"]
+    assert after["hypothesisClaims"] == 0
+    assert after["scenarioItems"] == 2
+
+
+def test_claim_assessment_distinguishes_basis_from_prediction_without_restoring_rejections():
+    from src.research_core import build_claim_assessment
+    cio = _report("CIOAgent", [("c1", "supported", "已公布财务增长。"),
+                               ("c2", "hypothesis", "增长或能延续。"),
+                               ("c3", "rejected", "无来源保证盈利。")])
+    assessment = build_claim_assessment(cio)
+    assert [c["label"] for c in assessment["claims"]] == ["有据支持", "研究判断"]
+    assert [c["text"] for c in assessment["claims"]] == ["已公布财务增长。", "增长或能延续。"]
+    assert assessment["summary"] == "1条有据支持 · 1条研究判断"
 
 
 def test_scenario_adjudication_keeps_base_case_and_opposing_case_separate():

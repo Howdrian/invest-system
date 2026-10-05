@@ -26,15 +26,6 @@ FORBIDDEN_READER_TERMS = (
     "volume_vs_avg20",
 )
 
-CONFLICTING_READER_TERMS = (
-    "采纳红队",
-    "系统性走弱",
-    "基本面失速",
-    "业绩下修",
-    "补跌概率更高",
-    "主要受持续股份回购支撑",
-)
-
 
 def audit_semantic_quality(docs_dir: str | Path, run_date: str) -> Dict[str, Any]:
     docs = Path(docs_dir)
@@ -67,12 +58,9 @@ def audit_semantic_quality(docs_dir: str | Path, run_date: str) -> Dict[str, Any
     leaked = [term for term in FORBIDDEN_READER_TERMS if term in reader_text]
     if leaked:
         errors.append("reader_engineering_terms:" + ",".join(leaked))
-    conflicting = [term for term in CONFLICTING_READER_TERMS if term in reader_text]
-    if conflicting:
-        errors.append("reader_unresolved_reasoning_terms:" + ",".join(conflicting))
-
-    if "-21.28" in json.dumps(artifact.get("departmentReports") or [], ensure_ascii=False) and "21.28%" in reader_text and "-21.28%" not in reader_text:
-        errors.append("reader_negative_sign_lost")
+    # Whether a conclusion is grounded is decided by its claim/evidence audit
+    # below. Words such as earnings downgrades can be legitimate scenarios;
+    # neither a phrase blacklist nor a hardcoded sample number proves error.
 
     adjudication = reader.get("adjudication") if isinstance(reader.get("adjudication"), Mapping) else {}
     for key in ("baseCase", "strongestAlternative", "judgment"):

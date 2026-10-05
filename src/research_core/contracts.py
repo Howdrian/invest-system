@@ -54,13 +54,16 @@ class EvidenceFact:
     domain: str = ""
     metric: str = ""
     measurements: Mapping[str, Any] = field(default_factory=dict)
+    history: Sequence[Mapping[str, Any]] = field(default_factory=tuple)
     unit: str = ""
     period_start: str = ""
     period_end: str = ""
+    document_excerpt: str = ""
     filing_form: str = ""
     fiscal_period: str = ""
     fiscal_year: str = ""
     frame: str = ""
+    covered_subjects: Sequence[str] = field(default_factory=tuple)
 
     def normalized_type(self) -> EvidenceType:
         if isinstance(self.fact_type, EvidenceType):
@@ -143,12 +146,36 @@ def evidence_pool_from_dicts(items: Iterable[Mapping[str, Any]]) -> EvidencePool
             domain=str(item.get("domain") or ""),
             metric=str(item.get("metric") or item.get("concept") or item.get("series") or ""),
             measurements=dict(item.get("measurements") or item.get("metrics") or {}),
+            history=tuple(dict(row) for row in item.get("history") or [] if isinstance(row, Mapping)),
             unit=str(item.get("unit") or ""),
             period_start=str(item.get("periodStart") or item.get("period_start") or item.get("start") or ""),
             period_end=str(item.get("periodEnd") or item.get("period_end") or item.get("end") or ""),
+            document_excerpt=str(item.get("document_excerpt") or ""),
             filing_form=str(item.get("filingForm") or item.get("filing_form") or item.get("form") or ""),
             fiscal_period=str(item.get("fiscalPeriod") or item.get("fiscal_period") or item.get("fp") or ""),
             fiscal_year=str(item.get("fiscalYear") or item.get("fiscal_year") or item.get("fy") or ""),
             frame=str(item.get("frame") or ""),
+            covered_subjects=_covered_price_subjects(item, fact_type),
         ))
     return EvidencePool(tuple(facts))
+
+
+def _covered_price_subjects(item: Mapping[str, Any], fact_type: str) -> Sequence[str]:
+    if fact_type != "derived_fact":
+        return ()
+    if item.get("metric") == "sector_performance":
+        return tuple(dict.fromkeys(
+                str(value) for value in [
+                    item.get("benchmark"),
+                    *(row.get("code") for row in item.get("records") or [] if isinstance(row, Mapping)),
+                ] if value
+        ))
+    if item.get("metric") == "universe_price_comparison":
+        # Compatibility format emitted by the numerical universe collector:
+        # leaders=AAPL +2.21%, HK00700 -7.52%; never infer membership from prose.
+        import re
+        return tuple(dict.fromkeys(re.findall(
+            r"(?<![A-Z0-9])((?:HK\d{4,5}|\d{6}|[A-Z]{1,5}(?:\.[A-Z])?))\s+[+-]?\d+(?:\.\d+)?%",
+            str(item.get("value") or ""),
+        )))
+    return ()

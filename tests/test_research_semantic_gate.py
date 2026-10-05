@@ -1,6 +1,155 @@
 from src.research_core import AtomicClaim, ClaimStatus, ClaimType, evidence_pool_from_dicts, validate_claim, validate_claim_dicts
 
 
+def test_cn_region_alias_accepts_existing_market_scope_and_not_foreign_company():
+    rows = [{"id": "cn", "domain": "price", "subject": "market", "fact_type": "derived_fact",
+             "as_of": "2026-09-07", "value": "up_count=2831", "measurements": {"up_count": 2831}},
+            {"id": "foreign", "domain": "price", "subject": "AAPL", "fact_type": "derived_fact",
+             "as_of": "2026-09-07", "value": "price=100"}]
+    result = validate_claim_dicts([{"claim": "A股上涨2831家，选择性参与。", "subject": "market_cn",
+                                   "domain": "price", "claimType": "recommendation", "evidence_ids": ["cn", "foreign"]}],
+                                 rows, reference_date="2026-09-07")[0]
+    assert result.status != ClaimStatus.REJECTED
+    assert result.accepted_evidence_ids == ("cn",)
+
+
+def test_regional_macro_opinion_can_use_shared_fred_facts():
+    rows = [{"id": "oil", "domain": "macro", "subject": "DCOILWTICO", "metric": "DCOILWTICO",
+             "fact_type": "verified_fact", "source_url": "https://fred.example/oil",
+             "as_of": "2026-09-01", "value": "WTI=91.48"}]
+    for subject in ("market_cn", "market_hk", "market_us", "market"):
+        result = validate_claim_dicts([{"claim": "油价上涨，主观看好上游油气。", "subject": subject,
+                                       "domain": "macro", "claimType": "recommendation", "evidence_ids": ["oil"]}],
+                                     rows, reference_date="2026-09-07")[0]
+        assert result.status != ClaimStatus.REJECTED
+
+
+def test_monthly_and_quarterly_fred_period_start_dates_allow_release_lag():
+    for metric, observed in (("CPIAUCSL", "2026-07-01"), ("GDP", "2026-04-01")):
+        result = validate_claim_dicts([{"claim": "所给最近一期数据作为研究背景。", "subject": "macro",
+                                       "domain": "macro", "evidence_ids": [metric]}],
+            [{"id": metric, "metric": metric, "subject": metric, "domain": "macro",
+              "as_of": observed, "source_url": "https://fred.example/series", "fact_type": "verified_fact"}],
+            reference_date="2026-09-07")[0]
+        assert result.status != ClaimStatus.REJECTED
+    stale = validate_claim_dicts([{"claim": "当前通胀背景", "evidence_ids": ["old"]}],
+        [{"id": "old", "domain": "macro", "metric": "CPIAUCSL", "as_of": "2025-01-01", "fact_type": "derived_fact"}],
+        reference_date="2026-09-07")[0]
+    assert stale.status == ClaimStatus.REJECTED
+
+
+def test_denying_a_portfolio_benefit_is_not_claiming_actual_position_outcomes():
+    result = _validate("样本上涨不能证明替换后能够降低真实组合风险。", [{
+        "id": "sample", "fact_type": "derived_fact", "domain": "price", "subject": "market",
+        "value": "sample return=10%",
+    }])
+    assert result.status != ClaimStatus.REJECTED
+
+
+def test_no_positions_statement_is_not_a_portfolio_outcome():
+    result = _validate("本轮未覆盖真实组合，不计算行业权重、集中度、实际盈亏或对冲效果。", [{
+        "id": "scope", "fact_type": "derived_fact", "domain": "portfolio", "subject": "portfolio",
+        "value": "No positions connected",
+    }])
+    assert result.status != ClaimStatus.REJECTED
+
+
+def test_research_inference_can_cross_domains_but_factual_metrics_cannot():
+    facts = [{"id": "oil", "domain": "macro", "subject": "DCOILWTICO", "metric": "DCOILWTICO",
+              "fact_type": "verified_fact", "source_url": "https://fred.example/oil", "value": "WTI=91.48"}]
+    inference = {"claim": "油价上涨有利于上游销售收入，主观看好上游油气。", "domain": "fundamentals",
+                 "subject": "market_cn", "claimType": "recommendation", "evidence_ids": ["oil"]}
+    result = validate_claim_dicts([inference], facts)[0]
+    assert result.status == ClaimStatus.HYPOTHESIS
+    assert result.accepted_evidence_ids == ("oil",)
+    factual = {**inference, "claim": "上游净利润增长30%。", "claimType": "fact"}
+    assert validate_claim_dicts([factual], facts)[0].status == ClaimStatus.REJECTED
+
+
+def test_official_commodity_series_is_price_evidence_despite_macro_routing():
+    result = validate_claim_dicts([{"claim": "WTI为91.48美元/桶。", "subject": "market", "domain": "price",
+                                   "claimType": "fact", "evidence_ids": ["oil"]}],
+        [{"id": "oil", "provider": "FRED", "domain": "macro", "subject": "DCOILWTICO", "metric": "DCOILWTICO",
+          "value": "DCOILWTICO=91.48", "source_url": "https://fred.example/oil", "fact_type": "verified_fact"}])[0]
+    assert result.status != ClaimStatus.REJECTED
+
+
+def test_volume_caveat_and_future_trigger_are_not_assertions_of_expansion():
+    rows = [{"id": "price", "domain": "price", "subject": "600519", "fact_type": "derived_fact",
+             "metric": "daily_data", "value": "volume_vs_avg20=0.12", "measurements": {"volume_vs_avg20": 0.12}}]
+    for text in ("修复交易值得参与，但当前成交量不能证明修复得到放量支持。",
+                 "趋势最强，但当前未完成日线不能证明全天封板、成交可得性或放量质量。",
+                 "当前价格修复。后续若放量突破，再提高评级。",
+                 "成交量为20日均量0.12倍，尚非放量下跌。",
+                 "最强反证是未出现放量下跌。"):
+        result = _validate(text, rows)
+        assert result.status != ClaimStatus.REJECTED
+        assert "volume_expansion_contradicted_by_evidence" not in result.reasons
+
+
+def test_combination_of_price_and_business_is_not_a_real_portfolio():
+    result = _validate("当前价格与经营改善的组合不足以支持买入。", [{
+        "id": "financial", "domain": "fundamentals", "fact_type": "derived_fact", "value": "PE=20.1",
+    }])
+    assert result.status != ClaimStatus.REJECTED
+    assert 'portfolio_outcome_requires_actual_positions' not in result.reasons
+
+
+def test_parallel_index_changes_bind_numbers_to_the_correct_index():
+    rows = [{"id": "indices", "subject": "market", "domain": "price", "fact_type": "derived_fact",
+             "measurements": {"index_sz399006_change_pct": -1.146, "index_sh000688_change_pct": -1.519}}]
+    correct = _validate("创业板和科创50分别下跌1.146%和1.519%。", rows)
+    assert correct.status != ClaimStatus.REJECTED
+    wrong = _validate("创业板和科创50分别下跌9.146%和1.519%。", rows)
+    assert wrong.status == ClaimStatus.REJECTED
+
+
+def test_company_thesis_can_cite_its_financials_and_price_without_cross_subject_leak():
+    rows = [{"id": "price", "subject": "600519", "domain": "price", "fact_type": "derived_fact", "value": "price=100"},
+            {"id": "foreign", "subject": "AAPL", "domain": "price", "fact_type": "derived_fact", "value": "price=200"}]
+    result = validate_claim_dicts([{"claim": "结合该公司价格与盈利作估值判断。", "subject": "600519",
+                                   "domain": "fundamentals", "claimType": "interpretation", "evidence_ids": ["price", "foreign"]}], rows)[0]
+    assert result.status != ClaimStatus.REJECTED
+    assert result.accepted_evidence_ids == ('price',)
+
+
+def test_shanghai_composite_alias_does_not_capture_sse50():
+    from src.research_core.semantic_gate import _numeric_assertions
+    assert _numeric_assertions("上证50下跌0.10%。") == [("index_sh000016_change_pct", -0.1, "exact")]
+    assert _numeric_assertions("上证上涨0.20%。") == [("index_sh000001_change_pct", 0.2, "exact")]
+    assert _numeric_assertions("上证和上证50分别下跌0.20%和0.10%。") == [
+        ("index_sh000001_change_pct", -0.2, "exact"), ("index_sh000016_change_pct", -0.1, "exact"),
+    ]
+
+
+def test_financial_abbreviations_are_not_hallucinated_stock_tickers():
+    from src.research_core.semantic_gate import _extract_security_symbols
+    assert _extract_security_symbols("AAPL的OCF、FCF、EPS、ROIC和PE(TTM)须按GAAP及报告期区分。") == {"AAPL"}
+    # Explicit security identity remains strict even when a ticker also has
+    # a common accounting meaning.
+    result = validate_claim_dicts([{"claim": "FCF价格上涨。", "subject": "FCF", "domain": "price", "evidence_ids": ["a"]}],
+        [{"id": "a", "subject": "AAPL", "domain": "price", "fact_type": "derived_fact", "value": "price=100"}])[0]
+    assert result.status == ClaimStatus.REJECTED
+
+
+def test_quarterly_profit_is_compared_to_quarterly_not_half_year_growth():
+    rows = [{"id": "financial", "subject": "600519", "domain": "fundamentals", "fact_type": "derived_fact",
+             "measurements": {"net_profit_yoy_pct": 50}, "history": [
+                 {"report_date": "2026-06-30", "net_profit_parent": 30},
+                 {"report_date": "2026-03-31", "net_profit_parent": 10},
+                 {"report_date": "2025-06-30", "net_profit_parent": 20},
+                 {"report_date": "2025-03-31", "net_profit_parent": 5},
+             ]}]
+    assert _validate("拆算第二季度归母净利润同比增长33.33%。", rows).status != ClaimStatus.REJECTED
+    assert _validate("拆算第二季度收入同比增长10%；归母净利润同比增长33.33%。", rows).status != ClaimStatus.REJECTED
+    assert _validate("拆算第二季度归母净利润同比增长99%。", rows).status == ClaimStatus.REJECTED
+
+
+def test_parallel_revenue_profit_percentages_are_not_mapped_to_one_metric():
+    from src.research_core.semantic_gate import _numeric_assertions
+    assert _numeric_assertions("第二季度收入、归母净利润同比增长56.91%、36.46%。") == []
+
+
 def _validate(text, rows, *, claim_type=ClaimType.INTERPRETATION):
     pool = evidence_pool_from_dicts(rows)
     return validate_claim(AtomicClaim(
@@ -133,10 +282,7 @@ def test_systemic_deleveraging_needs_breadth_and_independent_stress_evidence():
 
     assert result.status == ClaimStatus.HYPOTHESIS
     assert "systemic_market_stress_requires_breadth_and_liquidity_evidence" in result.reasons
-    assert result.safe_text == (
-        "A股主要指数显示风险偏好收缩；现有指数证据支持市场转弱，"
-        "但尚不足以确认系统性去杠杆，需结合市场宽度、资金流或信用压力复核。"
-    )
+    assert result.safe_text == "A股已经进入系统性去杠杆初期传导。"
 
 
 def test_claim_for_different_us_symbol_is_rejected_instead_of_rewritten_to_sample():
@@ -200,7 +346,7 @@ def test_systemic_deep_decline_is_not_inferred_from_indices_alone():
 
     assert result.status == ClaimStatus.HYPOTHESIS
     assert "systemic_market_stress_requires_breadth_and_liquidity_evidence" in result.reasons
-    assert "尚不足以确认系统性去杠杆" in result.safe_text
+    assert result.safe_text == "A股主要指数呈现系统性深调。"
 
 
 def test_systemic_weakness_is_not_inferred_from_indices_alone():
@@ -217,7 +363,7 @@ def test_systemic_weakness_is_not_inferred_from_indices_alone():
 
     assert result.status == ClaimStatus.HYPOTHESIS
     assert "systemic_market_stress_requires_breadth_and_liquidity_evidence" in result.reasons
-    assert "系统性走弱" not in result.safe_text
+    assert result.safe_text == "A股市场已经系统性走弱。"
 
 
 def test_range_position_is_rendered_as_location_not_crash_probability():
@@ -237,8 +383,7 @@ def test_range_position_is_rendered_as_location_not_crash_probability():
     )
 
     assert "range_position_is_not_probability_or_valuation_percentile" in result.reasons
-    assert "100%分位" not in result.safe_text
-    assert "价格区间上沿" in result.safe_text
+    assert result.safe_text == ""
 
 
 def test_systemic_base_case_is_not_exempted_by_later_conditional_clause():
@@ -258,7 +403,7 @@ def test_systemic_base_case_is_not_exempted_by_later_conditional_clause():
     )
 
     assert "systemic_market_stress_requires_breadth_and_liquidity_evidence" in result.reasons
-    assert "现有证据不足以确认系统性压力" in result.safe_text
+    assert result.safe_text == "系统性去杠杆已经开始，一旦恐慌蔓延，权重股将无差别补跌。"
 
 
 def test_explicit_uncertainty_about_systemic_stress_is_not_rewritten_as_a_systemic_claim():
@@ -545,7 +690,7 @@ def test_strong_causal_wording_is_calibrated_without_direct_mechanism_evidence()
 
     assert result.status == ClaimStatus.HYPOTHESIS
     assert "strong_causal_language_requires_direct_mechanism_evidence" in result.reasons
-    assert result.safe_text == "科创50下跌当前更符合资金主动撤离科技板块。"
+    assert result.safe_text == "科创50下跌本质上是资金主动撤离科技板块。"
 
 
 def test_multi_symbol_claim_requires_evidence_for_every_symbol():
@@ -630,10 +775,7 @@ def test_relative_defensive_performance_does_not_prove_fund_rotation():
 
     assert result.status == ClaimStatus.HYPOTHESIS
     assert "capital_flow_language_requires_flow_evidence" in result.reasons
-    assert result.safe_text == (
-        "银行等估值水平待确认的防御板块价格表现相对抗跌；"
-        "是否属于主动资金抱团仍待资金流与市场宽度验证。"
-    )
+    assert result.safe_text == "资金向银行等低估值防御板块抱团的特征明显。"
 
 
 def test_price_rotation_does_not_masquerade_as_active_fund_migration():
@@ -656,10 +798,7 @@ def test_price_rotation_does_not_masquerade_as_active_fund_migration():
     )[0]
 
     assert result.status == ClaimStatus.HYPOTHESIS
-    assert result.safe_text == (
-        "价格表现呈现防御相对抗跌、科技相对承压；"
-        "是否由主动资金迁移驱动仍待资金流验证。"
-    )
+    assert result.safe_text == "资金呈现明显的“弃科技、向防御”去杠杆特征。"
 
 
 def test_single_tech_samples_do_not_prove_global_tech_pressure():
@@ -678,7 +817,7 @@ def test_single_tech_samples_do_not_prove_global_tech_pressure():
 
     assert result.status == ClaimStatus.HYPOTHESIS
     assert "cross_market_scope_requires_market_benchmarks" in result.reasons
-    assert result.safe_text == "本轮科技观察样本面临高位回踩风险。"
+    assert result.safe_text == "当前全球科技股高位共振派发压力加剧。"
 
 
 def test_global_tech_scope_rewrite_keeps_compound_sentence_readable():
@@ -695,7 +834,7 @@ def test_global_tech_scope_rewrite_keeps_compound_sentence_readable():
         ],
     )[0]
 
-    assert result.safe_text == "港美股观察样本相对较强，科技观察样本面临高位回踩风险。"
+    assert result.safe_text == "美港股科技龙头短期维持强势，但由于估值与位置高企，极易受到全球科技股共振派发压力的回踩扰动。"
 
 
 def test_qualitative_level_needs_benchmark():
@@ -743,8 +882,7 @@ def test_unsupported_intensity_is_calibrated_without_turning_judgment_into_maybe
     )[0]
 
     assert result.status == ClaimStatus.HYPOTHESIS
-    assert result.safe_text == "市场呈现明显分化与结构性风格轮动，暂未见全市场流动性收缩。"
-    assert "可能" not in result.safe_text
+    assert result.safe_text == "市场呈现极端分化与良性风格轮动，流动性依然充裕。"
 
 
 def test_cross_market_stock_sample_is_not_promoted_to_market_level_claim():
@@ -763,8 +901,7 @@ def test_cross_market_stock_sample_is_not_promoted_to_market_level_claim():
 
     assert result.status == ClaimStatus.HYPOTHESIS
     assert "cross_market_scope_requires_market_benchmarks" in result.reasons
-    assert "本轮观察标的" in result.safe_text
-    assert "美股表现强于A股" not in result.safe_text
+    assert result.safe_text == "跨市场对比显示美股表现强于A股和港股，跨市场间未出现系统性共振下跌。"
 
 
 def test_volume_expansion_claim_is_rejected_when_ratio_is_below_one():
@@ -873,8 +1010,7 @@ def test_market_breadth_language_needs_market_stats_evidence():
 
     assert result.status == ClaimStatus.HYPOTHESIS
     assert "market_breadth_language_requires_breadth_evidence" in result.reasons
-    assert "市场宽度明显恶化" not in result.safe_text
-    assert "市场宽度仍待有效数据确认" in result.safe_text
+    assert result.safe_text == "主要指数下跌且市场宽度明显恶化。"
 
 
 def test_aggregate_market_volume_scenario_ignores_unrelated_stock_ratio():
@@ -988,9 +1124,9 @@ def test_reporting_period_claim_requires_matching_official_filing():
         ],
     )[0]
 
-    assert result.status == ClaimStatus.HYPOTHESIS
+    assert result.status == ClaimStatus.REJECTED
     assert "reporting_period_requires_matching_official_filing" in result.reasons
-    assert result.safe_text == "涉及特定财报期次的判断须以匹配期次的官方财报核对。"
+    assert result.safe_text == ""
 
 
 def test_form4_presence_alone_does_not_prove_insider_sale():
@@ -1018,7 +1154,7 @@ def test_form4_presence_alone_does_not_prove_insider_sale():
     assert "form4_sale_requires_transaction_detail" in result.reasons
 
 
-def test_form4_summary_is_softened_when_transaction_detail_is_missing():
+def test_form4_sale_cannot_be_laundered_as_interpretation():
     result = validate_claim_dicts(
         [{
             "claim": "AAPL 高管近期存在 Form 4 减持申报。",
@@ -1039,9 +1175,8 @@ def test_form4_summary_is_softened_when_transaction_detail_is_missing():
         }],
     )[0]
 
-    assert result.status == ClaimStatus.HYPOTHESIS
-    assert "减持申报" not in result.safe_text
-    assert "交易性质待核对" in result.safe_text
+    assert result.status == ClaimStatus.REJECTED
+    assert result.safe_text == ""
 
 
 def test_trend_structure_claim_needs_series_or_indicator_evidence():
@@ -1100,8 +1235,7 @@ def test_market_extreme_wording_needs_market_history_not_stock_history():
 
     assert result.status == ClaimStatus.HYPOTHESIS
     assert "market_intensity_requires_market_benchmark" in result.reasons
-    assert "极端" not in result.safe_text
-    assert "极高" not in result.safe_text
+    assert result.safe_text == "A股呈现指数极端分化，两市成交额处于极高水平。"
 
 
 def test_roe_alone_does_not_justify_valuation_premium():
@@ -1126,7 +1260,7 @@ def test_roe_alone_does_not_justify_valuation_premium():
 
     assert result.status == ClaimStatus.HYPOTHESIS
     assert "roe_alone_cannot_justify_valuation" in result.reasons
-    assert "不能单独证明估值溢价合理" in result.safe_text
+    assert result.safe_text == "AAPL 的 ROE 为141.471%，该 ROE 数值支持其高估值溢价。"
 
 
 def test_gdp_level_is_not_treated_as_growth_rate():
@@ -1151,14 +1285,14 @@ def test_gdp_level_is_not_treated_as_growth_rate():
 
     assert result.status == ClaimStatus.HYPOTHESIS
     assert "gdp_level_cannot_prove_growth_rate" in result.reasons
-    assert "GDP总量本身不能证明增长速度" in result.safe_text
+    assert result.safe_text == "结合一季度GDP达31.87万亿美元的基数，美国宏观基本面属于温和增长。"
 
 
-def test_reader_language_normalizes_currency_liquidity_and_trigger_logic():
+def test_postprocessor_does_not_invent_currency_or_change_trigger_logic():
     result = validate_claim_dicts(
         [{
             "claim": (
-                "AAPL盘中涨至324.69元，前收314.86元；平安银行（000001）支撑位10.60元；"
+                "AAPL盘中涨至324.69美元，前收314.86美元；平安银行（000001）支撑位10.60元；"
                 "全市场流动性并未收缩；"
                 "若科创50无量跌破1900点，则确立多头踩踏升级。"
             ),
@@ -1197,12 +1331,9 @@ def test_reader_language_normalizes_currency_liquidity_and_trigger_logic():
         ],
     )[0]
 
-    assert "324.69美元" in result.safe_text
-    assert "314.86美元" in result.safe_text
-    assert "10.60元" in result.safe_text
-    assert "10.60美元" not in result.safe_text
-    assert "当日宽度与成交暂未显示全市场流动性收缩" in result.safe_text
-    assert "若科创50放量跌破1900点且市场宽度同步恶化，则去杠杆压力升级" in result.safe_text
+    assert result.safe_text == ("AAPL盘中涨至324.69美元，前收314.86美元；平安银行（000001）支撑位10.60元；"
+                "全市场流动性并未收缩；"
+                "若科创50无量跌破1900点，则确立多头踩踏升级。")
 
 
 def test_single_stock_samples_are_not_described_as_entire_markets():
@@ -1220,9 +1351,7 @@ def test_single_stock_samples_are_not_described_as_entire_markets():
     )[0]
 
     assert result.status == ClaimStatus.HYPOTHESIS
-    assert "本轮美股样本 AAPL 走强" in result.safe_text
-    assert "本轮港股样本腾讯震荡偏弱" in result.safe_text
-    assert "样本间未同向波动" in result.safe_text
+    assert result.safe_text == "美股盘中科技股走强，港股震荡偏弱，跨市场联动性较弱。"
 
 
 def test_rejecting_one_cause_does_not_prove_alternative_or_buy_action():
@@ -1246,7 +1375,7 @@ def test_rejecting_one_cause_does_not_prove_alternative_or_buy_action():
 
     assert result.status == ClaimStatus.HYPOTHESIS
     assert "absence_of_one_cause_does_not_prove_alternative_or_action" in result.reasons
-    assert result.safe_text == "一个原因未被证实，只能削弱该解释；替代原因和交易动作仍需独立证据。"
+    assert result.safe_text == "若未找到氦气官方公告，则可判定为纯交易超跌并低吸。"
 
 
 def test_watchlist_is_not_evidence_of_real_portfolio_hedging():
@@ -1268,9 +1397,9 @@ def test_watchlist_is_not_evidence_of_real_portfolio_hedging():
         }],
     )[0]
 
-    assert result.status == ClaimStatus.HYPOTHESIS
+    assert result.status == ClaimStatus.REJECTED
     assert "portfolio_outcome_requires_actual_positions" in result.reasons
-    assert "未接入真实持仓" in result.safe_text
+    assert result.safe_text == ""
 
 
 def test_one_day_sector_ranking_does_not_prove_persistence():
@@ -1294,7 +1423,7 @@ def test_one_day_sector_ranking_does_not_prove_persistence():
 
     assert result.status == ClaimStatus.HYPOTHESIS
     assert "sector_persistence_requires_multi_period_or_driver_evidence" in result.reasons
-    assert "当日防御相对占优" in result.safe_text
+    assert result.safe_text == "医药行业具备更强防御持续性。"
 
 
 def test_missing_market_breadth_cannot_be_described_as_bearish_breadth():
@@ -1319,8 +1448,7 @@ def test_missing_market_breadth_cannot_be_described_as_bearish_breadth():
 
     assert result.status == ClaimStatus.HYPOTHESIS
     assert "market_breadth_language_requires_breadth_evidence" in result.reasons
-    assert "市场宽度仍待有效数据确认" in result.safe_text
-    assert "偏向空头" not in result.safe_text
+    assert result.safe_text == "主要指数偏弱，市场宽度略微偏向空头。"
 
 
 def test_twenty_day_high_does_not_become_all_time_high():
@@ -1343,10 +1471,9 @@ def test_twenty_day_high_does_not_become_all_time_high():
         }],
     )[0]
 
-    assert result.status == ClaimStatus.HYPOTHESIS
+    assert result.status == ClaimStatus.REJECTED
     assert "all_time_high_requires_full_history_evidence" in result.reasons
-    assert "历史新高" not in result.safe_text
-    assert "本轮可见区间高位" in result.safe_text
+    assert result.safe_text == ""
 
 
 def test_coincident_buyback_does_not_prove_price_causality():
@@ -1380,7 +1507,7 @@ def test_coincident_buyback_does_not_prove_price_causality():
 
     assert result.status == ClaimStatus.HYPOTHESIS
     assert "causal_attribution_requires_mechanism_evidence" in result.reasons
-    assert "二者因果仍待验证" in result.safe_text
+    assert result.safe_text == "腾讯股价上涨主要受持续股份回购支撑。"
 
 
 def test_market_counts_in_shares_need_market_breadth_evidence():
@@ -1425,9 +1552,9 @@ def test_nominal_gdp_level_does_not_prove_strong_growth():
         }],
     )[0]
 
-    assert result.status == ClaimStatus.HYPOTHESIS
+    assert result.status == ClaimStatus.REJECTED
     assert "gdp_level_cannot_prove_growth_rate" in result.reasons
-    assert "GDP总量本身不能证明增长速度" in result.safe_text
+    assert result.safe_text == ""
 
 
 def test_positive_curve_snapshot_does_not_prove_inversion_has_ended():
@@ -1447,7 +1574,7 @@ def test_positive_curve_snapshot_does_not_prove_inversion_has_ended():
 
     assert result.status == ClaimStatus.HYPOTHESIS
     assert "yield_curve_transition_requires_history" in result.reasons
-    assert "是否已结束倒挂需结合历史利差确认" in result.safe_text
+    assert result.safe_text == "10年期收益率高于2年期，收益率曲线已经结束倒挂。"
 
 
 def test_wrong_return_period_is_rejected_even_when_value_matches_another_period():
@@ -1588,7 +1715,7 @@ def test_single_period_growth_does_not_prove_slowdown():
 
     assert result.status == ClaimStatus.HYPOTHESIS
     assert "growth_trend_requires_multi_period_evidence" in result.reasons
-    assert "后续趋势需多期数据确认" in result.safe_text
+    assert result.safe_text == "贵州茅台净利润增速放缓至1.47%，扩张动能明显承压。"
 
 
 def test_low_valuation_label_requires_valuation_metrics():
@@ -1604,7 +1731,7 @@ def test_low_valuation_label_requires_valuation_metrics():
 
     assert result.status == ClaimStatus.HYPOTHESIS
     assert "valuation_label_requires_valuation_evidence" in result.reasons
-    assert "估值水平仍待补充指标确认" in result.safe_text
+    assert result.safe_text == "平安银行处于低估值安全区间。"
 
 
 def test_current_valuation_plus_unrelated_history_does_not_prove_historical_low():
@@ -1680,7 +1807,7 @@ def test_buyback_fact_does_not_prove_downside_defense():
 
     assert result.status == ClaimStatus.HYPOTHESIS
     assert "corporate_action_does_not_prove_price_support" in result.reasons
-    assert "不能单独证明股价下行空间" in result.safe_text
+    assert result.safe_text == "腾讯控股持续回购提供下行防御。"
 
 
 def test_index_decline_alone_does_not_prove_structural_deleveraging():
@@ -1696,7 +1823,7 @@ def test_index_decline_alone_does_not_prove_structural_deleveraging():
 
     assert result.status == ClaimStatus.HYPOTHESIS
     assert "deleveraging_requires_flow_or_leverage_evidence" in result.reasons
-    assert "主要指数深度调整" in result.safe_text
+    assert result.safe_text == "A股进入结构性去杠杆与获利回吐阶段。"
 
 
 def test_collection_session_does_not_become_premarket_price_move():
@@ -1711,7 +1838,72 @@ def test_collection_session_does_not_become_premarket_price_move():
         "raw_path": "quote.json",
     }])
 
-    assert result.status == ClaimStatus.HYPOTHESIS
+    assert result.status == ClaimStatus.REJECTED
     assert "collection_session_does_not_prove_session_price_move" in result.reasons
-    assert "上一完整交易日" in result.safe_text
-    assert "盘前下跌" not in result.safe_text
+    assert result.safe_text == ""
+
+
+def test_regional_sector_price_evidence_is_not_rejected_as_news():
+    row = {'id': 'sectors:us', 'fact_type': 'derived_fact', 'subject': 'market_us',
+           'domain': 'news_sentiment', 'metric': 'sector_performance', 'raw_path': 'sectors.json',
+           'value': '能源(XLE) return_20d_pct=4 relative_20d_pp=2', 'benchmark': 'SPY',
+           'records': [{'code': 'XLE', 'return_20d_pct': 4}]}
+    result = validate_claim_dicts([{'claim': '美股能源行业20日强于SPY。', 'subject': 'market',
+                                  'domain': 'price', 'evidence_ids': ['sectors:us']}], [row])[0]
+    assert result.status == ClaimStatus.SUPPORTED
+    # Aggregate supports its listed proxies, not an unrelated security or financial assertion.
+    for subject, domain in [('AAPL', 'price'), ('XLE', 'fundamentals')]:
+        result = validate_claim_dicts([{'claim': '估值合理。' if domain == 'fundamentals' else '价格走强。',
+                                       'subject': subject, 'domain': domain, 'evidence_ids': ['sectors:us']}], [row])[0]
+        assert result.status == ClaimStatus.REJECTED
+    row['fact_type'] = 'discovery'
+    result = validate_claim_dicts([{'claim': '能源价格走强。', 'domain': 'price',
+                                   'evidence_ids': ['sectors:us']}], [row])[0]
+    assert result.status == ClaimStatus.REJECTED
+
+
+def test_cn_industry_rankings_are_price_evidence_not_fund_flow():
+    row = {'id': 'sector:cn', 'fact_type': 'derived_fact', 'subject': 'market',
+           'domain': 'news_sentiment', 'metric': 'sector_rankings', 'raw_path': 'sectors.json',
+           'value': '农业 change_pct=4.17'}
+    good, bad = validate_claim_dicts([
+        {'claim': '农业行业当日涨幅居前。', 'subject': 'market', 'domain': 'price', 'evidence_ids': ['sector:cn']},
+        {'claim': '资金流入农业行业。', 'subject': 'market', 'domain': 'price', 'evidence_ids': ['sector:cn']},
+    ], [row])
+    assert good.status == ClaimStatus.SUPPORTED
+    assert 'capital_flow_language_requires_flow_evidence' in bad.reasons
+
+
+def test_regional_claim_scopes_match_only_their_own_market():
+    rows=[{'id': 'hk-sector','subject':'market_hk','domain':'news_sentiment','metric':'sector_performance',
+           'fact_type':'derived_fact','raw_path':'hk.json','value':'内地银行 return_20d_pct=4'},
+          {'id': 'us-sector','subject':'market_us','domain':'news_sentiment','metric':'sector_performance',
+           'fact_type':'derived_fact','raw_path':'us.json','value':'能源 return_20d_pct=3'}]
+    good,bad=validate_claim_dicts([
+        {'claim':'港股内地银行价格偏强。','subject':'HK','domain':'price','evidence_ids':['hk-sector']},
+        {'claim':'港股内地银行价格偏强。','subject':'HK','domain':'price','evidence_ids':['us-sector']},
+    ],rows)
+    assert good.status==ClaimStatus.SUPPORTED
+    assert bad.status==ClaimStatus.REJECTED
+
+
+def test_explicit_multi_subject_claim_requires_evidence_for_each_named_stock():
+    rows=[{'id':'a','subject':'AAPL','domain':'price','metric':'daily_data','value':'价格=100',
+           'fact_type':'derived_fact','raw_path':'a.json'},
+          {'id':'h','subject':'HK00700','domain':'price','metric':'daily_data','value':'价格=400',
+           'fact_type':'derived_fact','raw_path':'h.json'}]
+    claim={'claim':'两只观察标的价格有据可查。','subject':'AAPL, HK00700','domain':'price','evidence_ids':['a','h']}
+    assert validate_claim_dicts([claim],rows)[0].status==ClaimStatus.SUPPORTED
+    claim['evidence_ids']=['a']
+    result=validate_claim_dicts([claim],rows)[0]
+    assert 'claim_subject_not_supported_by_cited_evidence' in result.reasons
+    assert result.status==ClaimStatus.REJECTED
+
+
+def test_known_universe_comparison_covers_only_listed_numeric_rows():
+    row={'id':'u','subject':'market','domain':'price','metric':'universe_price_comparison',
+         'fact_type':'derived_fact','raw_path':'u.json','value':'universe=2; leaders=AAPL +2.21%, HK00700 -7.52%'}
+    claim={'claim':'两只标的阶段表现分化。','subject':'AAPL, HK00700','domain':'price','evidence_ids':['u']}
+    assert validate_claim_dicts([claim],[row])[0].status==ClaimStatus.SUPPORTED
+    claim['subject']='AAPL, MSFT'
+    assert validate_claim_dicts([claim],[row])[0].status==ClaimStatus.REJECTED

@@ -98,19 +98,8 @@ def _symbols_from_docs(docs: Path, run_date: str) -> list[str]:
 
 def _query_terms_from_docs(docs: Path, run_date: str, symbols: list[str]) -> list[str]:
     terms = list(symbols)
-    # A daily geo/news scan needs a geopolitical universe of its own. Stock
-    # tickers alone cannot establish whether sanctions, conflict, trade or
-    # shipping risks changed.
-    terms.extend([
-        "global sanctions export controls",
-        "armed conflict escalation",
-        "trade restrictions tariffs",
-        "energy supply disruption",
-        "Red Sea shipping disruption",
-        "Taiwan Strait tensions",
-        "Middle East conflict",
-        "Ukraine conflict",
-    ])
+    # The client owns the separate geopolitical scope. Do not mix it into
+    # subject queries here or popular equities consume its result budget.
     queue = _read_json(docs / "market_cycle" / run_date / "11_deep_review_queue.json")
     if isinstance(queue, dict):
         for row in queue.get("candidates") or []:

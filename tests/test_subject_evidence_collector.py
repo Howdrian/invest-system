@@ -1,6 +1,8 @@
 from types import SimpleNamespace
 from datetime import date, timedelta
 
+import pytest
+
 
 class FakeManager:
     def get_main_indices(self, market):
@@ -137,6 +139,61 @@ def test_market_only_refresh_preserves_existing_symbol_evidence(tmp_path):
     assert any(row.get("id") == f"subject:600519:daily_data:{run_date}" for row in evidence)
     assert any(row.get("id") == f"subject:AAPL:daily_data:{run_date}" for row in evidence)
     assert any(row.get("id") == f"subject:market_us:main_indices:{run_date}" for row in evidence)
+
+
+def test_explicit_three_market_scope_does_not_require_foreign_watchlist_stocks(tmp_path):
+    from src.source_health.daily_universe import write_daily_universe
+    from src.source_health.subject_evidence import collect_subject_evidence
+
+    class Manager(FakeManager):
+        def __init__(self):
+            self.sector_markets = []
+
+        def get_sector_performance(self, market, run_date):
+            self.sector_markets.append(market)
+            return {"records": [], "provider_runs": []}
+
+    manager = Manager()
+    write_daily_universe(tmp_path, "2026-09-07", symbols=["600519"], market="cn,hk,us")
+    result = collect_subject_evidence(tmp_path, "2026-09-07", manager=manager)
+    assert result["marketRegions"] == ["cn", "hk", "us"]
+    assert manager.sector_markets == ["hk", "us"]
+
+
+def test_empty_preopen_market_payload_is_not_breadth_or_sector_leadership():
+    from src.source_health.subject_evidence import _collect_market_scope
+
+    class Manager(FakeManager):
+        def get_main_indices(self, market):
+            return [{"code": "GOOD", "current": 3000}, {"code": "EMPTY", "current": 0}]
+
+        def get_market_stats(self, purpose=None):
+            return {"up_count": 0, "down_count": 0, "flat_count": 0, "total_amount": 0}
+
+        def get_sector_rankings(self, n=8):
+            return ([{"name": "农业", "change_pct": 0}], [{"name": "农业", "change_pct": 0}])
+
+    facts = []
+    runs = _collect_market_scope(Manager(), "2026-09-07", "cn", facts)
+    assert not any(r["metric"] in {"market_stats", "sector_rankings"} for r in facts)
+    indices = next(r for r in facts if r["metric"] == "main_indices")
+    assert [r["code"] for r in indices["records"]] == ["GOOD"]
+    assert all(not r["success"] for r in runs if r["operation"] in {"market_stats", "sector_rankings"})
+
+
+def test_zero_sector_snapshots_do_not_create_historical_persistence(tmp_path):
+    from src.source_health.subject_evidence import _sector_history_evidence
+    from src.source_health.evidence_ledger import write_evidence_ledger
+
+    current = {"metric": "sector_rankings", "as_of": "2026-09-07", "records": [
+        {"name": "农业", "rank_side": "top", "change_pct": 0},
+        {"name": "农业", "rank_side": "bottom", "change_pct": 0},
+    ]}
+    prior = {**current, "as_of": "2026-09-04", "records": [
+        {"name": "农业", "rank_side": "top", "change_pct": 1},
+    ]}
+    write_evidence_ledger(tmp_path / "run_status/2026-09-04/subject_evidence.jsonl", [prior])
+    assert _sector_history_evidence(tmp_path, "2026-09-07", [current]) is None
 
 
 def test_market_snapshot_date_uses_each_exchange_effective_bar_date():
@@ -485,6 +542,8 @@ def test_sector_history_uses_prior_local_snapshots(tmp_path):
         json.dumps({
             "id": "subject:market:sector_rankings:2099-01-01",
             "metric": "sector_rankings",
+            "as_of": "2099-01-01",
+            "time_basis": "source",
             "records": [
                 {"name": "AI", "rank_side": "top"},
                 {"name": "煤炭", "rank_side": "bottom"},
@@ -495,6 +554,8 @@ def test_sector_history_uses_prior_local_snapshots(tmp_path):
     current = [{
         "id": "subject:market:sector_rankings:2099-01-02",
         "metric": "sector_rankings",
+        "as_of": "2099-01-02",
+        "time_basis": "source",
         "records": [
             {"name": "AI", "rank_side": "top"},
             {"name": "煤炭", "rank_side": "bottom"},
@@ -605,3 +666,113 @@ def test_fundamental_history_does_not_report_percentage_across_negative_profit_b
     assert "net_profit_yoy_pct" not in row["measurements"]
     assert row["transitions"]["net_profit_parent"] == "turned_positive"
     assert row["transitions"]["operating_cash_flow"] == "loss_narrowed"
+
+
+def test_sector_history_does_not_count_repeated_weekend_payload_as_two_observations(tmp_path):
+    import json
+    from src.source_health.subject_evidence import _sector_history_evidence
+
+    prior = {'metric': 'sector_rankings', 'market': 'cn', 'as_of': '2026-09-05',
+             'records': [{'name': '科技', 'rank_side': 'top', 'change_pct': 1.2}]}
+    path = tmp_path / 'run_status/2026-09-05/subject_evidence.jsonl'
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps(prior) + '\n')
+    current = {**prior, 'as_of': '2026-09-04', 'time_basis': 'fetched'}
+    assert _sector_history_evidence(tmp_path, '2026-09-06', [current]) is None
+
+
+@pytest.mark.parametrize("metric", ["market_stats", "fundamental_valuation"])
+def test_local_history_does_not_inflate_sample_count_with_unchanged_captures(tmp_path, metric):
+    import json
+    from src.source_health.subject_evidence import (
+        _market_stats_history_evidence,
+        _valuation_history_evidence,
+    )
+
+    fact = {
+        "metric": metric,
+        "subject": "market" if metric == "market_stats" else "AAPL",
+        "measurements": {"up_count": 1000, "down_count": 2000, "trailing_pe": 20, "price_to_book": 5},
+        "time_basis": "fetched",
+    }
+    # Twenty fetches with no source timestamps do not establish twenty sessions.
+    for day in range(1, 21):
+        run_date = f"2026-08-{day:02}"
+        path = tmp_path / "run_status" / run_date / "subject_evidence.jsonl"
+        path.parent.mkdir(parents=True)
+        path.write_text(json.dumps({**fact, "as_of": run_date}) + "\n")
+    if metric == "market_stats":
+        assert _market_stats_history_evidence(tmp_path, "2026-08-21", [fact]) is None
+    else:
+        assert _valuation_history_evidence(tmp_path, "2026-08-21", [fact]) == []
+
+
+def test_distinct_snapshot_selection_keeps_source_dates_and_latest_revision():
+    from src.source_health.subject_evidence import _distinct_local_snapshots
+
+    def source(day):
+        return {"time_basis": "source", "as_of": day}
+
+    rows = _distinct_local_snapshots([
+        ("2026-09-06", source("2026-09-04"), {"pe": 22}),
+        ("2026-09-05", source("2026-09-04"), {"pe": 21}),
+        ("2026-09-04", source("2026-09-03"), {"pe": 22}),
+    ])
+    assert rows == [("2026-09-04", {"pe": 22}), ("2026-09-03", {"pe": 22})]
+
+
+def test_distinct_snapshots_ignore_row_order_without_erasing_dated_equal_sessions():
+    from src.source_health.subject_evidence import _distinct_local_snapshots
+
+    payload = [{"name": "科技", "change_pct": 1.2}, {"name": "金融", "change_pct": 0.1}]
+    rows = _distinct_local_snapshots([
+        ("2026-09-06", {"time_basis": "fetched"}, list(reversed(payload))),
+        ("2026-09-05", {"time_basis": "source", "as_of": "2026-09-04"}, payload),
+        ("2026-09-04", {"time_basis": "source", "as_of": "2026-09-03"}, payload),
+    ])
+    assert [day for day, _ in rows] == ["2026-09-04", "2026-09-03"]
+
+
+@pytest.mark.parametrize("market", ["cn", "hk", "us"])
+def test_market_snapshot_weekend_fetch_after_open_is_not_a_new_trading_day(market):
+    from src.source_health.subject_evidence import _market_snapshot_date
+
+    assert _market_snapshot_date(market, "2026-09-06", "2026-09-05T23:40:00Z") == "2026-09-04"
+
+
+def test_valuation_history_preserves_source_date_when_capture_dates_overlap(tmp_path):
+    import json
+    from src.source_health.subject_evidence import _valuation_history_evidence
+
+    def fact(day, pe):
+        return {"metric": "fundamental_valuation", "symbol": "AAPL", "as_of": day,
+                "time_basis": "source", "measurements": {"trailing_pe": pe}}
+
+    path = tmp_path / "run_status/2026-09-04/subject_evidence.jsonl"
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps(fact("2026-09-03", 20)) + "\n")
+    rows = _valuation_history_evidence(tmp_path, "2026-09-06", [fact("2026-09-04", 22)])
+    assert rows[0]["as_of"] == "2026-09-04"
+    assert rows[0]["observed_dates"] == ["2026-09-03", "2026-09-04"]
+
+
+def test_foreign_sector_provider_results_enter_subject_evidence_via_manager(tmp_path):
+    from src.source_health.subject_evidence import _collect_sector_performance
+    from data_provider.base import DataFetcherManager
+    from unittest.mock import patch
+    payload = {'records': [{'code': 'XLK', 'name': '科技', 'as_of': '2026-09-04', 'return_20d_pct': 2}],
+               'scope': '标普500行业代理', 'benchmark': 'SPY', 'expected_count': 11,
+               'provider_runs': [{'provider': 'YfinanceFetcher', 'symbol': 'XLK', 'status': 'success',
+                                  'record_count': 70, 'error_type': None},
+                                 {'provider': 'YfinanceFetcher', 'symbol': 'XLF', 'status': 'failed',
+                                  'record_count': 0, 'error_type': 'TimeoutError'}]}
+    # Exercise the real manager seam, not a parallel report-only provider.
+    with patch('data_provider.sector_performance.collect_sector_performance', return_value=payload) as fetch:
+        manager = DataFetcherManager.__new__(DataFetcherManager)
+        facts = []
+        runs = _collect_sector_performance(manager, '2026-09-06', 'us', facts)
+    fetch.assert_called_once_with('us', '2026-09-06')
+    assert facts[0]['market'] == 'us' and facts[0]['fact_type'] == 'derived_fact'
+    assert facts[0]['coverage'] == {'actual': 1, 'expected': 11}
+    assert facts[0]['records'][0]['return_20d_pct'] == 2
+    assert runs[0]['success'] and not runs[1]['success']

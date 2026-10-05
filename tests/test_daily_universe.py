@@ -1,10 +1,39 @@
 import json
 
 
+def test_research_horizon_is_configurable_without_extending_candidate_freshness(tmp_path, monkeypatch):
+    from src.source_health.daily_universe import build_daily_universe, integrate_discovered_candidates
+    monkeypatch.setenv('ENV_FILE', str(tmp_path / 'no.env'))
+    monkeypatch.setenv('RESEARCH_RECENT_CHANGE_MONTHS', '3')
+    monkeypatch.setenv('RESEARCH_OUTLOOK_MONTHS', '6')
+    payload = build_daily_universe(tmp_path, '2026-09-08', symbols=['AAPL'])
+    window = payload['researchWindow']
+    assert window['recentChanges']['start'] == '2026-06-08'
+    assert window['decisionHorizon']['end'] == '2027-03-08'
+    assert window['decisionHorizon']['flexible'] is True
+    assert '历史参照' in ' '.join(window['displayLines'])
+    stale = {'id': 'old:hot', 'metric': 'hot_stocks', 'as_of': '2026-07-01',
+             'records': [{'symbol': '000592'}]}
+    updated = integrate_discovered_candidates(payload, [stale])
+    assert '000592' not in updated['subjectSymbols']
+
+
+def test_invalid_horizon_warns_and_falls_back_without_breaking_daily_run(tmp_path, monkeypatch, caplog):
+    from src.source_health.daily_universe import build_daily_universe
+    monkeypatch.setenv('ENV_FILE', str(tmp_path / 'no.env'))
+    monkeypatch.setenv('RESEARCH_RECENT_CHANGE_MONTHS', '0')
+    monkeypatch.setenv('RESEARCH_OUTLOOK_MONTHS', 'bad')
+    window = build_daily_universe(tmp_path, '2026-03-31', symbols=['AAPL'])['researchWindow']
+    assert window['recentChanges']['start'] == '2026-02-28'
+    assert window['decisionHorizon']['end'] == '2026-05-31'
+    assert 'RESEARCH_OUTLOOK_MONTHS' in caplog.text
+
+
 def test_daily_universe_does_not_fallback_to_single_600519(tmp_path, monkeypatch):
     from src.source_health.daily_universe import build_daily_universe
 
-    monkeypatch.setenv("STOCK_LIST", "600519")
+    monkeypatch.setenv("STOCK_LIST", "")
+    monkeypatch.setenv("STOCK_LIST_CONFIG", "")
     monkeypatch.setenv("PORTFOLIO_HOLDINGS", "")
     docs = tmp_path / "docs"
     payload = build_daily_universe(docs, "2099-01-02")
@@ -100,3 +129,15 @@ def test_daily_universe_normalizes_market_and_falls_back_invalid_or_empty_to_cn(
     assert build_daily_universe(tmp_path / "docs", "2099-01-02")["market"] == "us,kr"
     assert build_daily_universe(tmp_path / "docs", "2099-01-02", market="invalid")["market"] == "cn"
     assert build_daily_universe(tmp_path / "docs", "2099-01-02", market="")["market"] == "cn"
+
+
+def test_candidate_freshness_preserves_calendar_month_boundary(tmp_path, monkeypatch):
+    from src.source_health.daily_universe import build_daily_universe, integrate_discovered_candidates
+    monkeypatch.setenv('ENV_FILE', str(tmp_path / 'no.env'))
+    monkeypatch.setenv('RESEARCH_RECENT_CHANGE_MONTHS', '6')
+    universe = build_daily_universe(tmp_path, '2026-03-01', symbols=['AAPL'])
+    facts = [{'metric': 'hot_stocks', 'as_of': '2026-01-31', 'records': [{'symbol': '000592'}]},
+             {'metric': 'hot_stocks', 'as_of': '2026-02-01', 'records': [{'symbol': '600108'}]}]
+    result = integrate_discovered_candidates(universe, facts)
+    assert '000592' not in result['subjectSymbols']
+    assert '600108' in result['subjectSymbols']

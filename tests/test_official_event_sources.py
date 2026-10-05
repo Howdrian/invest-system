@@ -69,6 +69,7 @@ def test_official_event_sources_normalize_sec_cninfo_and_gdelt(monkeypatch):
     monkeypatch.setattr(client, "_get_json", fake_get_json)
     monkeypatch.setattr(client, "_post_json", fake_post_json)
 
+    monkeypatch.setattr(client, "_get_document", lambda *args, **kwargs: ("<html>经营现金流变动说明。" + "财报正文内容。" * 40 + "</html>").encode())
     result = client.fetch(symbols=["AAPL", "600519"], query_terms=["AI chips", "tariffs"], run_date="2099-01-02")
 
     providers = {row["provider"]: row for row in result.provider_runs}
@@ -99,6 +100,8 @@ def test_tavily_search_creates_discovery_from_env_file(monkeypatch):
         assert headers["Authorization"].startswith("Bearer tvly-")
         payload = json.loads(data.decode("utf-8"))
         assert payload["query"].startswith("(")
+        assert payload["start_date"] == "2098-12-26"
+        assert payload["end_date"] == "2099-01-02"
         return {"results": [{"title": "Tariff update", "url": "https://news.example/tariff", "published_date": "2099-01-02"}]}
 
     monkeypatch.setattr(client, "_post_json_body", fake_post_json_body)
@@ -110,6 +113,30 @@ def test_tavily_search_creates_discovery_from_env_file(monkeypatch):
     assert result.provider_runs[0]["success"] is True
     assert result.evidence_facts[0]["fact_type"] == "discovery"
     assert result.evidence_facts[0]["provider"] == "Tavily"
+
+
+def test_tavily_preserves_snippet_and_real_publication_time(monkeypatch):
+    from src.source_health import official_event_sources as module
+    monkeypatch.setattr(module, "_env_csv", lambda *args: ["test-key"])
+    client = module.OfficialEventSourceClient(timeout_s=0.1)
+    monkeypatch.setattr(client, "_post_json_body", lambda *args, **kwargs: {"results": [
+        {"title": "Energy policy", "url": "https://example.org/new", "content": "New export restriction affects energy shipping.",
+         "published_date": "Fri, 04 Sep 2026 10:00:00 GMT"},
+        {"title": "Undated context", "url": "https://example.org/undated"},
+        {"title": "Old news", "url": "https://example.org/old", "published_date": "Fri, 07 Aug 2026 00:00:00 GMT"},
+        {"title": "Future", "url": "https://example.org/future", "published_date": "2026-09-07"},
+    ]})
+    result = client.fetch_tavily_search(query_terms=["energy"], run_date="2026-09-06", query_scope="geopolitical")
+    assert len(result.evidence_facts) == 2
+    fact, undated = result.evidence_facts
+    assert "export restriction" in fact["value"]
+    assert fact["published_at"] == "2026-09-04T10:00:00Z"
+    assert fact["as_of"] == "2026-09-04"
+    assert fact["query_scope"] == "geopolitical"
+    assert fact["fact_type"] == "discovery"
+    assert undated["as_of"] == undated["published_at"] == ""
+    assert undated["time_basis"] == "unknown"
+    assert undated["fetched_at"]
 
 
 def test_sec_companyfacts_create_fundamental_verified_facts(monkeypatch):
@@ -163,10 +190,13 @@ def test_fetch_uses_independent_geopolitical_query_scope(monkeypatch):
     monkeypatch.setattr(client, "fetch_exchange_disclosures", lambda **kwargs: empty)
     monkeypatch.setattr(client, "fetch_hkex_disclosures", lambda **kwargs: empty)
     seen = {}
+    tavily_calls = []
 
     def capture(name):
         def inner(**kwargs):
             seen[name] = list(kwargs["query_terms"])
+            if name == "tavily":
+                tavily_calls.append(kwargs)
             return empty
         return inner
 
@@ -175,6 +205,7 @@ def test_fetch_uses_independent_geopolitical_query_scope(monkeypatch):
     monkeypatch.setattr(client, "fetch_reliefweb_reports", capture("reliefweb"))
     monkeypatch.setattr(client, "fetch_ofac_sanctions_signals", capture("ofac"))
 
+    monkeypatch.setattr(client, "_get_document", lambda *args, **kwargs: ("<html>经营现金流变动说明。" + "财报正文内容。" * 40 + "</html>").encode())
     result = client.fetch(symbols=["AAPL"], query_terms=["AAPL"], run_date="2099-01-02")
 
     assert "AAPL" not in seen["gdelt"]
@@ -182,6 +213,9 @@ def test_fetch_uses_independent_geopolitical_query_scope(monkeypatch):
     assert any("conflict" in term or "sanctions" in term for term in seen["gdelt"])
     assert seen["ofac"] == ["AAPL"]
     assert result.raw["queryScopes"]["subject"] == ["AAPL"]
+    assert [call["query_scope"] for call in tavily_calls] == ["subject", "geopolitical"]
+    assert tavily_calls[0]["query_terms"] == ["AAPL"]
+    assert "AAPL" not in tavily_calls[1]["query_terms"]
 
 
 def test_exchange_disclosures_parse_sse_szse_and_hkex(monkeypatch):
@@ -445,7 +479,7 @@ def test_fetch_script_full_review_smoke_profile_uses_fixed_symbols(tmp_path, mon
     assert captured["timeout_s"] == 0.1
     assert captured["symbols"] == ["600519", "000001", "AAPL", "HK00700"]
     assert captured["query_terms"][:4] == ["600519", "000001", "AAPL", "HK00700"]
-    assert any("sanctions" in term for term in captured["query_terms"])
+    assert captured["query_terms"] == captured["symbols"]  # Geo queries are owned by the client, not mixed here.
     assert captured["run_date"] == "2099-01-02"
     output = json.loads(capsys.readouterr().out)
     assert output["symbols"] == ["600519", "000001", "AAPL", "HK00700"]

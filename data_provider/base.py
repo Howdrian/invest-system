@@ -4736,6 +4736,12 @@ class DataFetcherManager:
 
             return [], [], source_chain, last_error
 
+    def get_sector_performance(self, market: str, as_of: str) -> Dict[str, Any]:
+        """Free regional sector histories; does not change the CN ranking chain."""
+        from .sector_performance import collect_sector_performance
+
+        return collect_sector_performance(market, as_of)
+
     def get_sector_rankings(self, n: int = 5) -> Tuple[List[Dict], List[Dict]]:
         """获取板块涨跌榜（自动切换数据源）"""
         # 按需求固定回退顺序：Akshare(EM) -> Akshare(Sina) -> Tushare -> Efinance

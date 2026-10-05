@@ -8,7 +8,11 @@ not call network providers; provider collection is handled by
 from __future__ import annotations
 
 import json
+import logging
 import os
+import re
+from calendar import monthrange
+from datetime import date
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Sequence
 
@@ -16,6 +20,49 @@ from src.utils.market_review_region import normalize_market_review_region_lenien
 
 
 DEFAULT_MACRO_SERIES = ["DGS10", "DGS2", "FEDFUNDS", "CPIAUCSL", "UNRATE", "M2SL"]
+
+
+def research_window(run_date: str, *, recent_change_months: int = 1, outlook_months: int = 2) -> Dict[str, Any]:
+    """Separate recent changes, historical context and the default decision horizon.
+
+    Dates describe research emphasis, never a data-retention or holding rule.
+    The legacy date fields remain aliases for existing artifact consumers.
+    """
+    anchor = date.fromisoformat(run_date)
+    def shift(months: int) -> str:
+        year, month0 = divmod(anchor.year * 12 + anchor.month - 1 + months, 12)
+        month = month0 + 1
+        return date(year, month, min(anchor.day, monthrange(year, month)[1])).isoformat()
+    recent_start, outlook_end = shift(-recent_change_months), shift(outlook_months)
+    horizon = '1–2' if outlook_months == 2 else str(outlook_months)
+    return {
+        "schema": "research_window_v2", "asOf": run_date,
+        "lookbackStart": recent_start, "outlookEnd": outlook_end,
+        "recentChanges": {"start": recent_start, "end": run_date, "months": recent_change_months},
+        "decisionHorizon": {"start": run_date, "end": outlook_end, "months": outlook_months, "flexible": True},
+        "label": f"聚焦未来{horizon}个月的机会与风险；结合近期变化及必要的中长期背景。",
+        "basis": "近期变化窗口不截断历史资料，也不是数据过期标准；建议期限是默认重点，不是持有指令。具体观点可采用不同期限，说明当前影响及改变判断的条件。",
+        "displayLines": [
+            f"近期变化：{recent_start} 至 {run_date}（重点，不是历史资料截止线）",
+            f"建议适用期：{run_date} 至 {outlook_end}（默认重点，具体观点可另列期限）",
+            "历史参照：按部门使用相关历史与最新财报；实际覆盖范围以证据为准。",
+        ],
+    }
+
+
+def _research_months(name: str, values: Mapping[str, str], default: int) -> int:
+    raw = _env_get(name, values).strip()
+    if not raw:
+        return default
+    try:
+        months = int(raw)
+        if 1 <= months <= 60:
+            return months
+    except ValueError:
+        pass
+    # Do not echo arbitrary env contents (including accidentally pasted keys).
+    logging.getLogger(__name__).warning("%s must be 1..60 months; using default %s", name, default)
+    return default
 
 
 def build_daily_universe(
@@ -46,7 +93,7 @@ def build_daily_universe(
             "source": "cli_symbols" if explicit_symbols else "STOCK_LIST" if stock_list_symbols else "empty",
             "symbols": stock_list_symbols,
             "whyIncluded": (
-                "本地验收显式指定标的"
+                "用户手动指定的自选跟踪标的；不限制行业研究范围"
                 if explicit_symbols
                 else "来自本地 STOCK_LIST 配置"
                 if stock_list_symbols
@@ -67,8 +114,8 @@ def build_daily_universe(
             "name": "candidates",
             "source": "market_cycle_or_market_heat",
             "symbols": candidates,
-            "whyIncluded": "来自候选池、市场热度或筛选产物；只做观察清单",
-            "evidenceRequirements": ["price", "news_sentiment"],
+            "whyIncluded": "系统发现的研究候选，独立于用户自选；热度不是推荐，须经过公司研究与CIO取舍",
+            "evidenceRequirements": ["price", "fundamentals", "filings_events", "news_sentiment"],
         },
         {
             "name": "market",
@@ -93,6 +140,11 @@ def build_daily_universe(
         "schema": "daily_universe_v1",
         "runDate": run_date,
         "mode": mode,
+        "researchWindow": research_window(
+            run_date,
+            recent_change_months=_research_months("RESEARCH_RECENT_CHANGE_MONTHS", env_values, 1),
+            outlook_months=_research_months("RESEARCH_OUTLOOK_MONTHS", env_values, 2),
+        ),
         "market": region,
         "subjectSymbols": subject_symbols,
         "groups": groups,
@@ -101,6 +153,55 @@ def build_daily_universe(
             "Source smoke proves provider availability; subject evidence proves current report coverage.",
         ],
     }
+
+
+def integrate_discovered_candidates(
+    universe: Mapping[str, Any], facts: Sequence[Mapping[str, Any]], *, per_market: int = 3,
+) -> Dict[str, Any]:
+    """Discover research subjects from provider rows, not an LLM ticker guess.
+
+    A popularity result is a research lead, not an investment recommendation.
+    The full list remains evidence; bounded enrichment prevents unbounded scans.
+    """
+    result = {**universe, "groups": [dict(group) for group in universe.get("groups") or []]}
+    discoveries = []
+    seen = set()
+    as_of = date.fromisoformat(str(universe["runDate"]))
+    # Candidate leads retain a recent-data rule independent of the chosen
+    # research horizon. A six-month outlook does not revive stale hot lists.
+    freshness_start = research_window(as_of.isoformat(), recent_change_months=1)["lookbackStart"]
+    counts: Dict[str, int] = {}
+    for fact in facts:
+        if fact.get("metric") not in {"hot_stocks", "screening_candidates", "sector_constituents"}:
+            continue
+        if fact.get("evidence_scope", "subject_evidence") != "subject_evidence":
+            continue
+        observed = str(fact.get("as_of") or "")[:10]
+        if not observed or not freshness_start <= observed <= as_of.isoformat():
+            continue
+        for row in fact.get("records") or []:
+            if not isinstance(row, Mapping):
+                continue
+            symbol = str(row.get("symbol") or row.get("code") or row.get("stock_code") or "").upper()
+            symbol = re.sub(r"^(?:SH|SZ|BJ)(?=\d{6}$)", "", symbol)
+            if not re.fullmatch(r"(?:\d{6}|HK\d{4,5}|[A-Z]{1,5}(?:\.[A-Z])?)", symbol):
+                continue
+            market = "cn" if symbol.isdigit() else "hk" if symbol.startswith("HK") and symbol[2:].isdigit() else "us"
+            if symbol in seen or counts.get(market, 0) >= per_market:
+                continue
+            seen.add(symbol)
+            counts[market] = counts.get(market, 0) + 1
+            discoveries.append({"symbol": symbol, "name": row.get("name") or symbol,
+                                "market": market, "sourceEvidenceId": fact.get("id"),
+                                "asOf": fact.get("as_of"),
+                                "whyIncluded": "来自本期筛选/热度/行业成分资料；进入公司研究，不等于买入推荐"})
+    for group in result["groups"]:
+        if group.get("name") == "candidates":
+            group["symbols"] = _dedupe([*group.get("symbols", []), *(row["symbol"] for row in discoveries)])
+            group["discoveries"] = discoveries
+            group["source"] = "provider_discovery_and_existing_screening"
+    result["subjectSymbols"] = _dedupe([*result.get("subjectSymbols", []), *(row["symbol"] for row in discoveries)])
+    return result
 
 
 def write_daily_universe(
@@ -130,10 +231,7 @@ def load_daily_universe(docs_dir: str | Path, run_date: str) -> Dict[str, Any]:
 def _symbols_from_env(env_values: Mapping[str, str]) -> List[str]:
     raw = _env_get("STOCK_LIST", env_values) or _env_get("STOCK_LIST_CONFIG", env_values)
     symbols = _clean_symbols(raw.replace("，", ",").split(","))
-    # Guard against upstream's old minimum fallback being mistaken as a daily
-    # universe. A user may still explicitly pass --symbols 600519.
-    if symbols == ["600519"]:
-        return []
+    # STOCK_LIST is explicit user input, including a single chosen stock.
     return symbols
 
 

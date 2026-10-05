@@ -18,6 +18,7 @@ from .contracts import (
 )
 from .semantic_gate import validate_claim, validate_claim_dicts
 from .reliability import (
+    build_claim_assessment,
     build_challenge_verdicts,
     build_research_reliability,
     build_scenario_adjudication,
@@ -35,6 +36,7 @@ __all__ = [
     "validate_claim",
     "validate_claim_dicts",
     "build_research_reliability",
+    "build_claim_assessment",
     "build_scenario_adjudication",
     "build_challenge_verdicts",
 ]
