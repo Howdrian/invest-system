@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
 import type { ReportArtifactV1 } from '../../types/analysis';
 import { ReportArtifactDiagnosticsView, ReportArtifactView } from './ReportArtifactView';
 
@@ -8,7 +9,7 @@ const artifact: ReportArtifactV1 = {
   artifactId: 'stock-600519-2026-06-19',
   runDate: '2026-06-19',
   generatedAt: '2026-06-19T09:00:00Z',
-  artifactType: 'stock_governed',
+  artifactType: 'daily',
   audience: 'reader',
   title: '贵州茅台 governed 报告',
   summary: {
@@ -254,7 +255,7 @@ describe('ReportArtifactView', () => {
     expect(screen.getByText('截至下个交易日开盘前')).toBeInTheDocument();
     expect(screen.getByText('覆盖')).toBeInTheDocument();
     expect(screen.getByText('A股主要指数完整；美股为观察样本')).toBeInTheDocument();
-    expect(screen.getByText('可信度')).toBeInTheDocument();
+    expect(screen.getByText('论据评估')).toBeInTheDocument();
     expect(screen.getAllByText('中等可信').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('多市场观察简报')).toBeInTheDocument();
     expect(screen.getByText(/综合数据截至 2026-06-19 16:30（北京时间） · 生成于 17:00/)).toBeInTheDocument();
@@ -361,8 +362,9 @@ describe('ReportArtifactView', () => {
     expect(within(stockCard).getByText('营收同比 +6.34%')).toBeInTheDocument();
     expect(within(stockCard).getByText('官方事件')).toBeInTheDocument();
     expect(within(stockCard).getByRole('link', { name: '年度权益分派公告' })).toHaveAttribute('href', 'https://example.test/cninfo.pdf');
-    expect(within(stockCard).getByText('定位')).toBeInTheDocument();
-    expect(within(stockCard).getAllByText('观察').length).toBeGreaterThan(0);
+    expect(within(stockCard).queryByText('定位')).not.toBeInTheDocument();
+    expect(within(stockCard).queryByText('观察')).not.toBeInTheDocument();
+    expect(screen.getByText('这里是本期价格与财务快照；研究评级与入场节奏见上方公司研究。')).toBeInTheDocument();
   });
 
   it('shows only reader-safe evidence metadata and links valid source URLs', () => {
@@ -452,4 +454,52 @@ describe('ReportArtifactView', () => {
     fireEvent.click(screen.getByRole('button', { name: '查看机器 JSON' }));
     expect(screen.getByText(/schemaVersion/)).toBeInTheDocument();
   });
+});
+
+it('shows research priorities and per-claim basis without flattening departments to medium', () => {
+  const value = structuredClone(artifact);
+  value.readerV3!.focusList = {
+    schema: 'reader_focus_list_v1', note: '研究优先级不是买入评级。', sectorCoverage: '港股、美股尚未形成板块清单。',
+    sectors: [{ market: 'A股', priority: '强势跟踪', targets: ['渔业'], basis: '两份快照相对领先', watchFor: '后续是否延续', evidenceIds: ['s1'] }],
+    stocks: [{ symbol: 'AAPL', name: '苹果', market: 'US', priority: '优先研究', reason: '盈利改善有支持，估值须比较。',
+      sourceLabel: 'CIO 报告', evidenceLabel: '有据支持', watchFor: '关注盈利持续性', asOf: '2026-09-04', historyRecordId: 6, evidenceIds: ['a1'] }],
+  };
+  value.readerV3!.departmentCards = [{ agent: '基本面部门', label: '基本面部门', confidence: 'medium', conclusion: '经营改善。',
+    claimAssessment: { schema: 'claim_assessment_v1', summary: '1条有据支持 · 1条推演待验证', claims: [
+      { claimId: 'c1', text: '营收已经增长', label: '有据支持', evidenceIds: ['a1'] },
+      { claimId: 'c2', text: '增长能否延续仍待观察', label: '推演待验证', evidenceIds: ['a1'] },
+    ] },
+  }];
+  render(<MemoryRouter><ReportArtifactView artifact={value} /></MemoryRouter>);
+  const focus = screen.getByRole('region', { name: '本期关注清单' });
+  expect(within(focus).getByText('优先研究')).toBeInTheDocument();
+  expect(within(focus).getByText('渔业')).toBeInTheDocument();
+  expect(within(focus).getByRole('link', { name: /原 DSA 短线分析/ })).toHaveAttribute('href', '/reports/history:6');
+  const department = screen.getByText('基本面部门').closest('details')!;
+  expect(within(department).queryByText('中等可信')).not.toBeInTheDocument();
+  fireEvent.click(within(department).getByText('查看依据'));
+  expect(within(department).getByText('营收已经增长')).toBeInTheDocument();
+  expect(within(department).getByText('推演待验证')).toBeInTheDocument();
+});
+
+it('shows regional sector observations with historical comparison and safe sources', () => {
+  const value = structuredClone(artifact);
+  value.readerV3!.focusList = {
+    schema: 'reader_focus_list_v1', note: '行情观察与研究判断分开。', sectors: [], stocks: [], sectorCoverage: '',
+    sectorPerformance: [{ market: '美股', scope: '标普500行业ETF代理', asOf: '2026-09-04', benchmark: 'SPY', evidenceIds: ['e1'],
+      rows: [{ name: '科技', code: 'XLK', asOf: '2026-09-04', sourceUrl: 'https://example.com/x?api_key=private',
+        return1dPct: 0, return5dPct: 2, return20dPct: -1, return60dPct: 5, relative20dPp: 2 },
+        { name: '金融', code: 'XLF', asOf: '2026-09-04', sourceUrl: 'javascript:alert(1)' }] }],
+  };
+  render(<MemoryRouter><ReportArtifactView artifact={value} /></MemoryRouter>);
+  const focus = screen.getByRole('region', { name: '本期关注清单' });
+  expect(within(focus).getByText('美股 · 行业动态')).toBeInTheDocument();
+  const summary = within(focus).getByText('展开 2 个行业/主题的阶段表现与来源');
+  expect(summary.closest('details')).not.toHaveAttribute('open');
+  fireEvent.click(summary);
+  expect(within(focus).getByText('0.00%')).toBeInTheDocument();
+  expect(within(focus).getByRole('table')).toHaveClass('report-sector-table');
+  expect(within(focus).getByRole('link', { name: '科技' })).toHaveAttribute('href', 'https://example.com/x');
+  expect(within(focus).queryByRole('link', { name: '金融' })).not.toBeInTheDocument();
+  expect(focus.textContent).not.toContain('private');
 });

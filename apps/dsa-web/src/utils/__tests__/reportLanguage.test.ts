@@ -4,6 +4,11 @@ import { getReportText, normalizeReportLanguage } from '../reportLanguage';
 import { getSentimentLabel } from '../../types/analysis';
 
 describe('reportLanguage ko support', () => {
+  it('attributes the model sentiment score instead of presenting it as a market index', () => {
+    expect(getReportText('zh').fearGreedIndex).toBe('AI 情绪评分');
+    expect(getReportText('en').fearGreedIndex).toBe('AI sentiment score');
+    expect(getReportText('ko').fearGreedIndex).toBe('AI 심리 점수');
+  });
   it('normalizes ko and falls back to zh for unknown', () => {
     expect(normalizeReportLanguage('ko')).toBe('ko');
     expect(normalizeReportLanguage('en')).toBe('en');

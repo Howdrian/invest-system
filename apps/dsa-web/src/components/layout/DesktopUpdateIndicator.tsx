@@ -7,6 +7,7 @@ import { getDesktopUpdateBadgeTone } from '../../desktop/updateState';
 import { useDesktopUpdate } from '../../hooks/useDesktopUpdate';
 import { cn } from '../../utils/cn';
 import { Button } from '../common/Button';
+import { Tooltip } from '../common/Tooltip';
 import { StatusDot } from '../common/StatusDot';
 
 export const DesktopUpdateIndicator: React.FC = () => {
@@ -69,6 +70,7 @@ export const DesktopUpdateIndicator: React.FC = () => {
 
   return (
     <div className="relative" ref={containerRef}>
+      <Tooltip content={tooltip}>
       <button
         type="button"
         className={cn(
@@ -78,7 +80,6 @@ export const DesktopUpdateIndicator: React.FC = () => {
         aria-label={t('layout.desktopUpdateEntry')}
         aria-expanded={open}
         aria-haspopup="dialog"
-        title={tooltip}
         onClick={() => setOpen((current) => !current)}
       >
         {busy ? (
@@ -96,6 +97,7 @@ export const DesktopUpdateIndicator: React.FC = () => {
           />
         ) : null}
       </button>
+      </Tooltip>
 
       {open ? (
         <div

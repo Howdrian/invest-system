@@ -1,5 +1,6 @@
 import React from 'react';
 import type { AnalysisResult, AnalysisReport } from '../../types/analysis';
+import { ReportMarkdownBody } from './ReportMarkdownBody';
 import { ReportOverview } from './ReportOverview';
 import { ReportStrategy } from './ReportStrategy';
 import { ReportNews } from './ReportNews';
@@ -12,6 +13,8 @@ import { getReportText, normalizeReportLanguage } from '../../utils/reportLangua
 interface ReportSummaryProps {
   data: AnalysisResult | AnalysisReport;
   isHistory?: boolean;
+  /** Reports centre reuses the native report, with diagnostic controls kept separate. */
+  readerMarkdown?: string;
   /** 自选相关 */
   watchlist?: {
     isInWatchlist: (code: string) => boolean;
@@ -29,6 +32,7 @@ interface ReportSummaryProps {
 export const ReportSummary: React.FC<ReportSummaryProps> = ({
   data,
   isHistory = false,
+  readerMarkdown,
   watchlist,
   onOpenRunFlow,
 }) => {
@@ -71,6 +75,9 @@ export const ReportSummary: React.FC<ReportSummaryProps> = ({
       {/* 策略点位区 */}
       <ReportStrategy strategy={strategy} language={reportLanguage} />
 
+      {readerMarkdown !== undefined ? (
+        <ReportMarkdownBody content={readerMarkdown} testId="native-history-body" />
+      ) : <>
       {/* 资讯区 */}
       <ReportNews recordId={recordId} limit={8} language={reportLanguage} />
 
@@ -91,8 +98,9 @@ export const ReportSummary: React.FC<ReportSummaryProps> = ({
       {/* 透明度与追溯区 */}
       <ReportDetails details={details} recordId={recordId} language={reportLanguage} />
 
+      </>}
       {/* 分析模型标记（Issue #528）— 报告末尾 */}
-      {shouldShowModel && (
+      {readerMarkdown === undefined && shouldShowModel && (
         <p className="px-1 text-xs text-muted-text">
           {text.analysisModel}: {modelUsed}
         </p>

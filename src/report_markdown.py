@@ -9,7 +9,7 @@ from typing import Any, List
 
 CSS = """<style>
 :root{--bg:#0b1020;--card:#121a2b;--line:#26344f;--text:#edf2ff;--muted:#9aa8c7;--accent:#7dd3fc;--red:#fb7185;--yellow:#facc15;--green:#86efac}
-*{box-sizing:border-box}html,body{max-width:100%;min-width:0}body{margin:0;background:linear-gradient(135deg,#08101f,#111827);color:var(--text);font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.65}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:24px}.reader-toc{display:flex;flex-wrap:wrap;gap:20px;padding:18px 0;border-bottom:1px solid var(--line);font-size:14px}.department-details{font-size:15px;line-height:1.8}html,body{max-width:100%;min-width:0}body{margin:0;background:linear-gradient(135deg,#08101f,#111827);color:var(--text);font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.65}
 main{width:100%;max-width:1120px;min-width:0;margin:0 auto;padding:clamp(14px,4vw,28px);overflow-wrap:anywhere}a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
 h1{font-size:clamp(26px,7vw,32px);margin:.2em 0 .4em}h2{font-size:23px;margin:1.1em 0 .5em;color:#cfe0ff}h3{font-size:18px;margin:1em 0 .35em;color:#dbeafe}h1,h2,h3,h4,p,li,a,summary,span{overflow-wrap:anywhere;word-break:break-word}
 .hero,.card,.flow-card{max-width:100%;min-width:0;border:1px solid var(--line);background:rgba(18,26,43,.94);border-radius:22px;padding:20px;margin:16px 0}.hero{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(220px,.8fr);gap:20px}.hero>*{min-width:0}
@@ -29,6 +29,55 @@ ul,ol{padding-left:24px}.toc a{display:inline-block;margin:4px 8px 4px 0;padding
 @media(max-width:900px){.hero,.grid,.grid3,.flow-grid,.executive-grid,.scenario-grid{grid-template-columns:1fr}.kpi{border-left:0;padding-left:0}.executive-grid>div+div{border-left:0;border-top:1px solid var(--line);padding:18px 0 0}.hero-kicker{flex-direction:column;gap:2px}}
 @media(max-width:700px){.reader-matrix-table{display:none}.reader-matrix-cards{display:grid;gap:12px}}
 @media(max-width:640px){.hero,.card,.flow-card{border-radius:16px;padding:16px}.hero-facts{grid-template-columns:1fr;gap:12px}.department-card>summary{padding:12px 78px 12px 12px}.department-open-label{top:12px;right:12px}.department-details{padding:4px 12px 12px}.matrix-card dl>div{grid-template-columns:1fr;gap:2px}}
+/* Research brief: one editorial hierarchy, detailed evidence on demand. */
+body { font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif; }
+.research-highlights { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px;margin:24px 0; }
+.research-highlights a { display:block;border-top:2px solid var(--accent);padding-top:12px;color:inherit; }
+.research-highlights a>span { font-size:12px;color:var(--accent);font-weight:600; }
+.research-highlights p { font-size:15px;line-height:1.8;margin-top:6px; }
+.research-reading-note { font-size:13px;line-height:1.8;color:var(--muted);padding:12px 0; }
+.research-reading-note>summary { cursor:pointer;min-height:32px; }
+.research-sector-decisions { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px;margin-top:16px; }
+.research-sector-decisions>details { border-top:1px solid var(--line);padding:18px 0; }
+.research-sector-decisions summary { cursor:pointer;list-style:none; }
+.research-market-label { display:block;font-size:12px;color:var(--accent);margin-bottom:8px; }
+.research-decision-title { display:block;font-size:18px;font-weight:600;line-height:1.6;margin-bottom:12px; }
+.research-rating { display:inline-block;font-size:12px;font-weight:600;border-radius:5px;padding:4px 8px;background:rgba(56,189,248,.10);color:var(--accent); }
+.research-teaser { display:block;margin:14px 0 8px;font-size:14px;line-height:1.9;color:var(--muted); }
+.research-expand { font-size:12px;color:var(--accent); }
+.research-expanded { font-size:14px;line-height:1.95;padding:16px 0 4px; }
+.research-expanded>p+p { margin-top:14px; }
+.research-stock-grid { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 32px; }
+.research-stock-grid>article { padding:24px 0;border-top:1px solid var(--line);scroll-margin-top:80px; }
+.research-company-detail>summary { font-size:13px;cursor:pointer;padding:10px 0;color:var(--accent); }
+.research-bars { margin:20px 0;font-size:12px;font-variant-numeric:tabular-nums; }
+.research-bar-row { display:grid;grid-template-columns:100px 1fr 74px;align-items:center;gap:10px;min-height:28px; }
+.research-bar-row>span:last-child { text-align:right; }
+.research-bar-track { height:12px;position:relative;background:rgba(148,163,184,.07); }
+.research-bar-track:after { content:"";position:absolute;left:50%;top:-3px;height:18px;border-left:1px solid #64748b; }
+.research-bar-track i { position:absolute;height:100%;border-radius:2px; }
+.research-bar-track .positive { background:#22b8a0; }.research-bar-track .negative { background:#d29671; }
+ .department-card { border:0;border-radius:0;background:none;border-top:1px solid var(--line); }
+ .department-card>summary { padding:18px 0; }
+details>summary:focus-visible { outline:2px solid #38bdf8;outline-offset:4px; }
+@media(max-width:767px) {
+ .research-highlights,.research-sector-decisions,.research-stock-grid { grid-template-columns:1fr;gap:12px; }
+ .research-highlights { margin:18px 0; }
+ .research-highlights a { padding-top:8px; }
+ .research-highlights p { font-size:14px;line-height:1.65; }
+ .research-sector-decisions>details { padding:14px 0; }
+ .research-bar-row { grid-template-columns:82px 1fr 65px;gap:7px; }
+}
+
+.company-title{display:flex;justify-content:space-between;align-items:baseline;gap:12px}.company-title h3{margin:0}.company-title small{font-size:12px;color:var(--muted);font-weight:400}.company-argument{border-top:1px solid var(--line);padding-top:16px;margin-top:20px}.research-stock-grid>article>p{font-size:15px;line-height:1.9}.research-highlights a{color:var(--text)}.research-expanded p{margin-top:12px}.research-sector-decisions summary::-webkit-details-marker{display:none}
+
+.research-stock-grid>article:has(.research-company-detail[open]){grid-column:1/-1}.research-company-detail[open] .research-expanded{max-width:88ch}
+.department-reader{max-width:900px;margin:0 auto;font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif}
+.department-reader .hero,.department-reader .card{background:transparent;border:0;border-radius:0;box-shadow:none;padding:28px 0;margin:0;border-bottom:1px solid var(--line)}
+.department-reader .hero h1{letter-spacing:.02em}.department-reader .department-standfirst{font-size:17px;line-height:1.95;color:var(--text)}
+.department-reader h3{margin-top:32px;font-size:18px}.department-argument-list ol{padding-left:24px}.department-argument-list li{padding:12px 0 24px 8px;line-height:1.95;border-bottom:1px solid var(--line)}
+.department-argument-list li::marker{color:var(--accent);font-weight:600}.department-countercase,.department-followup{margin-top:24px;line-height:1.95}.department-reader .evidence-copy{line-height:1.8}
+@media(max-width:600px){.department-reader .hero,.department-reader .card{padding:20px 0}.department-reader .department-standfirst{font-size:16px}.department-argument-list ol{padding-left:20px}}
 </style>"""
 
 

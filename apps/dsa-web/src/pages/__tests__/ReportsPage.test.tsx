@@ -1,9 +1,13 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { historyApi } from '../../api/history';
 import { reportsApi } from '../../api/reports';
 import type { ReportArtifactV1 } from '../../types/analysis';
 import ReportsPage from '../ReportsPage';
+
+vi.mock('../../api/history', () => ({ historyApi: { getDetail: vi.fn(), getMarkdown: vi.fn() } }));
+vi.mock('../../components/report/ReportSummary', () => ({ ReportSummary: ({ readerMarkdown }: { readerMarkdown: string }) => <div>{readerMarkdown}</div> }));
 
 vi.mock('../../api/reports', () => ({
   reportsApi: {
@@ -18,7 +22,7 @@ const artifact: ReportArtifactV1 = {
   artifactId: 'latest',
   runDate: '2026-06-19',
   generatedAt: '2026-06-19T09:00:00Z',
-  artifactType: 'stock_governed',
+  artifactType: 'daily',
   audience: 'reader',
   title: '最新报告',
   summary: {
@@ -63,7 +67,7 @@ describe('ReportsPage', () => {
 
     expect(await screen.findByRole('heading', { name: '2026-06-19 投研日报' })).toBeInTheDocument();
     expect(reportsApi.getLatest).toHaveBeenCalledTimes(1);
-    expect(reportsApi.listArtifacts).toHaveBeenCalledWith(5);
+    expect(reportsApi.listArtifacts).toHaveBeenCalledWith(30);
     expect(screen.getByText('等待。')).toBeInTheDocument();
     expect(screen.getByText('补数据')).toBeInTheDocument();
     expect(screen.queryByText('结论 A')).not.toBeInTheDocument();
@@ -84,6 +88,19 @@ describe('ReportsPage', () => {
 
     expect(await screen.findByRole('heading', { name: '2026-06-18 投研日报' })).toBeInTheDocument();
     expect(reportsApi.getArtifact).toHaveBeenCalledWith('daily:2026-06-18');
+  });
+
+  it('opens a named native stock report at a stable history URL', async () => {
+    const stock = { ...artifact, artifactId: 'history:7', artifactType: 'stock_governed' as const, title: '苹果（AAPL）个股分析' };
+    vi.mocked(reportsApi.getArtifact).mockResolvedValue(stock);
+    vi.mocked(reportsApi.listArtifacts).mockResolvedValue([stock]);
+    vi.mocked(historyApi.getDetail).mockResolvedValue({ meta: { id: 7 } } as Awaited<ReturnType<typeof historyApi.getDetail>>);
+    vi.mocked(historyApi.getMarkdown).mockResolvedValue('苹果完整分析：现金流与估值的对照。');
+    renderReportsPage('/reports/history:7');
+    expect(await screen.findByText('苹果完整分析：现金流与估值的对照。')).toBeInTheDocument();
+    expect(screen.queryByText('未提供核心理由。')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '高级诊断' })).toHaveAttribute('href', '/reports/history%3A7/diagnostics');
+    expect(screen.getByRole('button', { name: /苹果.*AAPL/ })).toBeInTheDocument();
   });
 
   it('loads a dated report from the route and opens diagnostics route', async () => {

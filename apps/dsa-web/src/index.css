@@ -2962,3 +2962,58 @@ textarea {
     text-align: left;
   }
 }
+
+/* Sector comparisons scroll inside their wrapper; do not wrap numeric digits. */
+.report-reader .report-sector-table {
+  display: table;
+  min-width: 620px;
+  max-width: none;
+}
+
+.report-reader .report-sector-table :where(th, td) {
+  white-space: nowrap;
+}
+
+/* Research brief: one editorial hierarchy, detailed evidence on demand. */
+.report-reader { font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif; }
+.report-reader [id^="report-"] { scroll-margin-top:80px; }
+.report-reader .research-highlights { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px;margin:24px 0; }
+.report-reader .research-highlights a { display:block;border-top:2px solid hsl(var(--primary));padding-top:12px;color:inherit; }
+.report-reader .research-highlights a>span { font-size:12px;color:hsl(var(--primary));font-weight:600; }
+.report-reader .research-highlights p { font-size:15px;line-height:1.8;margin-top:6px; }
+.report-reader .research-reading-note { font-size:13px;line-height:1.8;color:hsl(var(--secondary-text));padding:12px 0; }
+.report-reader .research-reading-note>summary { cursor:pointer;min-height:32px; }
+.report-reader .research-sector-decisions { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px;margin-top:16px; }
+.report-reader .research-sector-decisions>details { border-top:1px solid hsl(var(--border));padding:18px 0; }
+.report-reader .research-sector-decisions summary { cursor:pointer;list-style:none; }
+.report-reader .research-market-label { display:block;font-size:12px;color:hsl(var(--primary));margin-bottom:8px; }
+.report-reader .research-decision-title { display:block;font-size:18px;font-weight:600;line-height:1.6;margin-bottom:12px; }
+.report-reader .research-rating { display:inline-block;font-size:12px;font-weight:600;border-radius:5px;padding:4px 8px;background:rgba(56,189,248,.10);color:hsl(var(--primary)); }
+.report-reader .research-teaser { display:block;margin:14px 0 8px;font-size:14px;line-height:1.9;color:hsl(var(--secondary-text)); }
+.report-reader .research-expand { font-size:12px;color:hsl(var(--primary)); }
+.report-reader .research-expanded { font-size:14px;line-height:1.95;padding:16px 0 4px; }
+.report-reader .research-expanded>p+p { margin-top:14px; }
+.report-reader .research-stock-grid { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 32px; }
+.report-reader .research-stock-grid>article { padding:24px 0;border-top:1px solid hsl(var(--border));scroll-margin-top:80px; }
+.report-reader .research-company-detail>summary { font-size:13px;cursor:pointer;padding:10px 0;color:hsl(var(--primary)); }
+.report-reader .research-bars { margin:20px 0;font-size:12px;font-variant-numeric:tabular-nums; }
+.report-reader .research-bar-row { display:grid;grid-template-columns:100px 1fr 74px;align-items:center;gap:10px;min-height:28px; }
+.report-reader .research-bar-row>span:last-child { text-align:right; }
+.report-reader .research-bar-track { height:12px;position:relative;background:rgba(148,163,184,.07); }
+.report-reader .research-bar-track:after { content:"";position:absolute;left:50%;top:-3px;height:18px;border-left:1px solid #64748b; }
+.report-reader .research-bar-track i { position:absolute;height:100%;border-radius:2px; }
+.report-reader .research-bar-track .positive { background:#22b8a0; }.report-reader .research-bar-track .negative { background:#d29671; }
+.report-reader .report-department { border:0;border-radius:0;background:none;border-top:1px solid hsl(var(--border)); }
+.report-reader .report-department>summary { padding:18px 0; }
+.report-reader details>summary:focus-visible { outline:2px solid #38bdf8;outline-offset:4px; }
+@media(max-width:767px) {
+ .report-reader .research-highlights,.report-reader .research-sector-decisions,.report-reader .research-stock-grid { grid-template-columns:1fr;gap:12px; }
+ .report-reader .research-highlights { margin:18px 0; }
+ .report-reader .research-highlights a { padding-top:8px; }
+ .report-reader .research-highlights p { font-size:14px;line-height:1.65; }
+ .report-reader .research-sector-decisions>details { padding:14px 0; }
+ .report-reader .research-bar-row { grid-template-columns:82px 1fr 65px;gap:7px; }
+}
+
+.report-reader .research-stock-grid>article:has(.research-company-detail[open]) { grid-column:1/-1; }
+.report-reader .research-company-detail[open] .research-expanded { max-width:88ch; }

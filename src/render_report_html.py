@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import ast
 import json
+import math
 import re
 import sys
 from datetime import datetime, timezone
@@ -322,8 +323,12 @@ def _as_text_list(value: Any, *, limit: int = 5) -> List[str]:
     return out[:limit]
 
 
-def _html_list(items: Iterable[Any], *, empty: str = "未提供") -> str:
-    values = [_short_text(item) for item in items if _short_text(item)]
+def _html_list(items: Iterable[Any], *, empty: str = "未提供", full_text: bool = False) -> str:
+    values = [
+        _sanitize_reader_markdown(str(item or "").strip()) if full_text else _short_text(item)
+        for item in items
+    ]
+    values = [value for value in values if value]
     if not values:
         return f"<li class='muted'>{_esc(empty)}</li>"
     return "".join(f"<li>{_esc(item)}</li>" for item in values)
@@ -501,7 +506,7 @@ def _sanitize_blocked_trade_phrases(text: str) -> str:
     return sanitized
 
 
-def _sanitize_reader_markdown(markdown: str) -> str:
+def _sanitize_reader_markdown(markdown: str, *, preserve_advice: bool = False) -> str:
     """Remove raw enum / template-like wording from reader-facing HTML."""
     text = markdown
     text = re.sub(
@@ -639,7 +644,12 @@ def _sanitize_reader_markdown(markdown: str) -> str:
     text = text.replace("`", "")
     text = re.sub(r"[；;]{2,}", "；", text)
     text = re.sub(r"；\s*待验证情景：(?=同时|并|再)", "；", text)
-    return _sanitize_blocked_trade_phrases(text)
+    return text if preserve_advice else _sanitize_blocked_trade_phrases(text)
+
+
+def _reader_copy(value: Any) -> str:
+    """Format product copy without silently changing its investment recommendation."""
+    return _sanitize_reader_markdown(str(value or ""), preserve_advice=True)
 
 
 def _sanitize_stock_report_markdown(markdown: str) -> str:
@@ -1175,15 +1185,16 @@ def _reader_market_matrix_html(rows: Iterable[Any]) -> str:
             continue
         scope_type = "市场数据" if row.get("scopeType") == "market" else "观察样本"
         scope_label = str(row.get("scopeLabel") or row.get("market") or "市场")
-        state = _sanitize_reader_markdown(str(row.get("state") or "待观察"))
-        headline = _sanitize_reader_markdown(str(row.get("headline") or "未提供"))
-        scope_note = _sanitize_reader_markdown(str(row.get("scopeNote") or ""))
+        state = _reader_copy(str(row.get("state") or "待观察"))
+        headline = _reader_copy(str(row.get("headline") or "未提供"))
+        scope_note = _reader_copy(str(row.get("scopeNote") or ""))
+        time_text = f"{row.get('timeLabel') or '行情时间'}：{_reader_datetime(row.get('asOf'))}"
         body.append(
             "<tr>"
             f"<td><strong>{_esc(scope_label)}</strong><br><span class='scope-tag'>{_esc(scope_type)}</span></td>"
             f"<td>{_esc(state)}</td>"
             f"<td>{_esc(headline)}</td>"
-            f"<td class='muted'>{_esc(scope_note)}</td>"
+            f"<td class='muted'>{_esc(scope_note)}<br>{_esc(time_text)}</td>"
             "</tr>"
         )
         cards.append(
@@ -1191,13 +1202,13 @@ def _reader_market_matrix_html(rows: Iterable[Any]) -> str:
             f"<div class='matrix-card-heading'><strong>{_esc(scope_label)}</strong><span class='scope-tag'>{_esc(scope_type)}</span></div>"
             f"<dl><div><dt>状态</dt><dd>{_esc(state)}</dd></div>"
             f"<div><dt>关键表现</dt><dd>{_esc(headline)}</dd></div>"
-            f"<div><dt>如何解读</dt><dd>{_esc(scope_note or '未提供')}</dd></div></dl>"
+            f"<div><dt>如何解读</dt><dd>{_esc(scope_note or '未提供')}</dd></div><div><dt>时间</dt><dd>{_esc(time_text)}</dd></div></dl>"
             "</article>"
         )
     if not body:
         return ""
     return (
-        "<section class='research-section'><div class='section-heading'><p class='eyebrow'>市场范围</p>"
+        "<section id='report-markets' class='research-section'><div class='section-heading'><p class='eyebrow'>市场范围</p>"
         "<h2>市场范围与样本表现</h2></div>"
         "<div class='table-wrap reader-matrix-table'><table class='research-table'><thead><tr>"
         "<th>范围</th><th>状态</th><th>关键表现</th><th>如何解读</th>"
@@ -1212,6 +1223,7 @@ def _reader_stock_matrix_html(rows: Iterable[Any]) -> str:
     for row in rows:
         if not isinstance(row, dict):
             continue
+        price_time = f"行情截至 {_reader_datetime(row.get('asOf'))}"
         price = row.get("lastPrice")
         price_text = f"{float(price):.2f} {row.get('currency') or ''}" if isinstance(price, (int, float)) else "待更新"
         returns = []
@@ -1219,7 +1231,7 @@ def _reader_stock_matrix_html(rows: Iterable[Any]) -> str:
             value = row.get(key)
             if isinstance(value, (int, float)):
                 returns.append(f"{label} {float(value):+.2f}%")
-        event = _sanitize_reader_markdown(str(row.get("latestEvent") or "暂无近期官方事件摘要"))
+        event = _reader_copy(str(row.get("latestEvent") or "暂无近期官方事件摘要"))
         event_url = str(row.get("eventUrl") or "")
         event_html = _esc(event)
         valid_event_url = _valid_http_url(event_url)
@@ -1232,24 +1244,22 @@ def _reader_stock_matrix_html(rows: Iterable[Any]) -> str:
         returns_text = " / ".join(returns) or "阶段表现待更新"
         trend = str(row.get("trend") or "趋势待确认")
         watch_levels = str(row.get("watchLevels") or "")
-        fundamental = _sanitize_reader_markdown(str(row.get("fundamental") or "结构化基本面待补强"))
-        valuation = _sanitize_reader_markdown(str(row.get("valuation") or "当前估值与历史样本待补"))
-        stance = str(row.get("stance") or "观察")
+        fundamental = _reader_copy(str(row.get("fundamental") or "结构化基本面待补强"))
+        valuation = _reader_copy(str(row.get("valuation") or "当前估值与历史样本待补"))
         body.append(
             "<tr>"
             f"<td><strong>{_esc(name)}</strong><br><span class='muted'>{_esc(symbol)}</span></td>"
-            f"<td>{_esc(price_text)}<br><span class='muted'>{_esc(returns_text)}</span></td>"
+            f"<td>{_esc(price_text)}<br><span class='muted'>{_esc(price_time)}<br>{_esc(returns_text)}</span></td>"
             f"<td>{_esc(trend)}<br><span class='muted'>{_esc(watch_levels)}</span></td>"
             f"<td>{_esc(fundamental)}</td>"
             f"<td>{_esc(valuation)}</td>"
             f"<td>{event_html}</td>"
-            f"<td><span class='stance'>{_esc(stance)}</span></td>"
             "</tr>"
         )
         cards.append(
             "<article class='matrix-card stock-matrix-card'>"
-            f"<div class='matrix-card-heading'><span><strong>{_esc(name)}</strong><small>{_esc(symbol)}</small></span><span class='stance'>{_esc(stance)}</span></div>"
-            f"<dl><div><dt>价格 / 阶段表现</dt><dd>{_esc(price_text)}<br><span class='muted'>{_esc(returns_text)}</span></dd></div>"
+            f"<div class='matrix-card-heading'><span><strong>{_esc(name)}</strong><small>{_esc(symbol)}</small></span></div>"
+            f"<dl><div><dt>价格 / 阶段表现</dt><dd>{_esc(price_text)}<br><span class='muted'>{_esc(price_time)}<br>{_esc(returns_text)}</span></dd></div>"
             f"<div><dt>趋势 / 观察位</dt><dd>{_esc(trend)}<br><span class='muted'>{_esc(watch_levels)}</span></dd></div>"
             f"<div><dt>基本面</dt><dd>{_esc(fundamental)}</dd></div>"
             f"<div><dt>估值</dt><dd>{_esc(valuation)}</dd></div>"
@@ -1259,28 +1269,24 @@ def _reader_stock_matrix_html(rows: Iterable[Any]) -> str:
     if not body:
         return ""
     return (
-        "<section class='research-section'><div class='section-heading'><p class='eyebrow'>标的跟踪</p>"
-        "<h2>重点标的跟踪</h2><p class='muted'>价格与指标来自同轮证据；定位是研究观察，不代表自动交易指令。</p></div>"
+        "<section id='report-stocks' class='research-section'><div class='section-heading'><p class='eyebrow'>标的跟踪</p>"
+        "<h2>重点标的跟踪</h2><p class='muted'>这里是本期价格与财务快照；研究评级与入场节奏见上方公司研究。</p></div>"
         "<div class='table-wrap reader-matrix-table'><table class='research-table stock-table'><thead><tr>"
-        "<th>标的</th><th>价格 / 阶段表现</th><th>趋势 / 观察位</th><th>基本面</th><th>估值</th><th>最新官方事件</th><th>定位</th>"
+        "<th>标的</th><th>价格 / 阶段表现</th><th>趋势 / 观察位</th><th>基本面</th><th>估值</th><th>最新官方事件</th>"
         f"</tr></thead><tbody>{''.join(body)}</tbody></table></div>"
         f"<div class='reader-matrix-cards'>{''.join(cards)}</div></section>"
     )
 
 
 def _hero_additive_fields_html(hero: Dict[str, Any]) -> str:
-    primary_fields = (
-        ("marketStance", "研究立场"),
-        ("portfolioAction", "组合动作"),
-    )
+    primary_fields = ()
     meta_fields = (
-        ("confidence", "可信度"),
+        ("confidence", "论据评估"),
         ("validity", "时效"),
-        ("dataCoverage", "覆盖"),
     )
     primary: List[str] = []
     for key, label in primary_fields:
-        value = _sanitize_reader_markdown(_reader_product_text(hero.get(key)))
+        value = _reader_copy(_reader_product_text(hero.get(key)))
         if not value:
             continue
         primary.append(
@@ -1290,7 +1296,7 @@ def _hero_additive_fields_html(hero: Dict[str, Any]) -> str:
         )
     meta: List[str] = []
     for key, label in meta_fields:
-        value = _sanitize_reader_markdown(_reader_product_text(hero.get(key)))
+        value = _reader_copy(_reader_product_text(hero.get(key)))
         if not value:
             continue
         meta.append(f"<span><b>{_esc(label)}</b> {_esc(value)}</span>")
@@ -1313,15 +1319,14 @@ def _reader_v3_html(artifact: Dict[str, Any], reader: Dict[str, Any]) -> str:
         timing.get("generatedAt") or artifact.get("generatedAt"),
         time_only=True,
     )
-    one_line = _sanitize_reader_markdown(str(hero.get("oneLine") or "本轮未生成总判断。"))
-    limitation = _sanitize_reader_markdown(str(hero.get("maxLimitation") or "仍需人工复核，不自动执行交易。"))
+    one_line = _reader_copy(str(hero.get("oneLine") or "本轮未生成总判断。"))
+    limitation = _reader_copy(str(hero.get("maxLimitation") or "仍需人工复核，不自动执行交易。"))
     additive_fields = _hero_additive_fields_html(hero)
     key_reasons = _html_bullets(reader.get("keyReasons") or [], limit=3) or "<p class='muted'>未提供核心理由。</p>"
     counterpoints = _html_bullets(reader.get("counterpoints") or [], limit=3) or "<p class='muted'>未提供反证。</p>"
     next_steps = _html_bullets(reader.get("nextSteps") or [], limit=3) or "<p class='muted'>等待下一次刷新。</p>"
     market_matrix = _reader_market_matrix_html(reader.get("marketMatrix") or [])
     stock_matrix = _reader_stock_matrix_html(reader.get("stockMatrix") or [])
-    market_geo = _html_bullets(reader.get("marketGeo") or [], limit=3)
     adjudication = reader.get("adjudication") if isinstance(reader.get("adjudication"), dict) else {}
     reliability = reader.get("reliability") if isinstance(reader.get("reliability"), dict) else {}
     shared_facts = _html_bullets(adjudication.get("sharedFacts") or [], limit=3)
@@ -1371,18 +1376,20 @@ def _reader_v3_html(artifact: Dict[str, Any], reader: Dict[str, Any]) -> str:
         if int(critical_gap_count or 0) > 0
         else f"无关键证据缺口；部门待确认 {department_gap_count}"
     )
-    coverage = _sanitize_reader_markdown(str(hero.get("coverage") or ""))
+    coverage = _reader_copy(str(hero.get("coverage") or hero.get("dataCoverage") or ""))
     return f"""
 <section class="institution-hero">
   <div class="hero-kicker"><span>{_esc(str(hero.get('status') or '跨市场机构简报'))}</span><span>{_esc(report_date)}</span></div>
-  <h1>今日总判断</h1>
+  <h1>投研日报</h1>
   <p class="muted">报告日期 {_esc(report_date)} · 综合数据截至 {_esc(data_as_of)} · 生成于 {_esc(generated_at)}</p>
-  {f'<p class="muted">{_esc(coverage)}</p>' if coverage else ''}
+  <p class="eyebrow">今日总判断</p>
   <p class="decision-line">{_esc(one_line)}</p>
+  {_reader_highlights_html(reader.get('focusList') or {})}
   {additive_fields}
-  <div class="research-boundary"><strong>研究边界</strong><span>{_esc(limitation)}</span></div>
 </section>
-<section class="research-section executive-grid">
+<nav class="reader-toc">{'<a href="#report-focus">关注清单</a>' if reader.get('focusList') else ''}<a href="#report-reasons">理由与风险</a><a href="#report-markets">三地市场</a><a href="#report-stocks">重点标的</a><a href="#report-departments">部门分析</a></nav>
+{_reader_focus_html(reader.get('focusList'))}
+<section id="report-reasons" class="research-section executive-grid">
   <div><p class="eyebrow">核心依据</p><h2>核心理由</h2>{key_reasons}</div>
   <div><p class="eyebrow">反证与风险</p><h2>最大反证 / 风险</h2>{counterpoints}</div>
   <div><p class="eyebrow">后续观察</p><h2>下一步</h2>{next_steps}</div>
@@ -1392,24 +1399,27 @@ def _reader_v3_html(artifact: Dict[str, Any], reader: Dict[str, Any]) -> str:
   <div class="section-heading"><p class="eyebrow">情景裁决</p><h2>基准情景与竞争情景</h2></div>
   {('<h3>双方共同事实</h3>' + shared_facts) if shared_facts else ''}
   <div class="scenario-grid">
-    <div><span class="scope-tag">基准情景</span><p>{_esc(_sanitize_reader_markdown(str(adjudication.get('baseCase') or '当前基准情景尚未形成。')))}</p></div>
-    <div><span class="scope-tag">竞争情景</span><p>{_esc(_sanitize_reader_markdown(str(adjudication.get('strongestAlternative') or '暂无形成证据链的竞争情景。')))}</p></div>
+    <div><span class="scope-tag">基准情景</span><p>{_esc(_reader_copy(str(adjudication.get('baseCase') or '当前基准情景尚未形成。')))}</p></div>
+    <div><span class="scope-tag">竞争情景</span><p>{_esc(_reader_copy(str(adjudication.get('strongestAlternative') or '暂无形成证据链的竞争情景。')))}</p></div>
   </div>
-  <div class="cio-verdict"><span>CIO 裁决</span><p>{_esc(_sanitize_reader_markdown(str(adjudication.get('judgment') or one_line)))}</p></div>
-  {('<p class="muted">为什么：' + _esc(_sanitize_reader_markdown(str(adjudication.get('why')))) + '</p>') if adjudication.get('why') else ''}
+  {('<div class="cio-verdict"><span>CIO 裁决</span><p>' + _esc(_reader_copy(str(adjudication.get('judgment')))) + '</p></div>') if adjudication.get('judgment') and _reader_copy(str(adjudication.get('judgment'))) != one_line else ''}
+  {('<p class="muted">为什么：' + _esc(_reader_copy(str(adjudication.get('why')))) + '</p>') if adjudication.get('why') else ''}
   {('<h3>推翻当前裁决的信号</h3>' + invalidation_triggers) if invalidation_triggers else ''}
 </section>
 {market_matrix}
 {stock_matrix}
-{('<section class="research-section"><div class="section-heading"><p class="eyebrow">宏观与地缘</p><h2>市场与地缘</h2></div>' + market_geo + '</section>') if market_geo else ''}
+
 {fallback_sections}
-<section class="research-section">
+<section id="report-departments" class="research-section">
   <div class="section-heading"><p class="eyebrow">部门摘要</p><h2>部门研究摘要</h2></div>
   <p class="muted">摘要直接可见；依据、反证、待确认项和证据默认折叠。</p>
   <div class="department-list">{departments or '<p class="muted">本轮未记录到分部门结论。</p>'}</div>
 </section>
 <details class="methodology-drawer"><summary>数据与方法说明</summary><div>
-  <p>{_esc(_sanitize_reader_markdown(str(reader.get('dataConfidence') or '本轮数据可用于投研复核，仍需人工判断。')))}</p>
+  <p>覆盖：{_esc(coverage)}</p>
+  <p>研究立场：{_esc(str(hero.get('marketStance') or ''))} · 组合动作：{_esc(str(hero.get('portfolioAction') or ''))}</p>
+  <p>研究边界：{_esc(limitation)}</p>
+  <p>{_esc(_reader_copy(str(reader.get('dataConfidence') or '本轮数据可用于投研复核，仍需人工判断。')))}</p>
   <p class="muted">已验证 {_esc(verified_count)}；推导 {_esc(derived_count)}；发现线索 {_esc(discovery_count)}；{_esc(gap_text)}</p>
   {('<div class="warn">' + reliability_warnings + '</div>') if reliability_warnings else ''}
 </div></details>
@@ -1425,8 +1435,8 @@ def _reader_v3_report_sections_html(
     for section in sections:
         if not isinstance(section, dict):
             continue
-        title = _sanitize_reader_markdown(str(section.get("title") or "报告环节"))
-        body = _sanitize_reader_markdown(str(section.get("body") or "本环节未形成独立结论。"))
+        title = _reader_copy(str(section.get("title") or "报告环节"))
+        body = _reader_copy(str(section.get("body") or "本环节未形成独立结论。"))
         bullets = _html_bullets(section.get("bullets") or [], limit=5)
         counters = _html_bullets(section.get("counterpoints") or [], limit=4)
         next_actions = _html_bullets(section.get("nextActions") or [], limit=3)
@@ -1464,23 +1474,137 @@ def _reader_v3_report_sections_html(
 
 
 def _sanitize_list(items: Iterable[Any]) -> List[str]:
-    return [_sanitize_reader_markdown(str(item)) for item in items if str(item)]
+    return [_reader_copy(str(item)) for item in items if str(item)]
+
+
+def _reader_sector_performance_html(markets: List[Dict[str, Any]]) -> str:
+    def number(value: Any, unit: str = "%") -> str:
+        return f"{value:+.2f}{unit}" if isinstance(value, (int, float)) else "—"
+
+    panels = []
+    for market in markets:
+        rows = market.get("rows") or []
+        leaders = "、".join(str(row.get("name")) + "（" + number(row.get("relative20dPp"), "个百分点") + "）"
+                           for row in [r for r in rows if r.get("relative20dPp") is not None][:3])
+        body = []
+        for row in rows:
+            name = _esc(str(row.get("name") or ""))
+            source = sanitize_public_http_url(row.get("sourceUrl") or "")
+            if source:
+                name = f'<a href="{_esc(source)}" target="_blank" rel="noopener noreferrer">{name}</a>'
+            values = ''.join('<td>' + number(row.get(key)) + '</td>' for key in
+                             ('return1dPct', 'return5dPct', 'return20dPct', 'return60dPct', 'return120dPct'))
+            body.append('<tr><td>' + name + '<small> · ' + _esc(str(row.get('asOf') or ''))
+                        + '</small></td>' + values + '<td>' + number(row.get('relative20dPp'), 'pp') + '</td></tr>')
+        panels.append('<article><h3>' + _esc(str(market.get('market') or '')) + ' · 行业动态</h3>'
+                      + '<p class="muted">行情截至 ' + _esc(str(market.get('asOf') or ''))
+                      + ' · 比较基准 ' + _esc(str(market.get('benchmark') or '')) + '</p><p>'
+                      + _esc(str(market.get('scope') or '')) + '</p><p>近20日相对居前：'
+                      + _esc(leaders or '暂无同日期基准比较') + '</p>' + _sector_comparison_chart(rows) + '<details><summary>展开 '
+                      + str(len(rows)) + ' 个行业/主题的阶段表现与来源</summary><div style="overflow-x:auto">'
+                      + '<table style="min-width:620px"><thead><tr><th>行业/主题</th><th>1日</th><th>5日</th>'
+                      + '<th>20日</th><th>60日</th><th>120日</th><th>较基准20日</th></tr></thead><tbody>' + ''.join(body)
+                      + '</tbody></table></div><p class="muted">均为交易日窗口。pp为百分点差；相对居前不等于绝对上涨。这里是行情观察，部门判断见下方研究。</p></details></article>')
+    return ''.join(panels)
+
+
+def _sector_comparison_chart(rows: List[Dict[str, Any]]) -> str:
+    comparable = [row for row in rows if isinstance(row.get('relative20dPp'), (int, float))
+                  and math.isfinite(row['relative20dPp'])]
+    scale = max([1.0, *[abs(row['relative20dPp']) for row in comparable]])
+    bars = []
+    for row in comparable:
+        value = row['relative20dPp']
+        width = abs(value) / scale * 50
+        left = 50 if value >= 0 else 50 - width
+        tone = 'positive' if value >= 0 else 'negative'
+        bars.append('<div class="research-bar-row"><span>' + _esc(str(row.get('name') or ''))
+                    + '</span><span class="research-bar-track" aria-hidden="true">'
+                    + f'<i class="{tone}" style="width:{width:.3f}%;left:{left:.3f}%"></i></span>'
+                    + f'<span>{value:+.2f}pp</span></div>')
+    return '<div class="research-bars" aria-label="20日相对收益">' + ''.join(bars) + '</div>'
+
+
+def _reader_highlights_html(value: Dict[str, Any]) -> str:
+    return '<div class="research-highlights" aria-label="三地投资要点">' + ''.join(
+        '<a href="#report-focus"><span>' + _esc(str(row.get('market') or '')) + '</span><p>'
+        + _esc(str(row.get('summary') or '')) + '</p></a>' for row in value.get('highlights') or []
+    ) + '</div>'
+
+
+def _reader_focus_html(value: Any) -> str:
+    if not isinstance(value, dict):
+        return ""
+    sectors = []
+    for row in value.get("sectors") or []:
+        sectors.append(
+            '<details><summary><span class="research-market-label">' + _esc(str(row.get('market') or ''))
+            + '</span><span class="research-decision-title">' + _esc('、'.join(row.get('targets') or []))
+            + '</span><span class="research-rating">' + _esc(str(row.get('priority') or ''))
+            + '</span><span class="research-teaser">' + _esc(str(row.get('lead') or row.get('basis') or ''))
+            + '</span><span class="research-expand">展开理由与条件 ＋</span></summary>'
+            + '<div class="research-expanded"><p>' + _esc(str(row.get('basis') or ''))
+            + '</p><p><b>参与节奏与改判条件：</b>' + _esc(str(row.get('watchFor') or '')) + '</p></div></details>'
+        )
+    stocks = []
+    for row in value.get("stocks") or []:
+        research = ''.join(
+            '<section class="company-argument"><h4>' + _esc(str(claim.get('department') or ''))
+            + ' <small>' + _esc(str(claim.get('label') or '')) + '</small></h4><p>'
+            + _esc(str(claim.get('text') or '')) + '</p>'
+            + _evidence_sample_bullets(claim.get('evidenceSamples') or [], limit=len(claim.get('evidenceSamples') or []) or 1)
+            + '</section>' for claim in row.get('research') or []
+        )
+        stocks.append(
+            '<article id="research-stock-' + _esc(str(row.get('symbol') or '')) + '"><div class="company-title"><h3>'
+            + _esc(str(row.get('name') or row.get('symbol') or '')) + ' <small>'
+            + _esc(str(row.get('symbol') or '')) + ' · ' + _esc(str(row.get('market') or ''))
+            + '</small></h3><span class="research-rating">' + _esc(str(row.get('priority') or '')) + '</span></div>'
+            + '<p>' + _esc(str(row.get('lead') or row.get('reason') or ''))
+            + '</p><p class="muted">' + _esc(' · '.join(filter(None, [str(row.get('listOrigin') or ''), str(row.get('horizon') or '')])))
+            + '</p><details class="research-company-detail"><summary>综合研究 · 理由、反证与入场条件</summary>'
+            + '<div class="research-expanded">'
+            + (('<p><b>当前综合判断：</b>' + _esc(str(row.get('reason') or '')) + '</p>')
+               if not any(claim.get('text') == row.get('reason') for claim in row.get('research') or []) else '')
+            + '<p><b>参与节奏与改判条件：</b>' + _esc(str(row.get('watchFor') or '')) + '</p>' + research
+            + '</div></details><a href="#report-stocks">查看标的数据 →</a></article>'
+        )
+    window = value.get('researchWindow') or {}
+    lines = window.get('displayLines') or ([str(window.get('label') or '') + ' · '
+             + str(window.get('lookbackStart') or '') + ' 至 ' + str(window.get('outlookEnd') or '')] if window.get('label') else [])
+    return (
+        '<section id="report-focus" class="research-section" aria-label="本期关注清单">'
+        '<p class="eyebrow">投资观点 · 先看取舍，再读依据</p><h2>本期关注清单</h2>'
+        '<p class="muted">研究评级与入场节奏分别阅读；以下是研究建议，不是你的自选或持仓清单。</p>'
+        '<details class="research-reading-note"><summary>研究范围与时间</summary><p>' + _esc(str(value.get('note') or ''))
+        + '</p>' + ''.join('<p>' + _esc(str(line)) + '</p>' for line in lines)
+        + '<p>' + _esc(str(value.get('sectorCoverage') or '')) + '</p></details>'
+        + '<h3>行业选择</h3><div class="research-sector-decisions">' + ''.join(sectors) + '</div>'
+        + '<details class="research-reading-note"><summary>行业相对表现 · 图表与来源</summary>'
+        + _reader_sector_performance_html(value.get('sectorPerformance') or []) + '</details>'
+        + '<h3>公司研究与参与节奏</h3><div class="research-stock-grid">' + ''.join(stocks)
+        + '</div><a href="#report-departments">查看完整部门研究 →</a></section>'
+    )
 
 
 def _department_cards(rows: Iterable[Any], *, evidence_time: Any = "") -> str:
-    featured_labels = {"CIO 报告", "风险部门", "市场部门", "持仓复核部门"}
-    featured: List[str] = []
-    other: List[str] = []
+    cards: List[str] = []
     for row in rows:
         if not isinstance(row, dict):
             continue
         if row.get("readerVisible") is False:
             continue
-        title = _sanitize_reader_markdown(str(row.get("label") or row.get("agent") or "分析部门"))
-        summary = _sanitize_reader_markdown(str(row.get("conclusion") or row.get("summaryForReader") or "本部门未给出可读结论。"))
-        next_action = _sanitize_reader_markdown(str(row.get("nextAction") or "等待下一轮复核。"))
+        title = _reader_copy(str(row.get("label") or row.get("agent") or "分析部门"))
+        summary = _reader_copy(str(row.get("conclusion") or row.get("summaryForReader") or "本部门未给出可读结论。"))
+        next_action = _reader_copy(str(row.get("nextAction") or "等待下一轮复核。"))
         next_actions = _html_bullets(row.get("nextActions") or [next_action], limit=3)
         claims = _html_bullets(row.get("keyClaims") or [], limit=5)
+        assessment = row.get("claimAssessment") or {}
+        if assessment.get("claims"):
+            claims = '<ul>' + ''.join(
+                '<li><strong>' + _esc(str(item.get("label") or "")) + '：</strong>'
+                + _esc(str(item.get("text") or "")) + '</li>' for item in assessment["claims"]
+            ) + '</ul>'
         challenged = _challenged_claims_html(row.get("challengedClaims") or [])
         counters = _html_bullets(row.get("counterpoints") or [], limit=4)
         gaps = _html_bullets(row.get("dataGaps") or [], limit=4)
@@ -1490,34 +1614,27 @@ def _department_cards(rows: Iterable[Any], *, evidence_time: Any = "") -> str:
             fallback_time=evidence_time,
         )
         empty = '<p class="muted">未提供。</p>'
-        no_key_gap = '<p class="muted">暂无会改变结论的关键缺口。</p>'
         card = (
             "<details class='department-card'>"
             "<summary>"
             f"<span class='department-title'>{_esc(title)}</span>"
+            f"<span class='muted'>{_esc(str(assessment.get('summary') or ''))}</span>"
             "<span class='department-open-label'>查看依据</span>"
-            f"<span class='department-summary'>{_esc(summary)}</span>"
+            f"<span class='department-summary'>{_esc('汇总依据与取舍' if row.get('agent') == 'CIOAgent' or title == 'CIO 报告' else summary)}</span>"
             "</summary>"
             "<div class='department-details'>"
             f"<h4>下一步</h4>{next_actions}"
             f"<h4>依据</h4>{claims or empty}"
             f"{('<h4>已识别的争议结论</h4>' + challenged) if challenged else ''}"
             f"<h4>反证</h4>{counters or empty}"
-            f"<h4>还需要确认</h4>{gaps or no_key_gap}"
-            f"<h4>支撑信号</h4>{support or empty}"
+            f"{('<h4>还需要确认</h4>' + gaps) if gaps else ''}"
+            f"{('<h4>支撑信号</h4>' + support) if support else ''}"
             f"<h4>证据样例</h4>{samples or empty}"
             "</div>"
             "</details>"
         )
-        (featured if title in featured_labels and len(featured) < 4 else other).append(card)
-    if other:
-        featured.append(
-            "<details class='department-group'>"
-            f"<summary><span>其余 {len(other)} 个研究部门</span><span>展开全部</span></summary>"
-            f"<div class='department-group-body'>{''.join(other)}</div>"
-            "</details>"
-        )
-    return "".join(featured)
+        cards.append(card)
+    return "".join(cards)
 
 
 def _challenged_claims_html(items: Iterable[Any], *, limit: int = 3) -> str:
@@ -1525,10 +1642,10 @@ def _challenged_claims_html(items: Iterable[Any], *, limit: int = 3) -> str:
     for item in list(items or [])[:limit]:
         if not isinstance(item, dict):
             continue
-        claim = _sanitize_reader_markdown(str(item.get("claim") or ""))
-        status = _sanitize_reader_markdown(str(item.get("status") or "存在有效反证"))
-        opposing = _sanitize_reader_markdown(str(item.get("opposingScenario") or ""))
-        falsifier = _sanitize_reader_markdown(str(item.get("falsifier") or ""))
+        claim = _reader_copy(str(item.get("claim") or ""))
+        status = _reader_copy(str(item.get("status") or "存在有效反证"))
+        opposing = _reader_copy(str(item.get("opposingScenario") or ""))
+        falsifier = _reader_copy(str(item.get("falsifier") or ""))
         detail = f"<strong>{_esc(status)}</strong>"
         if opposing:
             detail += f"<br>反方情景：{_esc(opposing)}"
@@ -1590,12 +1707,12 @@ def _reader_evidence_source(item: Dict[str, Any], source_url: str) -> str:
         return _EVIDENCE_SOURCE_LABELS[raw]
     if re.search(r"(?:Fetcher|Adapter|Manager|Provider|Client|Collector|Service)$", raw):
         return _source_label_from_url(source_url) if source_url else "系统整合数据"
-    return _sanitize_reader_markdown(raw) if raw else _source_label_from_url(source_url)
+    return _reader_copy(raw) if raw else _source_label_from_url(source_url)
 
 
 def _reader_evidence_text(item: Dict[str, Any]) -> str:
     raw = str(item.get("label") or item.get("value") or item.get("title") or "证据")
-    text = _sanitize_reader_markdown(raw)
+    text = _reader_copy(raw)
     if re.search(r"\b(?:rows|records)\s*=", text, flags=re.IGNORECASE):
         names = re.findall(
             r"\b(?:name|title|headline)\s*=\s*([^,;|]+)",
@@ -1652,7 +1769,7 @@ def _evidence_sample_bullets(
                 f"{source_html}</a>"
             )
         raw_fact_type = str(item.get("factType") or item.get("fact_type") or "")
-        fact_type = _EVIDENCE_FACT_LABELS.get(raw_fact_type, _sanitize_reader_markdown(raw_fact_type))
+        fact_type = _EVIDENCE_FACT_LABELS.get(raw_fact_type, _reader_copy(raw_fact_type))
         time_text = _reader_evidence_time(item, fallback_time)
         copy = _reader_evidence_text(item)
         copy_html = "" if copy == "结构化数据快照" else f"<span class='evidence-copy'>{_esc(copy)}</span>"
@@ -1675,7 +1792,7 @@ def _reader_v2_section(sections: Iterable[Any], key: str) -> Dict[str, Any]:
 
 
 def _html_bullets(items: Iterable[Any], *, limit: int = 5) -> str:
-    rows = [_sanitize_reader_markdown(str(item)) for item in list(items or [])[:limit] if str(item).strip()]
+    rows = [_reader_copy(str(item)) for item in list(items or [])[:limit] if str(item).strip()]
     if not rows:
         return ""
     return "<ul>" + "".join(f"<li>{_esc(item)}</li>" for item in rows) + "</ul>"
@@ -1829,30 +1946,33 @@ def _department_source_links(docs_dir: Path, sources: Iterable[Dict[str, str]]) 
 
 
 def _department_decision_card(model: Dict[str, Any]) -> str:
-    conclusion = _short_text(model.get("conclusion"), max_len=260)
-    status = _short_text(model.get("status"), max_len=80)
-    source = _short_text(model.get("source"), max_len=220)
-    inference = _short_text(model.get("inference"), max_len=260)
-    reasons = _html_list(model.get("reasons") or [], empty="本轮没有足够依据形成更细结论。")
-    risks = _html_list(model.get("risks") or [], empty="本轮没有额外反证摘要。")
-    next_steps = _html_list(model.get("next_steps") or [], empty="等待下一次数据刷新后复核。")
+    conclusion = str(model.get("conclusion") or "")
+    inference = str(model.get("inference") or "")
+    reasons = "".join(f"<li>{_esc(str(item))}</li>" for item in model.get("reasons") or [])
+    if not reasons:
+        reasons = "<li>本轮没有足够依据形成更细结论。</li>"
+    risks = _html_list(model.get("risks") or [], empty="本轮没有额外反证摘要。", full_text=True)
+    next_steps = _html_list(model.get("next_steps") or [], empty="等待下一次数据刷新后复核。", full_text=True)
     inference_html = (
         f'<div class="flow-row"><span class="flow-label">推论</span>{_esc(inference)}</div>'
         if inference and inference != conclusion
         else ""
     )
+    final_judgment = str(model.get("final_judgment") or "")
+    final_html = (
+        f'<h2>CIO 最终取舍</h2><p class="department-standfirst">{_esc(final_judgment)}</p>'
+        if final_judgment else ""
+    )
     return f"""
-<section class="card">
-  <h2>本环节结论</h2>
-  <p><span class="pill">{_esc(status)}</span></p>
-  <div class="flow-row"><span class="flow-label">信息源</span>{_esc(source)}</div>
-  <div class="flow-row"><span class="flow-label">分析结论</span>{_esc(conclusion)}</div>
+<section class="card department-article">
+  {final_html}
+  <p class="muted">以下保留部门观点与分歧；最终评级和参与节奏以汇总报告中的 CIO 取舍为准。</p>
+  <h2>部门研究结论</h2>
+  <p class="department-standfirst">{_esc(conclusion)}</p>
   {inference_html}
-  <div class="grid">
-    <div><h3>核心依据</h3><ul>{reasons}</ul></div>
-    <div><h3>风险和反证</h3><ul>{risks}</ul></div>
-  </div>
-  <div><h3>下一步</h3><ul>{next_steps}</ul></div>
+  <div class="department-argument-list"><h3>核心依据与完整论证</h3><ol>{reasons}</ol></div>
+  <div class="department-countercase"><h3>风险和反证</h3><ul>{risks}</ul></div>
+  <div class="department-followup"><h3>下一步</h3><ul>{next_steps}</ul></div>
 </section>
 """
 
@@ -2165,20 +2285,25 @@ def _department_section_model(docs_dir: Path, run_date: str, *, slug: str, title
     ]
     if not rows:
         return None
+    if slug == "stocks":
+        # Company research starts with the business case, then entry timing.
+        fundamental = {"FundamentalAgent", "FundamentalReportsAgent", "基本面部门"}
+        rows.sort(key=lambda row: str(row.get("agent") or "") not in fundamental)
     conclusion = "；".join(
-        _short_text(
-            _sanitize_reader_markdown(
-                str(row.get("conclusion") or row.get("summaryForReader") or "")
-            ),
-            max_len=220,
-        )
-        for row in rows[:2]
+        _sanitize_reader_markdown(str(row.get("conclusion") or row.get("summaryForReader") or ""))
+        for row in rows
         if row.get("conclusion") or row.get("summaryForReader")
     ) or "本板块已完成分析，但未产出可读摘要。"
-    reasons = _collect_department_items(rows, "keyClaims", fallback_key="evidenceIds", limit=5)
-    risks = _collect_department_items(rows, "counterpoints", fallback_key="dataGaps", limit=5)
+    reasons = [
+        _sanitize_reader_markdown(f"{claim['label']}：{claim['text']}")
+        for row in rows for claim in (row.get("claimAssessment") or {}).get("claims") or []
+        if isinstance(claim, dict) and claim.get("label") and claim.get("text")
+    ]
+    if not reasons:
+        reasons = _collect_department_items(rows, "keyClaims", fallback_key="evidenceIds")
+    risks = _collect_department_items(rows, "counterpoints", fallback_key="dataGaps")
     if not risks:
-        risks = _collect_department_items(rows, "dataGaps", limit=5)
+        risks = _collect_department_items(rows, "dataGaps")
     next_steps = [
         _sanitize_reader_markdown(str(row.get("nextAction") or ""))
         for row in rows
@@ -2196,9 +2321,12 @@ def _department_section_model(docs_dir: Path, run_date: str, *, slug: str, title
         "source": "同一轮市场、公司与官方事件证据",
         "conclusion": conclusion,
         "inference": conclusion,
-        "reasons": list(dict.fromkeys(reason for reason in reasons if reason))[:5],
-        "risks": list(dict.fromkeys(risk for risk in risks if risk))[:5],
-        "next_steps": list(dict.fromkeys(step for step in next_steps if step))[:4] or ["等待下一轮数据刷新后复核。"],
+        "final_judgment": str((reader.get("adjudication") or {}).get("judgment") or "") if slug == "stocks" else "",
+        # This is the full department page, not a top-five teaser. Keep all
+        # retained topics (later US/HK claims used to disappear here).
+        "reasons": list(dict.fromkeys(reason for reason in reasons if reason)),
+        "risks": list(dict.fromkeys(risk for risk in risks if risk)),
+        "next_steps": list(dict.fromkeys(step for step in next_steps if step)) or ["等待下一轮数据刷新后复核。"],
         "sources": [],
         "evidence_samples": evidence_samples,
     }
@@ -2209,7 +2337,6 @@ def _collect_department_items(
     key: str,
     *,
     fallback_key: str = "",
-    limit: int = 5,
 ) -> List[str]:
     items: List[str] = []
     for row in rows:
@@ -2221,9 +2348,7 @@ def _collect_department_items(
         for value in values:
             text = _sanitize_reader_markdown(str(value or "").strip())
             if text:
-                items.append(_short_text(text, max_len=180))
-            if len(items) >= limit:
-                return items
+                items.append(text)
     return items
 
 
@@ -2240,17 +2365,19 @@ def build_section_report(
     intro = _department_decision_card(model)
     evidence = _evidence_sample_bullets(model.get("evidence_samples") or [], limit=8)
     body = f"""
+<article class="department-reader">
 <section class="hero">
   <div><span class="pill">分部门报告</span><h1>{_esc(title)}</h1><p class="muted">{_esc(summary)}</p></div>
-  <div class="kpi"><small>运行日期</small><b>{_esc(run_date)}</b><span>同一份报告数据</span></div>
+  <div class="kpi"><small>报告日期</small><b>{_esc(run_date)}</b><a href="../{_esc(run_date)}.html">返回日报</a></div>
 </section>
 {intro}
 <section class="card">
   <h2>证据与来源</h2>
-  <p>本页结论来自同一轮研究证据，不另起一套分析。公开页只展示可读证据摘要；维护诊断不随报告公开。</p>
+  <p>以下材料支持本期研究判断。点击来源可核对原文、口径和日期。</p>
   {evidence or '<p class="muted">本板块本轮没有独立可公开的证据样例；核心依据已列在上方。</p>'}
   <p class="muted"><a href="../{_esc(run_date)}.html">返回汇总报告</a></p>
 </section>
+</article>
 """
     return _html_page(f"{run_date} {title}", body)
 

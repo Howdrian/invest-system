@@ -28,7 +28,7 @@ def test_official_event_script_uses_daily_universe_symbols(tmp_path, monkeypatch
     assert fetch_script.main(["--date", run_date, "--docs-dir", str(docs)]) == 0
     assert captured["symbols"] == ["600519", "AAPL"]
     assert captured["query_terms"][:2] == ["600519", "AAPL"]
-    assert "global sanctions export controls" in captured["query_terms"]
+    assert captured["query_terms"] == ["600519", "AAPL"]
 
 
 def test_pages_compat_bundle_writes_required_legacy_entries(tmp_path):

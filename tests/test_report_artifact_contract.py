@@ -9,6 +9,7 @@ def test_reader_cio_headline_is_short_and_marks_adjudication():
     value = "市场呈现明显分化。第二句是详细解释，不应塞进首屏。"
 
     assert _reader_cio_headline(value) == "当前基准判断：市场呈现明显分化。"
+    assert _reader_cio_headline("基准判断是行业分化延续。") == "基准判断是行业分化延续。"
 
 
 def test_reader_cio_headline_treats_red_team_as_competing_scenario_not_alarm():
@@ -39,14 +40,13 @@ def test_reader_cio_headline_skips_generic_model_verdict_and_leads_with_shared_f
     )
 
 
-def test_reader_next_steps_keeps_analysis_discipline_when_cio_omits_do_not():
+def test_reader_next_steps_does_not_invent_prohibition_when_cio_omits_it():
     from src.report_artifact import _reader_next_steps
 
     assert _reader_next_steps(
         "看什么：观察市场宽度；下次复核什么：资金流",
         [],
     ) == [
-        "不做什么：不要把单一标的或单日波动直接外推为全市场结论",
         "看什么：观察市场宽度",
         "下次复核什么：资金流",
     ]
@@ -210,6 +210,7 @@ def test_stock_matrix_uses_completed_session_change_and_clear_fundamental_period
             "metric": "realtime_quote",
             "as_of": "2026-07-17",
             "session_phase": "postmarket",
+            "event_time": "2026-07-17T15:00:00+08:00",
             "measurements": {"price": 1253.0, "change_pct": -0.48},
         },
         {
@@ -1142,6 +1143,30 @@ def test_artifact_evidence_items_prioritize_department_references():
 
     assert items[0]["id"] == "subject:600519:daily_data"
     assert len(items) == 80
+
+
+def test_late_reader_references_survive_evidence_sample_limit(tmp_path, monkeypatch):
+    import src.report_artifact as module
+
+    facts = [
+        {"id": f"official:{i:03}", "domain": "filings_events", "fact_type": "verified_fact",
+         "provider": "official", "source_url": f"https://example.com/{i}", "value": f"公告 {i}"}
+        for i in range(100)
+    ]
+    monkeypatch.setattr(module, "_load_daily_evidence_facts", lambda *args: facts)
+    build_reader = module._build_reader_v3
+
+    def reader_with_stock_refs(**kwargs):
+        reader = build_reader(**kwargs)
+        reader["stockMatrix"] = [{"symbol": "000735", "evidenceIds": ["official:099", "nonexistent"]}]
+        return reader
+
+    monkeypatch.setattr(module, "_build_reader_v3", reader_with_stock_refs)
+    artifact = module.build_daily_report_artifact(tmp_path, "2026-09-07")
+    ids = {row["id"] for row in artifact["evidenceItems"]}
+    assert "official:099" in ids
+    assert "nonexistent" not in ids
+    assert "referenced evidence missing from evidenceItems: nonexistent" in artifact["quality"]["validationErrors"]
 
 
 def _valid_daily_reader_artifact():
@@ -2177,3 +2202,35 @@ def test_reader_portfolio_snapshot_label_is_human_readable():
     assert _reader_evidence_label(
         "portfolio_snapshot_status=not_connected holdings=0 watchlist=4"
     ) == "真实持仓快照未接入；观察清单 4 只"
+
+
+def test_reader_cio_regional_summary_keeps_all_three_validated_markets():
+    from src.report_artifact import _reader_cio_headline, _reader_cio_regional_summary
+
+    claims = [{"claimId": str(i), "claim": text} for i, text in enumerate((
+        "A股风格轮动。", "港股银行表现较强。", "美股能源有多日支撑。",
+    ))]
+    cio = {"agent": "CIOAgent", "claimEvidence": claims, "semanticValidation": {
+        "claims": [{"claimId": str(i), "status": "supported"} for i in range(3)],
+    }}
+    summary = _reader_cio_regional_summary(cio)
+    assert _reader_cio_headline(summary) == "当前基准判断：A股风格轮动；港股银行表现较强；美股能源有多日支撑。"
+    for verdict in ("withdrawn", "challenged"):
+        assert _reader_cio_regional_summary(cio, challenge_verdicts=[{
+            "department": "CIOAgent", "targetClaimId": "2", "verdict": verdict,
+        }]) == ""
+    cio["semanticValidation"]["claims"][2]["status"] = "rejected"
+    assert _reader_cio_regional_summary(cio) == ""
+
+
+def test_validated_cio_summary_precedes_assembled_regional_paragraphs():
+    from src.report_artifact import _build_reader_v3
+    texts = ['A股具体长论证。', '港股具体长论证。', '美股具体长论证。']
+    cio = {'agent': 'CIOAgent', 'agentRuntime': 'LLM', 'summaryForReader': '首选有盈利支撑的公司，行业选择能源。',
+           'claimEvidence': [{'claimId': str(i), 'claim': text} for i, text in enumerate(texts)],
+           'semanticValidation': {'claims': [{'claimId': str(i), 'status': 'supported'} for i in range(3)]}}
+    reader = _build_reader_v3(run_date='2099-01-02', reader_brief={}, department_reports=[cio],
+        department_inputs=[], evidence_items=[], source_health_v2={'overallMode': 'LIMITED_REVIEW'},
+        evidence_stats={'missingCriticalFacts': 0}, decision={},
+        research_reliability={'headlineSafe': True, 'label': '结论有据，含推演'})
+    assert reader['hero']['oneLine'] == '当前基准判断：首选有盈利支撑的公司，行业选择能源。'

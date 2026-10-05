@@ -187,8 +187,8 @@ def test_render_report_html_builds_human_report_center_and_html_pages(tmp_path, 
     assert (heat / "latest_market_heat.html").exists()
     for slug in ["macro", "market", "sectors", "candidates", "news", "stocks", "portfolio", "risk"]:
         section_html = (docs / "reports" / "2026-06-17" / f"{slug}.html").read_text(encoding="utf-8")
-        assert "本环节结论" in section_html
-        assert "分析结论" in section_html
+        assert "研究结论" in section_html
+        assert '<p class="department-standfirst">' in section_html
         assert "核心依据" in section_html
         assert "风险和反证" in section_html
         assert "下一步" in section_html
@@ -319,7 +319,7 @@ def test_report_center_keeps_one_collapsed_department_summary_and_one_diagnostic
     assert "A 股偏弱，海外样本仅作观察。" in html
     assert "组合动作" in html
     assert "保持防御，不新增风险暴露。" in html
-    assert "可信度" in html
+    assert "论据评估" in html
     assert "可用，含待确认情景" in html
     assert "时效" in html
     assert "下一交易日开盘前有效。" in html

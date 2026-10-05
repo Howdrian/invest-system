@@ -1078,6 +1078,23 @@ class TestNotificationServiceReportGeneration(unittest.TestCase):
         self.assertIn("*分析模型: gemini/gemini-2.5-flash*", out)
 
     @mock.patch("src.notification.get_config")
+    def test_dashboard_missing_volume_numbers_do_not_render_none_percent(self, mock_get_config):
+        mock_get_config.return_value = _make_config(report_renderer_enabled=False)
+        service = NotificationService()
+        for missing in (None, ''):
+            result = AnalysisResult(
+                code="AAPL", name="Apple", sentiment_score=50,
+                trend_prediction="震荡", operation_advice="观望", analysis_summary="测试",
+                dashboard={"data_perspective": {"volume_analysis": {
+                    "volume_ratio": missing, "turnover_rate": missing,
+                    "volume_meaning": "未提供量比，不以相邻两日成交量比代替。",
+                }}},
+            )
+            out = service.generate_dashboard_report([result], report_date="2026-09-06")
+            self.assertNotIn("None", out)
+            self.assertIn("换手率 数据缺失", out)
+
+    @mock.patch("src.notification.get_config")
     def test_generate_dashboard_report_shows_model_by_default(self, mock_get_config: mock.MagicMock):
         mock_get_config.return_value = _make_config(report_renderer_enabled=False)
         service = NotificationService()

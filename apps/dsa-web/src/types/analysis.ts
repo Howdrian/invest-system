@@ -337,6 +337,11 @@ export interface ReportArtifactReaderV3Hero {
 }
 
 export interface ReportArtifactReaderV3DepartmentCard {
+  claimAssessment?: {
+    schema: 'claim_assessment_v1';
+    summary: string;
+    claims: Array<{ claimId: string; text: string; label: string; evidenceIds: string[] }>;
+  };
   agent?: string;
   label?: string;
   conclusion?: string;
@@ -374,6 +379,8 @@ export interface ReportArtifactReaderV3MarketRow {
   headline?: string;
   scopeNote?: string;
   breadthAvailable?: boolean;
+  timeLabel?: string;
+  fetchedAt?: string;
   asOf?: string;
   evidenceIds?: string[];
 }
@@ -383,6 +390,7 @@ export interface ReportArtifactReaderV3StockRow {
   name?: string;
   market?: 'CN' | 'HK' | 'US' | string;
   stance?: string;
+  historyRecordId?: number;
   lastPrice?: number;
   currency?: string;
   return1dPct?: number;
@@ -398,7 +406,26 @@ export interface ReportArtifactReaderV3StockRow {
   evidenceIds?: string[];
 }
 
+export interface ReportReaderFocusList {
+  schema: 'reader_focus_list_v1';
+  highlights?: Array<{ market: string; summary: string }>;
+  researchWindow?: { schema?: string; asOf?: string; lookbackStart?: string; outlookEnd?: string;
+    label?: string; basis?: string; displayLines?: string[];
+    recentChanges?: { start: string; end: string; months: number };
+    decisionHorizon?: { start: string; end: string; months: number; flexible: boolean } };
+  note: string;
+  sectorCoverage: string;
+  sectorPerformance?: Array<{ market: string; scope: string; asOf: string; benchmark: string; evidenceIds: string[];
+    rows: Array<{ name: string; code: string; asOf: string; sourceUrl: string; return1dPct?: number;
+      return5dPct?: number; return20dPct?: number; return60dPct?: number; return120dPct?: number; relative120dPp?: number; relative20dPp?: number }> }>;
+  sectors: Array<{ market: string; priority: string; targets: string[]; basis: string; lead?: string; watchFor: string; evidenceIds: string[] }>;
+  stocks: Array<{ symbol: string; name: string; market: string; priority: string; reason: string; sourceLabel: string;
+    lead?: string; research?: Array<{ department: string; text: string; label: string; evidenceSamples: ReportArtifactReaderV2EvidenceSample[] }>;
+    evidenceLabel: string; watchFor: string; asOf: string; horizon?: string; listOrigin?: string; historyRecordId?: number | null; evidenceIds: string[] }>;
+}
+
 export interface ReportArtifactReaderV3 {
+  focusList?: ReportReaderFocusList;
   schema?: string;
   runDate?: string;
   timing?: {

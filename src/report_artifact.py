@@ -31,7 +31,7 @@ from src.original_analysis_adapter import (
     load_original_analysis_refs,
     load_original_analysis_snapshot,
 )
-from src.research_core import build_challenge_verdicts, build_research_reliability, build_scenario_adjudication
+from src.research_core import build_challenge_verdicts, build_claim_assessment, build_research_reliability, build_scenario_adjudication
 from src.research_core.semantic_gate import validate_claim_dicts
 
 
@@ -627,6 +627,7 @@ def build_daily_report_artifact(docs_dir: str | Path, run_date: str) -> Dict[str
                 "market_stats",
                 "market_stats_history_comparison",
                 "sector_history_comparison",
+                "sector_performance",
                 "realtime_quote",
                 "daily_data",
                 "price_history_comparison",
@@ -681,6 +682,16 @@ def build_daily_report_artifact(docs_dir: str | Path, run_date: str) -> Dict[str
         universe=universe,
         evidence_facts=evidence_facts,
         original_analysis_snapshot=original_analysis_snapshot,
+    )
+    # Stock/detail views may bind additional source facts after the initial
+    # evidence sample is selected. Keep those real references in the artifact;
+    # unresolved IDs still fail validation rather than inventing evidence.
+    evidence_items = _evidence_items(
+        evidence_facts,
+        preferred_ids=list(dict.fromkeys([
+            *(str(item["id"]) for item in evidence_items if item.get("id")),
+            *_collect_evidence_refs(department_reports, reader_v2, reader_v3),
+        ])),
     )
     reader_reliability = reader_v3.get("reliability") if isinstance(reader_v3.get("reliability"), Mapping) else {}
     research_reliability = _finalize_research_reliability(
@@ -932,6 +943,7 @@ def build_stock_artifact_from_history_detail(detail: Dict[str, Any]) -> Dict[str
     query_id = detail.get("query_id") or ""
     stock_code = detail.get("stock_code") or ""
     stock_name = detail.get("stock_name") or stock_code or "未知标的"
+    is_market = detail.get("report_type") == "market_review" or stock_code == "MARKET"
     created_at = detail.get("created_at") or _now_iso()
     run_date = str(created_at)[:10] if created_at else _now_iso()[:10]
     raw_result = detail.get("raw_result") if isinstance(detail.get("raw_result"), dict) else {}
@@ -956,10 +968,10 @@ def build_stock_artifact_from_history_detail(detail: Dict[str, Any]) -> Dict[str
         "schemaVersion": SCHEMA_VERSION,
         "artifactId": f"history:{record_id}" if record_id is not None else f"query:{query_id}",
         "runDate": run_date,
-        "generatedAt": _now_iso(),
-        "artifactType": "stock_governed",
+        "generatedAt": str(created_at),
+        "artifactType": "market_summary" if is_market else "stock_governed",
         "audience": "reader",
-        "title": f"{stock_name}({stock_code}) governed 报告",
+        "title": "市场复盘" if is_market else f"{stock_name}（{stock_code}）个股分析",
         "summary": {
             "oneLine": str(operation),
             "keyFacts": key_facts,
@@ -1440,8 +1452,9 @@ def _build_reader_v3(
     research_reliability = research_reliability or build_research_reliability(department_reports)
     scenario_adjudication = scenario_adjudication or build_scenario_adjudication(department_reports)
     visible = _reader_department_reports(department_reports)
-    cards = [_reader_v3_department_card(row, department_inputs, evidence_items) for row in visible]
     challenge_verdicts = build_challenge_verdicts(visible)
+    cards = [_reader_v3_department_card(row, department_inputs, evidence_items,
+                                        challenge_verdicts=challenge_verdicts) for row in visible]
     _apply_challenge_verdicts(cards, challenge_verdicts)
     cio = _first_department(visible, {"CIOAgent", "DecisionReportAgent"})
     risk = _first_department(visible, {"RiskAgent", "RiskPositionAgent"})
@@ -1483,12 +1496,22 @@ def _build_reader_v3(
             **scenario_adjudication,
             "judgment": _product_copy(reader_brief.get("finalConclusion")),
         }
-    scenario_adjudication = _reader_scope_adjudication(
-        scenario_adjudication,
-        market_matrix=market_matrix,
-    )
+    # Reader renders validated analysis; deterministic editorial fallbacks must
+    # not silently replace genuine LLM conclusions or their evidence bindings.
+    llm_agents = {str(row.get("agent") or "") for row in visible
+                  if row.get("agentRuntime") == "LLM" and row.get("llmStatus") == "success"}
+    if "CIOAgent" not in llm_agents:
+        scenario_adjudication = _reader_scope_adjudication(
+            scenario_adjudication,
+            market_matrix=market_matrix,
+        )
+    if "CIOAgent" in llm_agents and scenario_adjudication.get("judgment"):
+        for card in cards:
+            if card.get("agent") == "CIOAgent":
+                card["conclusion"] = _reader_adjudication_judgment(scenario_adjudication["judgment"])
+    fallback_cards = [card for card in cards if card.get("agent") not in llm_agents]
     _curate_reader_v3_cards(
-        cards,
+        fallback_cards,
         market_matrix=market_matrix,
         stock_matrix=stock_matrix,
         evidence_rows=evidence_facts or evidence_items,
@@ -1497,7 +1520,7 @@ def _build_reader_v3(
         adjudication=scenario_adjudication,
     )
     _rebind_curated_reader_evidence(
-        cards,
+        fallback_cards,
         evidence_rows=evidence_facts or evidence_items,
         evidence_items=evidence_items,
     )
@@ -1514,17 +1537,28 @@ def _build_reader_v3(
     if not reliability_provided and not critical_gap_count and total_gap_count and "待确认" not in confidence_label:
         confidence_label = f"{confidence_label}，含待确认项"
     if not _reader_portfolio_symbols(universe or {}):
-        _align_reader_no_portfolio_language(cards)
-        scenario_adjudication = _reader_no_portfolio_copy(scenario_adjudication)
+        _align_reader_no_portfolio_language(fallback_cards)
+        if "CIOAgent" not in llm_agents:
+            scenario_adjudication = _reader_no_portfolio_copy(scenario_adjudication)
+    # The validated reader summary is the final editor's concise conclusion.
+    # Keep the longer adjudication for drill-down, not the default headline.
+    validated_cio_summary = (
+        (cio or {}).get("summaryForReader")
+        if research_reliability.get("headlineSafe")
+        else ""
+    )
+    regional_summary = _reader_cio_regional_summary(cio or {}, challenge_verdicts=challenge_verdicts)
     one_line = _reader_cio_headline(
-        scenario_adjudication.get("judgment")
+        validated_cio_summary
+        or regional_summary
+        or scenario_adjudication.get("judgment")
         or (cio or {}).get("summaryForReader")
         or reader_brief.get("finalConclusion")
         or reader_brief.get("oneLine")
         or "本轮未生成总判断。",
         shared_facts=(
             []
-            if sum(1 for row in market_matrix if row.get("scopeType") == "market") >= 3
+            if validated_cio_summary or sum(1 for row in market_matrix if row.get("scopeType") == "market") >= 3
             else scenario_adjudication.get("sharedFacts")
         ),
     )
@@ -1554,11 +1588,32 @@ def _build_reader_v3(
         ),
         limit=3,
     )
+    if "CIOAgent" in llm_agents:
+        retained = build_claim_assessment(cio or {}, challenge_verdicts=challenge_verdicts)["claims"]
+        # Editorial summary is market-balanced; the detailed department claims
+        # remain complete. Array order must not silently remove US research.
+        mappings = {row.get("claimId"): row for row in (cio or {}).get("claimEvidence") or []}
+        regional = [next((row for row in retained
+                          if mappings.get(row["claimId"], {}).get("subject") == scope), None)
+                    for scope in ("market_cn", "market_hk", "market_us")]
+        key_reasons = _dedupe_nonempty(
+            [row["text"] for row in regional if row] + [row["text"] for row in retained], limit=3,
+        ) or key_reasons
+        retained_ids = {row["claimId"] for row in retained}
+        ratings = {row.get("rating") for row in (cio or {}).get("claimEvidence") or []
+                   if row.get("claimId") in retained_ids}
+        if "买入" in ratings:
+            action_label = "选择性参与"
+        elif "卖出" in ratings:
+            action_label = "回避或减持"
+        elif "中性" in ratings:
+            action_label = "保持中性"
     strongest_alternative = _product_copy(scenario_adjudication.get("strongestAlternative"))
     risk_items = _dedupe_nonempty(
         (
-            [f"竞争情景：{_reader_institutional_copy(strongest_alternative)}"]
-            if strongest_alternative
+            _product_list((cio or {}).get("counterpoints"), limit=3)
+            if (cio or {}).get("counterpoints")
+            else [f"竞争情景：{_reader_institutional_copy(strongest_alternative)}"] if strongest_alternative
             else _product_list((red_team or {}).get("counterpoints"), limit=2)
         ),
         limit=3,
@@ -1584,7 +1639,7 @@ def _build_reader_v3(
         ],
     )
     next_steps = [_reader_institutional_copy(item) for item in next_steps]
-    if market_level_count >= 3:
+    if market_level_count >= 3 and "CIOAgent" not in llm_agents:
         pressured_markets = [
             str(row.get("scopeLabel") or row.get("market") or "").replace("市场", "")
             for row in market_matrix
@@ -1643,6 +1698,14 @@ def _build_reader_v3(
     ):
         confidence_label = "中等可信，含待验证情景"
     coverage_copy = _reader_coverage_copy(universe or {}, cards)
+    focus_list = build_reader_focus_list(
+        stock_matrix=stock_matrix, departments=department_reports,
+        evidence_facts=evidence_facts or [], universe=universe, evidence_items=evidence_items,
+    )
+    sector_scopes = [f"{row['market']} {len(row['rows'])}个行业/主题代理"
+                     for row in focus_list.get("sectorPerformance") or []]
+    if sector_scopes:
+        coverage_copy += "；" + "；".join(sector_scopes)
     return {
         "schema": "reader_v3_v1",
         "runDate": run_date,
@@ -1668,6 +1731,7 @@ def _build_reader_v3(
         "nextSteps": next_steps or ["等待下一次数据刷新后复核。"],
         "marketMatrix": market_matrix,
         "stockMatrix": stock_matrix,
+        "focusList": focus_list,
         "marketGeo": market_geo,
         "adjudication": {
             "sharedFacts": [
@@ -1714,6 +1778,201 @@ def _build_reader_v3(
         "departmentCards": public_cards,
         "diagnosticsPath": f"reports/{run_date}.diagnostics.html",
     }
+
+
+def build_reader_focus_list(
+    *, stock_matrix: List[Dict[str, Any]], departments: List[Dict[str, Any]],
+    evidence_facts: List[Dict[str, Any]], universe: Optional[Dict[str, Any]] = None,
+    evidence_items: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    """Index existing research, never generate a new recommendation/ranking.
+
+    Sector groups require both price observations and department selection.
+    Stock priority is only lifted from an explicit retained CIO claim.
+    """
+    by_agent = {str(row.get("agent") or ""): row for row in departments}
+    challenge_verdicts = build_challenge_verdicts(departments)
+    sector = by_agent.get("SectorAgent") or {}
+    sector_text = " ".join([str(sector.get("summaryForReader") or ""), *sector.get("keyClaims", [])])
+    sector_refs = set(_collect_evidence_refs(sector))
+    market_names = {"cn": "A股", "hk": "港股", "us": "美股"}
+    sectors: List[Dict[str, Any]] = []
+    for fact in evidence_facts:
+        if fact.get("metric") == "sector_rankings" and fact.get("id") in sector_refs:
+            for side, title in (("top", "当日强势观察"), ("bottom", "当日承压观察")):
+                targets = [str(row["name"]) for row in fact.get("records") or []
+                           if isinstance(row, dict) and row.get("name") and row["name"] in sector_text
+                           and row.get("rank_side") == side]
+                if targets:
+                    sectors.append({
+                        "market": market_names.get(str(fact.get("market") or "").lower(), "市场未标"),
+                        "priority": title, "targets": targets,
+                        "basis": "最近一次行业涨幅榜中" + ("居前" if side == "top" else "居后") + "；仅为单次截面，不代表多日持续性。",
+                        "watchFor": _reader_institutional_copy(str(sector.get("nextAction") or "").split("；")[0]),
+                        "evidenceIds": [fact["id"]],
+                    })
+        if fact.get("metric") != "sector_history_comparison" or fact.get("id") not in sector_refs:
+            continue
+        market = market_names.get(str(fact.get("market") or "").lower(), "市场未标")
+        snapshots = len(fact.get("observed_dates") or [])
+        for field, title in (("top", "强势跟踪"), ("bottom", "承压观察")):
+            targets = [str(row["name"]) for row in fact.get("history") or []
+                       if isinstance(row, dict) and row.get("name") and row["name"] in sector_text
+                       and (_safe_float(row.get(field)) or 0) >= 2]
+            if not targets:
+                continue
+            sectors.append({
+                "market": market, "priority": title, "targets": targets,
+                "basis": f"{snapshots}份本地快照中重复{'居前' if field == 'top' else '居后'}；快照数不等于独立交易日数。",
+                "watchFor": _reader_institutional_copy(str(sector.get("nextAction") or "").split("；")[0]),
+                "evidenceIds": [fact["id"]],
+            })
+
+    # Explicit department judgments override the legacy price-ranking projection.
+    explicit_sectors = []
+    cio_scopes = set()
+    for agent in ("CIOAgent", "SectorAgent"):
+        department = by_agent.get(agent) or {}
+        assessments = {row["claimId"]: row for row in build_claim_assessment(department)["claims"]}
+        for claim in department.get("claimEvidence") or []:
+            retained = assessments.get(claim.get("claimId"))
+            target, rating = str(claim.get("target") or ""), str(claim.get("rating") or "")
+            if not retained or not target or not rating:
+                continue
+            scope = str(claim.get("subject") or "").removeprefix("market_")
+            if scope not in market_names:
+                continue
+            # CIO may give one compound judgment for a market. Keep it intact;
+            # department drafts remain in their own drawer, not as competing
+            # final selections. Fall back per market only when CIO is absent.
+            if agent == "SectorAgent" and scope in cio_scopes:
+                continue
+            if agent == "CIOAgent":
+                cio_scopes.add(scope)
+            if any(row["targets"] == [target] and row["market"] == market_names[scope] for row in explicit_sectors):
+                continue
+            explicit_sectors.append({"market": market_names[scope], "priority": rating,
+                                     "targets": [target], "basis": retained["text"],
+                                     "watchFor": claim.get("entryCondition") or "",
+                                     "evidenceIds": retained["evidenceIds"]})
+    if explicit_sectors:
+        sectors = explicit_sectors
+
+    aliases = {str(row.get("symbol") or ""): [str(row.get("symbol") or ""), str(row.get("name") or "")]
+               for row in stock_matrix}
+    all_aliases = sorted({alias for values in aliases.values() for alias in values if alias}, key=len, reverse=True)
+
+    def excerpt(value: Any, symbol: str) -> str:
+        text = str(value or "")
+        matches = list(re.finditer("|".join(re.escape(alias) for alias in all_aliases), text)) if all_aliases else []
+        for i, match in enumerate(matches):
+            if match.group() not in aliases.get(symbol, []):
+                continue
+            end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
+            part = re.split(r"[。；;\n]", text[match.start():end], maxsplit=1)[0].strip(" ，,；;。")
+            return _reader_institutional_copy(part)
+        return ""
+
+    discovered_names = {
+        str(row.get("symbol") or "").upper(): str(row.get("name") or "")
+        for group in (universe or {}).get("groups", [])
+        for row in group.get("discoveries", [])
+        if isinstance(row, dict) and row.get("symbol") and row.get("name")
+    }
+    stocks: List[Dict[str, Any]] = []
+    for stock in stock_matrix:
+        symbol = str(stock.get("symbol") or "")
+        selected: Dict[str, Any] = {}
+        origin = ""
+        for agent in ("CIOAgent", "FundamentalAgent", "TechnicalAgent"):
+            department = by_agent.get(agent) or {}
+            subjects = {str(row.get("claimId") or ""): str(row.get("subject") or "").upper()
+                        for row in department.get("claimEvidence") or [] if isinstance(row, dict)}
+            mappings = {row.get("claimId"): row for row in department.get("claimEvidence") or []}
+            matching = [row for row in build_claim_assessment(department, challenge_verdicts=challenge_verdicts)["claims"]
+                        if symbol.upper() in re.split(r"[,，、;；]+", subjects.get(row["claimId"], ""))]
+            selected = next((row for row in matching if mappings.get(row["claimId"], {}).get("rating")),
+                            next(iter(matching), {}))
+            selected = {**selected, **{key: mappings.get(selected.get("claimId"), {}).get(key)
+                                      for key in ("rating", "entryCondition", "timeScope")}} if selected else {}
+            if selected:
+                origin = _DEPARTMENT_LABELS.get(agent, "部门分析")
+                break
+        text = str(selected.get("text") or "")
+        explicit_priority = origin == _DEPARTMENT_LABELS.get("CIOAgent") and bool(
+            re.search(r"优先(?:研究|关注|复核)|进入.{0,16}优先清单", text)
+        ) and not re.search(r"(?:不|勿|避免|暂缓).{0,6}优先", text)
+        technical = by_agent.get("TechnicalAgent") or {}
+        research = []
+        for agent in ("CIOAgent", "FundamentalAgent", "TechnicalAgent", "IntelAgent", "RiskAgent", "RedTeamAgent"):
+            department = by_agent.get(agent) or {}
+            claims_by_id = {row.get("claimId"): row for row in department.get("claimEvidence") or []}
+            for claim in build_claim_assessment(department, challenge_verdicts=challenge_verdicts)["claims"]:
+                subject = str(claims_by_id.get(claim["claimId"], {}).get("subject") or "").upper()
+                if symbol.upper() not in re.split(r"[,，、;；]+", subject):
+                    continue
+                samples = _evidence_samples(evidence_items or [], claim.get("evidenceIds") or [],
+                                            limit=len(claim.get("evidenceIds") or []) or 1)
+                research.append({"department": _DEPARTMENT_LABELS.get(agent, "部门研究"),
+                                 "text": _reader_institutional_copy(claim["text"]),
+                                 "label": claim["label"],
+                                 "evidenceSamples": [_reader_v3_evidence_sample(item) for item in samples]})
+        stocks.append({
+            "symbol": symbol, "name": (stock.get("name") if stock.get("name") not in (None, "", symbol) else discovered_names.get(symbol.upper()) or symbol), "market": market_names.get(str(stock.get("market") or "").lower(), str(stock.get("market") or "")),
+            "priority": selected.get("rating") or ("优先研究" if explicit_priority else "跟踪观察" if selected else "未排序"),
+            "horizon": selected.get("timeScope") or "",
+            "listOrigin": ("我的自选" if any(symbol.upper() in [str(s).upper() for s in g.get("symbols", [])]
+                          for g in (universe or {}).get("groups", []) if g.get("name") == "watchlist") else "系统研究候选") if universe else "",
+            "reason": _reader_institutional_copy(text) or "本轮未形成该标的的独立研究排序。",
+            "lead": _focus_lead(_reader_institutional_copy(text)),
+            "research": research,
+            "sourceLabel": origin or "观察池", "evidenceLabel": selected.get("label") or "论据未评估",
+            "watchFor": selected.get("entryCondition") or excerpt(technical.get("nextAction"), symbol) or str(stock.get("watchLevels") or ""),
+            "asOf": stock.get("asOf") or "", "historyRecordId": stock.get("historyRecordId"),
+            "evidenceIds": list(dict.fromkeys([*selected.get("evidenceIds", []), *stock.get("evidenceIds", [])])),
+        })
+    stocks.sort(key=lambda row: 0 if row["priority"] == "优先研究" else 1)
+    covered = {row["market"] for row in sectors}
+    performance = []
+    for fact in evidence_facts:
+        if fact.get("metric") != "sector_performance":
+            continue
+        market_name = market_names.get(str(fact.get("market") or "").lower())
+        if not market_name or not fact.get("records"):
+            continue
+        rows = [{
+            "name": row.get("name"), "code": row.get("code"), "asOf": row.get("as_of"),
+            "return1dPct": row.get("return_1d_pct"), "return5dPct": row.get("return_5d_pct"),
+            "return20dPct": row.get("return_20d_pct"), "return60dPct": row.get("return_60d_pct"),
+            "return120dPct": row.get("return_120d_pct"), "relative120dPp": row.get("relative_120d_pp"),
+            "relative20dPp": row.get("relative_20d_pp"), "sourceUrl": sanitize_public_http_url(row.get("source_url") or ""),
+        } for row in fact.get("records") or [] if isinstance(row, dict)]
+        rows.sort(key=lambda row: _safe_float(row.get("relative20dPp"))
+                  if _safe_float(row.get("relative20dPp")) is not None else float('-inf'), reverse=True)
+        performance.append({"market": market_name, "scope": fact.get("scope"), "asOf": fact.get("as_of"),
+                            "benchmark": fact.get("benchmark"), "rows": rows, "evidenceIds": [fact["id"]]})
+        covered.add(market_name)
+    absent = [name for name in market_names.values() if name not in covered]
+    for row in sectors:
+        row["lead"] = _focus_lead(row.get("basis") or "")
+    highlights = []
+    for name in market_names.values():
+        row = next((item for item in sectors if item.get("market") == name), None)
+        if row:
+            highlights.append({"market": name, "summary": row["lead"]})
+    return {
+        "schema": "reader_focus_list_v1", "sectors": sectors, "stocks": stocks,
+        "highlights": highlights,
+        "researchWindow": (universe or {}).get("researchWindow") or {},
+        "sectorPerformance": performance,
+        "sectorCoverage": ("、".join(absent) + "尚未形成板块关注清单。") if absent else "三地均有板块关注材料，覆盖范围见各市场说明。",
+        "note": "评级是本期研究意见，具体期限见各项判断。系统研究候选不自动加入我的自选，不执行交易。",
+    }
+
+
+def _focus_lead(text: str) -> str:
+    """First complete sentence for a teaser; full argument stays in drill-down."""
+    return re.split(r"(?<=[。！？])", str(text), maxsplit=1)[0]
 
 
 def _reader_headline_audit(
@@ -1791,17 +2050,12 @@ def _finalize_research_reliability(
     result["headlineSafe"] = final_safe
     result["headlineStatus"] = str(reader.get("headlineStatus") or "")
 
-    has_uncertainty = any(
-        int(upstream.get(key) or 0) > 0
-        for key in ("hypothesisClaims", "disputedClaims", "rejectedClaims")
-    ) or not upstream_safe
     if not final_safe:
         result["label"] = "结论不足"
-    elif has_uncertainty:
+    elif not upstream_safe:
         result["label"] = "中等可信，含待验证情景"
     else:
-        reader_label = str(reader.get("label") or "").strip()
-        result["label"] = reader_label if reader_label and reader_label != "结论不足" else "中等可信"
+        result["label"] = str(upstream.get("label") or reader.get("label") or "论据待评估")
 
     warnings: List[str] = []
     for warning in upstream.get("warnings") or []:
@@ -1896,6 +2150,10 @@ def _reader_timing_context(
     else:
         validity = f"{session_label} · 数据按各自标注时点"
         display_as_of = str(data_as_of or common_completed or run_date)
+    if len({str(row.get("market") or "") for row in market_matrix if row.get("scopeType") == "market"}) > 1:
+        # The legacy phase calculation above is Shanghai/A-share based. It
+        # must not imply that a simultaneously open US market has closed.
+        validity = f"A股时段：{validity}"
     return {
         "reportDate": run_date,
         "generatedAt": generated_at,
@@ -2016,6 +2274,8 @@ def _reader_no_portfolio_copy(value: Any) -> Any:
 
 def _align_reader_no_portfolio_language(cards: List[Dict[str, Any]]) -> None:
     for card in cards:
+        if card.get("agent") in {"PortfolioAgent", "PortfolioReviewAgent"}:
+            card["label"] = "自选股观察（未接入持仓）"
         for key in ("conclusion", "keyClaims", "counterpoints", "dataGaps", "nextAction", "nextActions"):
             if key in card:
                 card[key] = _reader_no_portfolio_copy(card[key])
@@ -2114,7 +2374,12 @@ def _build_market_matrix(
                 "基于主要宽基指数；本轮不以个股样本替代市场宽度。"
             ),
             "breadthAvailable": bool(breadth_row),
-            "asOf": index_row.get("as_of") or index_row.get("asOf") or "",
+            "asOf": (index_row.get("fetched_at") if index_row.get("time_basis") == "fetched" else None) or index_row.get("as_of") or index_row.get("asOf") or "",
+            "timeLabel": (
+                "采集时间（行情时点未提供）"
+                if index_row.get("time_basis") == "fetched" else "行情时间"
+            ),
+            "fetchedAt": index_row.get("fetched_at") or "",
             "evidenceIds": [
                 evidence_id for evidence_id in (index_row.get("id"), breadth_row.get("id")) if evidence_id
             ],
@@ -2767,10 +3032,19 @@ def _rebind_curated_reader_evidence(
 
 def _reader_cn_headline_short(headline: str) -> str:
     pairs = dict(re.findall(r"(上证指数|深证成指|创业板指|科创50|上证50|沪深300)\s*([+-]\d+(?:\.\d+)?)%", headline))
-    growth = [f"{name} {pairs[name]}%" for name in ("科创50", "创业板指") if name in pairs]
-    if growth:
-        return "主要指数同步下跌，" + "、".join(growth) + "领跌"
-    return headline
+    if not pairs:
+        return headline
+    changes = {name: float(value) for name, value in pairs.items()}
+    if all(value < 0 for value in changes.values()):
+        label, ending = "所列指数同步下跌", "跌幅居前"
+        names = sorted(changes, key=changes.get)[:2]
+    elif all(value > 0 for value in changes.values()):
+        label, ending = "所列指数同步上涨", "涨幅居前"
+        names = sorted(changes, key=changes.get, reverse=True)[:2]
+    else:
+        label, ending = "所列指数涨跌分化", ""
+        names = sorted(changes, key=lambda name: abs(changes[name]), reverse=True)[:2]
+    return label + "，" + "、".join(f"{name} {pairs[name]}%" for name in names) + ending
 
 
 def _reader_market_headline_short(row: Mapping[str, Any]) -> str:
@@ -3032,14 +3306,23 @@ def _build_stock_matrix(
     rows = [normalize_evidence_fact(item) for item in evidence_rows if isinstance(item, dict)]
     names: Dict[str, str] = {}
     actions: Dict[str, str] = {}
+    record_ids: Dict[str, int] = {}
+    for group in universe.get("groups") or []:
+        if not isinstance(group, Mapping):
+            continue
+        for item in group.get("discoveries") or []:
+            if isinstance(item, Mapping) and item.get("symbol") and item.get("name"):
+                names[str(item["symbol"]).strip().upper()] = str(item["name"]).strip()
     for item in original_analysis_snapshot.get("records") or []:
         if not isinstance(item, Mapping):
             continue
         symbol = str(item.get("code") or "").strip().upper()
         if not symbol or symbol == "MARKET":
             continue
-        names[symbol] = str(item.get("name") or symbol).strip()
+        names[symbol] = str(item.get("name") or names.get(symbol) or symbol).strip()
         actions[symbol] = str(item.get("action") or "").strip().lower()
+        if isinstance(item.get("recordId"), int):
+            record_ids[symbol] = item["recordId"]
 
     symbols = [str(item).strip().upper() for item in universe.get("subjectSymbols") or [] if str(item).strip()]
     if not symbols:
@@ -3078,7 +3361,11 @@ def _build_stock_matrix(
             {},
         )
         quote_phase = str(quote.get("session_phase") or quote.get("sessionPhase") or "")
-        use_quote = bool(quote_fields.get("price") is not None and quote_phase not in {"premarket", "lunch_break"})
+        use_quote = bool(
+            quote_fields.get("price") is not None
+            and quote_phase in {"intraday", "closing_auction", "postmarket"}
+            and quote.get("event_time")
+        )
         close = quote_fields.get("price") if use_quote else daily_fields.get("latest_close")
         if close is None:
             close = quote_fields.get("price") or daily_fields.get("latest_close")
@@ -3105,6 +3392,7 @@ def _build_stock_matrix(
             "stance": _reader_stock_stance(actions.get(symbol), trend),
             "lastPrice": close,
             "currency": _reader_symbol_currency(symbol),
+            "historyRecordId": record_ids.get(symbol),
             "return1dPct": return_1d,
             "return20dPct": history_fields.get("return_20d_pct"),
             "trend": trend,
@@ -3188,8 +3476,10 @@ def _reader_valuation_summary(
         ("pe_ttm", "PE(TTM)"),
         ("trailing_pe", "PE(TTM)"),
         ("pe", "PE"),
+        ("pe_ratio", "PE"),
         ("forward_pe", "Forward PE"),
         ("pb", "PB"),
+        ("pb_ratio", "PB"),
         ("price_to_book", "PB"),
         ("enterprise_to_ebitda", "EV/EBITDA"),
     )
@@ -3206,7 +3496,8 @@ def _reader_valuation_summary(
     online_percentiles: List[str] = []
     online_sample_counts: List[int] = []
     if online_eligible:
-        for metric, label in (("pe", "PE"), ("pb", "PB")):
+        for metric, label in (("pe", "PE"),
+        ("pe_ratio", "PE"), ("pb", "PB")):
             percentile = _safe_float(current.get(f"{metric}_history_percentile"))
             count = int(_safe_float(current.get(f"{metric}_history_sample_count")) or 0)
             if percentile is None or count < 20:
@@ -3222,7 +3513,8 @@ def _reader_valuation_summary(
     percentile_eligible = (_safe_float(history.get("valuation_percentile_eligible")) or 0) >= 1
     percentile_parts: List[str] = []
     if percentile_eligible:
-        for metric, label in (("pe", "PE"), ("pb", "PB")):
+        for metric, label in (("pe", "PE"),
+        ("pe_ratio", "PE"), ("pb", "PB")):
             value = _safe_float(history.get(f"{metric}_local_run_percentile"))
             if value is None:
                 value = _safe_float(history.get(f"{metric}_percentile"))
@@ -3308,6 +3600,8 @@ def _public_reader_v3_department_card(card: Dict[str, Any]) -> Dict[str, Any]:
     row = dict(card)
     agent_key = str(card.get("agent") or "")
     label = _DEPARTMENT_LABELS.get(agent_key) or str(card.get("label") or "")
+    if agent_key in {"PortfolioAgent", "PortfolioReviewAgent"} and card.get("label") == "自选股观察（未接入持仓）":
+        label = "自选股观察（未接入持仓）"
     if not label:
         label = re.sub(r"Agent$", "", agent_key) or "分析部门"
     row["agent"] = _product_copy(label)
@@ -3357,7 +3651,10 @@ def _public_challenge_verdict(value: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _reader_v3_department_card(row: Dict[str, Any], department_inputs: List[Dict[str, Any]], evidence_items: List[Dict[str, Any]]) -> Dict[str, Any]:
+def _reader_v3_department_card(
+    row: Dict[str, Any], department_inputs: List[Dict[str, Any]], evidence_items: List[Dict[str, Any]],
+    *, challenge_verdicts: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
     card = _reader_v2_department_card(row, department_inputs, evidence_items)
     evidence_samples = [
         _reader_v3_evidence_sample(item)
@@ -3368,6 +3665,9 @@ def _reader_v3_department_card(row: Dict[str, Any], department_inputs: List[Dict
         _reader_institutional_copy(_concise_numbered_step(item))
         for item in _split_reader_steps(card.get("nextAction"))
     ][:3]
+    assessment = build_claim_assessment(row, challenge_verdicts=challenge_verdicts or [])
+    for claim in assessment["claims"]:
+        claim["text"] = _reader_institutional_copy(claim["text"])
     return {
         "agent": card.get("agent"),
         "label": _product_copy(card.get("label")),
@@ -3378,6 +3678,7 @@ def _reader_v3_department_card(row: Dict[str, Any], department_inputs: List[Dict
         "nextAction": "；".join(next_actions),
         "nextActions": next_actions,
         "confidence": card.get("confidence") or "medium",
+        "claimAssessment": assessment,
         "supportSignals": [_reader_institutional_copy(item) for item in _product_list(card.get("supportSignals"), limit=3)],
         "evidenceIds": [str(item.get("id")) for item in evidence_samples if item.get("id")],
         "evidenceSamples": evidence_samples,
@@ -3417,10 +3718,41 @@ def _reader_department_claims(row: Dict[str, Any], fallback: Any) -> List[str]:
     return _dedupe_nonempty(claims, limit=3) or _product_list(fallback, limit=3)
 
 
+def _reader_financial_history_label(item: Mapping[str, Any]) -> str:
+    """Present the financial comparison record, not its wire-format key/value string."""
+    fields = item.get("measurements") or {}
+    metadata = dict(re.findall(r"\b([a-z_]+)=([^\s;]+)", str(item.get("label") or "")))
+    parts = []
+    count = _safe_float(fields.get("period_count"))
+    if count is not None:
+        parts.append(f"覆盖 {int(count)} 个报告期")
+    latest, comparison = metadata.get("latest_report", ""), metadata.get("comparison_report", "")
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", latest) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", comparison):
+        parts.append(f"{latest} 对 {comparison}，同期口径")
+    for key, label in (("revenue_yoy_pct", "营收同比"), ("net_profit_yoy_pct", "净利润同比"),
+                       ("operating_cash_flow_yoy_pct", "经营现金流同比")):
+        value = _safe_float(fields.get(key))
+        if value is not None:
+            parts.append(f"{label} {_format_percent(value)}")
+    for key, label in (("net_profit_parent_transition", "净利润"), ("operating_cash_flow_transition", "经营现金流")):
+        is_cash = key == "operating_cash_flow_transition"
+        transitions = {"loss_widened": "净流出扩大" if is_cash else "亏损扩大",
+                       "loss_narrowed": "净流出收窄" if is_cash else "亏损收窄",
+                       "turned_positive": "由净流出转为净流入" if is_cash else "扭亏为盈",
+                       "turned_negative": "由净流入转为净流出" if is_cash else "转为亏损",
+                       "not_comparable": "本期与基期不宜用百分比比较"}
+        transition = transitions.get(metadata.get(key, ""))
+        if transition:
+            parts.append(f"{label}{transition}")
+    return "；".join(parts) or "财务历史比较，详见本期公司论证与来源"
+
+
 def _reader_v3_evidence_sample(item: Dict[str, Any]) -> Dict[str, Any]:
     row = dict(item)
     source_url = sanitize_public_http_url(item.get("sourceUrl"))
-    if str(item.get("metric") or "") == "main_indices" and isinstance(item.get("measurements"), dict):
+    if str(item.get("metric") or "") == "fundamental_history_comparison":
+        row["label"] = _reader_financial_history_label(item)
+    elif str(item.get("metric") or "") == "main_indices" and isinstance(item.get("measurements"), dict):
         row["label"] = _main_indices_measurement_label(item.get("measurements") or {})
     elif str(item.get("metric") or "") == "fundamental_valuation" and isinstance(item.get("measurements"), dict):
         row["label"] = _reader_valuation_summary(item.get("measurements") or {}, {})
@@ -3519,6 +3851,35 @@ def _reader_evidence_label(value: Any) -> str:
     Raw field names and complete provider payloads stay available in
     Diagnostics.  Reader evidence is a short, human-readable citation.
     """
+    raw = str(value or "").strip()
+    if raw.startswith("belong_boards available: boards="):
+        payload = raw.split("boards=", 1)[1]
+        try:
+            boards = ast.literal_eval(payload if payload.startswith("[") else f"[{payload}]")
+        except (SyntaxError, ValueError):
+            boards = []
+        names = [str(row["name"]) for row in boards if isinstance(row, dict) and row.get("name")]
+        return "所属行业与概念：" + "、".join(dict.fromkeys(names)) if names else "所属行业与概念快照"
+    if raw.startswith("observations=") and "advancers_pct=" in raw:
+        fields = _named_number_fields(raw)
+        parts = [f"本地市场快照 {int(fields.get('observations', 0))} 次"]
+        date = _regex_group(raw, r"latest=(\d{4}-\d{2}-\d{2})")
+        if date:
+            parts.append(f"最新 {date}")
+        if "advancers_pct" in fields:
+            parts.append(f"上涨家数占比 {fields['advancers_pct']:.2f}%")
+        if "total_amount_100m_cny" in fields:
+            parts.append(f"当期成交额 {fields['total_amount_100m_cny']:.2f} 亿元")
+        # Local snapshots are not a comparable daily turnover series. Do not
+        # promote a raw difference into a growth rate or liquidity conclusion.
+        parts.append("快照不等同于可比交易日序列")
+        return "；".join(parts)
+    china_match = re.fullmatch(r"(CN_GDP_YOY|CN_CPI_YOY|CN_PMI_MANUFACTURING)=([^@]+)@\s*(.+)", raw)
+    if china_match:
+        code, _, date = china_match.groups()
+        labels = _reader_china_macro_levels([{"metric": code, "value": raw, "as_of": date}])
+        if labels:
+            return labels[0]
     text = _product_copy(value)
     if not text:
         return ""
@@ -3925,6 +4286,9 @@ def _split_reader_steps(value: Any) -> List[str]:
             if isinstance(parsed, dict):
                 value = parsed
     if isinstance(value, dict):
+        if "现在建议" in value or "改变意见的条件" in value:
+            return [f"{label}：{_product_copy(value[label])}" for label in
+                    ("现在建议", "改变意见的条件", "下次复核什么") if value.get(label)]
         aliases = {
             "不做什么": ("不做什么", "不要做", "禁止操作", "操作纪律", "do_not", "avoid"),
             "看什么": (
@@ -3940,6 +4304,16 @@ def _split_reader_steps(value: Any) -> List[str]:
             if clean:
                 rows.append(f"{label}：{clean}")
         return rows[:3]
+    if isinstance(value, str) and re.search(r"(?:现在建议|改变意见的条件)\s*[:：]", value):
+        # New CIO actions are editorial output, not ingredients for a generic
+        # warning. Preserve clauses, numeric levels and the analyst's order.
+        parts = re.split(r"(?:^|[\n；;])\s*(现在建议|改变意见的条件|下次复核什么)\s*[:：]", value)
+        return [f"{parts[i]}：{_product_copy(parts[i + 1]).strip('；; ')}"
+                for i in range(1, len(parts) - 1, 2) if parts[i + 1].strip()][:3]
+    if isinstance(value, str):
+        # Normalize list typography before product-copy whitespace normalization.
+        value = re.sub(r"(?:^|[\n；;])\s*[一二三四五六七八九十]+[、.）)]\s*", "; 1. ", value)
+        value = re.sub(r"(?:^|[\n；;])\s*[一二三](?=不做什么|看什么|下次复核)", "; ", value)
     text = _product_copy(value)
     if not text:
         return []
@@ -4002,6 +4376,9 @@ def _split_reader_steps(value: Any) -> List[str]:
 
 
 def _reader_next_steps(primary: Any, fallback: Any) -> List[str]:
+    authored = _split_reader_steps(primary)
+    if any(row.startswith(("现在建议：", "改变意见的条件：")) for row in authored):
+        return authored[:3]
     grouped: Dict[str, List[str]] = {
         "不做什么": [],
         "看什么": [],
@@ -4030,8 +4407,6 @@ def _reader_next_steps(primary: Any, fallback: Any) -> List[str]:
             normalized = re.sub(r"^下次复核(?:什么)?\s*[:：]?\s*", "", row).strip()
             if not grouped["下次复核什么"]:
                 grouped["下次复核什么"].append(normalized or row)
-    if not grouped["不做什么"]:
-        grouped["不做什么"].append("不要把单一标的或单日波动直接外推为全市场结论")
     return [
         _product_copy(f"{label}：{_clean_step_body(grouped[label][0])}")
         for label in ("不做什么", "看什么", "下次复核什么")
@@ -4291,6 +4666,24 @@ def _product_copy(value: Any) -> str:
     return text
 
 
+def _reader_cio_regional_summary(
+    cio: Dict[str, Any], *, challenge_verdicts: Optional[List[Dict[str, Any]]] = None,
+) -> str:
+    """Do not truncate a validated three-market conclusion to its first A-share claim."""
+
+    selected: Dict[str, str] = {}
+    for row in build_claim_assessment(cio, challenge_verdicts=challenge_verdicts or [])["claims"]:
+        if row["label"] != "有据支持":
+            continue
+        text = _product_copy(row["text"])
+        region = next((name for name in ("A股", "港股", "美股") if text.startswith(name)), None)
+        if region and region not in selected:
+            selected[region] = text.rstrip("。！？!?").replace("。", "；")
+    if len(selected) != 3:
+        return ""
+    return "；".join(selected[name] for name in ("A股", "港股", "美股"))
+
+
 def _reader_cio_headline(value: Any, *, shared_facts: Any = None) -> str:
     """Keep the hero decisive, short and explicitly framed as adjudication."""
 
@@ -4323,7 +4716,7 @@ def _reader_cio_headline(value: Any, *, shared_facts: Any = None) -> str:
     if not selected:
         selected = ["本轮未生成总判断"]
     headline = "；".join(selected).rstrip("。！？!?") + "。"
-    if headline.startswith(("当前基准判断：", "当前判断：", "今日结论：")):
+    if headline.startswith(("当前基准判断：", "当前判断：", "今日结论：", "基准判断是", "基准判断：")):
         return headline
     return f"当前基准判断：{headline}"
 
@@ -4527,6 +4920,8 @@ def _reader_institutional_copy(value: Any) -> str:
     text = text.replace("20日成交量比（volume_vs_avg20）", "20日成交量比")
     text = text.replace("（volume_vs_avg20）", "")
     text = re.sub(r"volume_vs_avg20\s*=\s*(-?\d+(?:\.\d+)?)", r"20日量比 \1", text, flags=re.I)
+    text = re.sub(r"close_high20\s*=\s*(-?\d+(?:\.\d+)?)", r"20日最高收盘价 \1", text, flags=re.I)
+    text = re.sub(r"close_low20\s*=\s*(-?\d+(?:\.\d+)?)", r"20日最低收盘价 \1", text, flags=re.I)
     text = re.sub(r"high20\s*=\s*(-?\d+(?:\.\d+)?)", r"20日高点 \1", text, flags=re.I)
     text = re.sub(r"，盘后继续微涨\s*-?\d+(?:\.\d+)?%[^，。；]*", "", text)
     text = text.replace("及市场宽度仍待有效数据确认", "，并补充市场宽度数据")
@@ -5477,7 +5872,12 @@ def _safe_reader_text(text: Any) -> str:
         "数据缺口": "待确认项",
     }
     for old, new in replacements.items():
-        value = value.replace(old, new)
+        # Domain tokens must not corrupt quoted English source titles (prices,
+        # macroeconomics, etc.) by replacing substrings inside ordinary words.
+        if old in {"price", "fundamentals", "filings", "macro"}:
+            value = re.sub(rf"\b{re.escape(old)}\b", new, value)
+        else:
+            value = value.replace(old, new)
     return value
 
 

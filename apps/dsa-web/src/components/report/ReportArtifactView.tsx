@@ -1,5 +1,6 @@
 import type React from 'react';
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { AlertTriangle } from 'lucide-react';
 import type {
   ReportArtifactDecision,
@@ -13,6 +14,7 @@ import type {
 import { Badge } from '../common/Badge';
 import { Card } from '../common/Card';
 import { JsonViewer } from '../common/JsonViewer';
+import { ResearchFocusList, ResearchHighlights } from './ResearchFocusList';
 
 interface ReportArtifactViewProps {
   artifact: ReportArtifactV1;
@@ -350,11 +352,11 @@ const AdjudicationPanel: React.FC<{
           <p className="mt-2 text-sm leading-6 text-secondary-text">{displayText(adjudication.strongestAlternative || '暂无形成证据链的竞争情景。')}</p>
         </div>
       </div>
-      <div className="mt-5 border-l-4 border-info bg-info/5 px-5 py-4">
+      {displayText(adjudication.judgment || fallback) !== displayText(fallback) ? <div className="mt-5 border-l-4 border-info bg-info/5 px-5 py-4">
         <div className="text-sm font-medium text-foreground">CIO 当前裁决</div>
         <p className="mt-1 text-sm leading-6 text-secondary-text">{displayText(adjudication.judgment || fallback)}</p>
         {adjudication.why ? <p className="mt-2 text-xs leading-5 text-muted-text">为什么：{displayText(adjudication.why)}</p> : null}
-      </div>
+      </div> : null}
       <details className="mt-4 rounded-xl border border-border/60 px-4 py-1">
         <summary className="flex min-h-11 cursor-pointer items-center justify-between py-2 text-sm font-medium text-foreground">
           <span>共同事实与翻转信号</span><span className="text-xs text-info">展开</span>
@@ -374,15 +376,15 @@ const DepartmentDisclosure: React.FC<{ report: ReportArtifactReaderV3DepartmentC
       <span className="flex min-w-0 flex-wrap items-center justify-between gap-2">
         <span className="font-medium text-foreground">{displayText(report.label || report.agent || '分析部门')}</span>
         <span className="flex items-center gap-2">
-          {report.confidence ? <Badge variant={report.confidence === 'high' ? 'success' : report.confidence === 'low' ? 'warning' : 'info'}>{({ high: '高可信', medium: '中等可信', low: '低可信' } as Record<string, string>)[report.confidence] || displayText(report.confidence)}</Badge> : null}
+          {report.claimAssessment ? <span className="text-xs text-secondary-text">{report.claimAssessment.summary}</span> : report.confidence ? <Badge variant="info">旧版评级：{({ high: '高', medium: '中', low: '低' } as Record<string, string>)[report.confidence] || displayText(report.confidence)}</Badge> : null}
           <span className="text-xs text-info">查看依据</span>
         </span>
       </span>
-      <span className="report-department-summary mt-1 block min-w-0 leading-6 text-secondary-text">{displayText(report.conclusion || '本部门未给出可读结论。')}</span>
+      <span className="report-department-summary mt-1 block min-w-0 leading-6 text-secondary-text">{report.agent === 'CIOAgent' || report.label === 'CIO 报告' ? '汇总依据与取舍' : displayText(report.conclusion || '本部门未给出可读结论。')}</span>
     </summary>
-    <div className="space-y-3 border-t border-border/50 px-3 py-3 text-xs text-secondary-text">
+    <div className="space-y-3 border-t border-border/50 px-3 py-3 text-sm leading-7 text-secondary-text">
       {shortList(report.nextActions || (report.nextAction ? [report.nextAction] : []), 3).length ? <div><div className="font-medium text-foreground">下一步</div><ul className="list-disc pl-5">{shortList(report.nextActions || (report.nextAction ? [report.nextAction] : []), 3).map((item) => <li key={item}>{item}</li>)}</ul></div> : null}
-      {shortList(report.keyClaims, 4).length ? <div><div className="font-medium text-foreground">依据</div><ul className="list-disc pl-5">{shortList(report.keyClaims, 4).map((item) => <li key={item}>{item}</li>)}</ul></div> : null}
+      {report.claimAssessment?.claims.length ? <div><div className="font-medium text-foreground">结论与论据</div><ul className="mt-2 space-y-3">{report.claimAssessment.claims.map((item) => <li key={item.claimId}><span className="mr-2 text-xs font-medium text-info">{item.label}</span><span>{item.text}</span></li>)}</ul></div> : shortList(report.keyClaims, 4).length ? <div><div className="font-medium text-foreground">依据</div><ul className="list-disc pl-5">{shortList(report.keyClaims, 4).map((item) => <li key={item}>{item}</li>)}</ul></div> : null}
       {report.challengedClaims?.length ? <div><div className="font-medium text-warning">已识别的争议结论</div><div className="mt-1 space-y-2">{report.challengedClaims.slice(0, 3).map((item, index) => <div key={`${item.claim || 'challenge'}-${index}`} className="rounded-lg border border-warning/30 bg-warning/5 p-2"><div>{displayText(item.claim || '')}</div><div className="mt-1 text-warning">{displayText(item.status || '存在有效反证')}</div>{item.opposingScenario ? <div className="mt-1">反方情景：{displayText(item.opposingScenario)}</div> : null}{item.falsifier ? <div className="mt-1 text-muted-text">如何验证：{displayText(item.falsifier)}</div> : null}</div>)}</div></div> : null}
       {shortList(report.counterpoints, 3).length ? <div><div className="font-medium text-foreground">反证</div><ul className="list-disc pl-5">{shortList(report.counterpoints, 3).map((item) => <li key={item}>{item}</li>)}</ul></div> : null}
       {shortList(report.dataGaps, 2).length ? <div><div className="font-medium text-foreground">还需要确认</div><ul className="list-disc pl-5">{shortList(report.dataGaps, 2).map((item) => <li key={item}>{item}</li>)}</ul></div> : null}
@@ -398,7 +400,7 @@ export const ReportArtifactView: React.FC<ReportArtifactViewProps> = ({ artifact
   const departmentGapItems = reader?.evidenceSummary?.departmentGapItems ?? 0;
   const hero = reader?.hero;
   const fallbackAction = actionText(artifact.decision);
-  const title = `${reader?.runDate || artifact.runDate} 投研日报`;
+  const title = artifact.artifactType === 'daily' ? `${reader?.runDate || artifact.runDate} 投研日报` : artifact.title;
   const timing = reader?.timing;
   const marketStance = displayText(hero?.marketStance || hero?.status || modeText(artifact));
   const portfolioAction = displayText(hero?.portfolioAction || hero?.action || fallbackAction);
@@ -411,13 +413,10 @@ export const ReportArtifactView: React.FC<ReportArtifactViewProps> = ({ artifact
   const keyReasons = shortList(reader?.keyReasons || artifact.readerBrief?.why, 3);
   const counterpoints = shortList(reader?.counterpoints || artifact.readerBrief?.risks, 3);
   const nextSteps = shortList(reader?.nextSteps || artifact.readerBrief?.nextSteps || artifact.summary.nextSteps, 3);
-  const marketGeo = shortList(reader?.marketGeo, 3);
   const adjudication = reader?.adjudication;
   const reliabilityWarnings = shortList(reader?.reliability?.warnings, 3);
   const departments = reader?.departmentCards || [];
-  const featuredDepartmentNames = new Set(['CIO 报告', '风险部门', '市场部门', '持仓复核部门']);
-  const featuredDepartments = departments.filter((report) => featuredDepartmentNames.has(report.label || report.agent || '')).slice(0, 4);
-  const otherDepartments = departments.filter((report) => !featuredDepartments.includes(report));
+  const visibleDepartments = departments;
   const marketMatrix = reader?.marketMatrix || [];
   const stockMatrix = reader?.stockMatrix || [];
   const coreEvidence = Array.from(
@@ -437,33 +436,24 @@ export const ReportArtifactView: React.FC<ReportArtifactViewProps> = ({ artifact
         </div>
         <h1 className="mt-6 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">{title}</h1>
         <p className="mt-5 max-w-5xl text-xl font-medium leading-9 text-foreground">{oneLine}</p>
-        <dl className="mt-6 grid gap-5 border-y border-border/70 py-5 sm:grid-cols-2">
-          {[
-            ['研究立场', marketStance],
-            ['组合动作', portfolioAction],
-          ].map(([label, value]) => (
-            <div key={label}>
-              <dt className="text-xs font-medium text-muted-text">{label}</dt>
-              <dd className="mt-1 text-base font-semibold leading-7 text-foreground">{value}</dd>
-            </div>
-          ))}
-        </dl>
-        <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-xs text-muted-text">
-          <span><b className="font-medium text-foreground">可信度</b> {confidence}</span>
+        <ResearchHighlights value={reader?.focusList} />
+        <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm text-secondary-text">
+          <span><b className="font-medium text-foreground">论据评估</b> {confidence}</span>
           <span><b className="font-medium text-foreground">时效</b> {validity}</span>
-          <span><b className="font-medium text-foreground">覆盖</b> {dataCoverage}</span>
         </div>
-        <p className="mt-3 text-xs leading-5 text-muted-text">
+        <p className="mt-3 text-sm leading-6 text-secondary-text">
           综合数据截至 {readerDataAsOf(timing?.dataAsOf)}
           {' · '}生成于 {readerDateTime(timing?.generatedAt || artifact.generatedAt, true)}
         </p>
-        <div className="mt-5 flex max-w-5xl gap-3 text-sm leading-6 text-secondary-text">
-          <span className="shrink-0 font-medium text-foreground">研究边界</span>
-          <span>{maxLimitation}</span>
-        </div>
       </header>
 
-      <section className="grid gap-8 border-b border-border/70 pb-9 lg:grid-cols-3">
+      <nav aria-label="报告目录" className="flex flex-wrap gap-4 text-sm text-info">
+        {reader?.focusList && <a href="#report-focus">关注清单</a>}
+        <a href="#report-reasons">理由与风险</a><a href="#report-markets">三地市场</a>
+        <a href="#report-stocks">重点标的</a><a href="#report-departments">部门分析</a>
+      </nav>
+      <ResearchFocusList value={reader?.focusList} sourceUrl={validSourceUrl} />
+      <section id="report-reasons" className="grid gap-8 border-b border-border/70 pb-9 lg:grid-cols-3">
         {[
           ['核心理由', '研究依据', keyReasons, '未提供核心理由。'],
           ['最大反证 / 风险', '反向验证', counterpoints, '未提供反证。'],
@@ -493,7 +483,7 @@ export const ReportArtifactView: React.FC<ReportArtifactViewProps> = ({ artifact
       <AdjudicationPanel adjudication={adjudication} fallback={oneLine} />
 
       {marketMatrix.length ? (
-        <section className="border-b border-border/70 pb-9">
+        <section id="report-markets" className="border-b border-border/70 pb-9">
           <div className="text-[11px] font-semibold tracking-[0.16em] text-info">市场范围</div>
           <h2 className="mt-1 text-xl font-semibold text-foreground">市场范围与样本表现</h2>
           <div className="mt-5 grid gap-3 md:hidden" data-testid="market-mobile-cards">
@@ -507,20 +497,20 @@ export const ReportArtifactView: React.FC<ReportArtifactViewProps> = ({ artifact
                   <span className="text-right text-sm font-medium text-secondary-text">{displayText(row.state || '待观察')}</span>
                 </div>
                 <p className="mt-4 text-sm leading-6 text-secondary-text">{displayText(row.headline || '未提供')}</p>
-                {row.scopeNote ? <p className="mt-2 text-xs leading-5 text-muted-text">{displayText(row.scopeNote)}</p> : null}
+                {row.scopeNote ? <p className="mt-2 text-sm leading-6 text-secondary-text">{displayText(row.scopeNote)}</p> : null}<p className="mt-2 text-xs text-secondary-text">{row.timeLabel || '行情时间'}：{readerDataAsOf(row.asOf)}</p>
               </article>
             ))}
           </div>
           <div className="mt-5 hidden overflow-x-auto md:block" data-testid="market-desktop-table">
             <table className="w-full min-w-[760px] text-left text-sm" aria-label="市场范围桌面表格">
-              <thead className="text-xs text-muted-text"><tr><th className="pb-3">范围</th><th className="pb-3">状态</th><th className="pb-3">关键表现</th><th className="pb-3">如何解读</th></tr></thead>
+              <thead className="text-sm text-secondary-text"><tr><th className="pb-3">范围</th><th className="pb-3">状态</th><th className="pb-3">关键表现</th><th className="pb-3">如何解读</th></tr></thead>
               <tbody>
                 {marketMatrix.map((row, index) => (
                   <tr key={`${row.market}-${row.scopeLabel}-${index}`} className="border-t border-border/60 align-top">
                     <td className="py-4 pr-5 font-medium text-foreground">{displayText(row.scopeLabel || row.market || '市场')}<div className="mt-1 text-xs font-normal text-info">{row.scopeType === 'market' ? '市场数据' : '观察样本'}</div></td>
                     <td className="py-4 pr-5 text-secondary-text">{displayText(row.state || '待观察')}</td>
                     <td className="py-4 pr-5 text-secondary-text">{displayText(row.headline || '未提供')}</td>
-                    <td className="py-4 text-muted-text">{displayText(row.scopeNote || '')}</td>
+                    <td className="py-4 text-muted-text">{displayText(row.scopeNote || '')}<div className="mt-2 text-xs">{row.timeLabel || '行情时间'}：{readerDataAsOf(row.asOf)}</div></td>
                   </tr>
                 ))}
               </tbody>
@@ -530,70 +520,65 @@ export const ReportArtifactView: React.FC<ReportArtifactViewProps> = ({ artifact
       ) : null}
 
       {stockMatrix.length ? (
-        <section className="border-b border-border/70 pb-9">
+        <section id="report-stocks" className="border-b border-border/70 pb-9">
           <div className="text-[11px] font-semibold tracking-[0.16em] text-info">标的跟踪</div>
           <h2 className="mt-1 text-xl font-semibold text-foreground">重点标的跟踪</h2>
-          <p className="mt-2 text-sm text-muted-text">价格与指标来自同轮证据；定位是研究观察，不代表自动交易指令。</p>
+          <p className="mt-2 text-sm text-muted-text">这里是本期价格与财务快照；研究评级与入场节奏见上方公司研究。</p>
           <div className="mt-5 grid gap-3 md:hidden" data-testid="stock-mobile-cards">
             {stockMatrix.map((row, index) => (
               <article key={`${row.symbol}-${index}`} className="rounded-xl border border-border/70 bg-background/30 p-4" data-testid={`stock-mobile-card-${row.symbol || index}`}>
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <div className="text-xs text-muted-text">标的</div>
+                    <div className="text-sm text-secondary-text">标的</div>
                     <h3 className="mt-1 font-semibold text-foreground">{displayText(row.name || row.symbol || '标的')}</h3>
-                    {row.symbol ? <div className="mt-0.5 text-xs text-muted-text">{row.symbol}</div> : null}
+                    {row.symbol ? <div className="mt-0.5 text-sm text-secondary-text">{row.symbol}</div> : null}
                   </div>
-                  <span className="rounded-full bg-info/10 px-2.5 py-1 text-xs font-medium text-info">{displayText(row.stance || '观察')}</span>
                 </div>
                 <dl className="mt-4 grid gap-4 text-sm">
                   <div>
-                    <dt className="text-xs text-muted-text">价格</dt>
-                    <dd className="mt-1 font-medium text-foreground">{readerPrice(row.lastPrice, row.currency)}</dd>
+                    <dt className="text-sm text-secondary-text">价格</dt>
+                    <dd className="mt-1 font-medium text-foreground">{readerPrice(row.lastPrice, row.currency)}<span className="block text-xs text-secondary-text">行情截至 {readerDataAsOf(row.asOf)}</span></dd>
                   </div>
                   <div>
-                    <dt className="text-xs text-muted-text">1 / 20 日表现</dt>
+                    <dt className="text-sm text-secondary-text">1 / 20 日表现</dt>
                     <dd className="mt-1 text-secondary-text">1日 {signedPct(row.return1dPct)} · 20日 {signedPct(row.return20dPct)}</dd>
                   </div>
                   <div>
-                    <dt className="text-xs text-muted-text">趋势 / 观察位</dt>
+                    <dt className="text-sm text-secondary-text">趋势 / 观察位</dt>
                     <dd className="mt-1 leading-6 text-secondary-text">{displayText(row.trend || '趋势待确认')}{row.watchLevels ? ` · ${displayText(row.watchLevels)}` : ''}</dd>
                   </div>
                   <div>
-                    <dt className="text-xs text-muted-text">基本面</dt>
+                    <dt className="text-sm text-secondary-text">基本面</dt>
                     <dd className="mt-1 leading-6 text-secondary-text">{displayText(row.fundamental || '结构化基本面待补强')}</dd>
                   </div>
                   <div>
-                    <dt className="text-xs text-muted-text">估值</dt>
+                    <dt className="text-sm text-secondary-text">估值</dt>
                     <dd className="mt-1 leading-6 text-secondary-text">{displayText(row.valuation || '当前估值与历史样本待补')}</dd>
                   </div>
                   <div>
-                    <dt className="text-xs text-muted-text">官方事件</dt>
+                    <dt className="text-sm text-secondary-text">官方事件</dt>
                     <dd className="mt-1 leading-6 text-secondary-text">
                       {validSourceUrl(row.eventUrl) ? <a className="text-info hover:underline" href={validSourceUrl(row.eventUrl) || undefined} target="_blank" rel="noreferrer">{displayText(row.latestEvent || '官方事件')}</a> : displayText(row.latestEvent || '暂无近期官方事件摘要')}
-                      {row.eventDate ? <span className="ml-2 text-xs text-muted-text">{row.eventDate}</span> : null}
+                      {row.eventDate ? <span className="ml-2 text-sm text-secondary-text">{row.eventDate}</span> : null}
                     </dd>
                   </div>
-                  <div>
-                    <dt className="text-xs text-muted-text">定位</dt>
-                    <dd className="mt-1 text-secondary-text">{displayText(row.stance || '观察')}</dd>
-                  </div>
                 </dl>
+                {row.historyRecordId ? <Link className="mt-4 inline-block text-sm text-info" to={`/reports/history:${row.historyRecordId}`}>原 DSA 短线分析 →</Link> : null}
               </article>
             ))}
           </div>
           <div className="mt-5 hidden overflow-x-auto md:block" data-testid="stock-desktop-table">
-            <table className="w-full min-w-[1280px] text-left text-sm" aria-label="重点标的桌面表格">
-              <thead className="text-xs text-muted-text"><tr><th className="pb-3">标的</th><th className="pb-3">价格 / 表现</th><th className="pb-3">趋势 / 观察位</th><th className="pb-3">基本面</th><th className="pb-3">估值</th><th className="pb-3">最新官方事件</th><th className="pb-3">定位</th></tr></thead>
+            <table className="w-full min-w-[1120px] text-left text-sm" aria-label="重点标的桌面表格">
+              <thead className="text-sm text-secondary-text"><tr><th className="pb-3">标的</th><th className="pb-3">价格 / 表现</th><th className="pb-3">趋势 / 观察位</th><th className="pb-3">基本面</th><th className="pb-3">估值</th><th className="pb-3">最新官方事件</th></tr></thead>
               <tbody>
                 {stockMatrix.map((row, index) => (
                   <tr key={`${row.symbol}-${index}`} className="border-t border-border/60 align-top">
-                    <td className="py-4 pr-5"><div className="font-medium text-foreground">{displayText(row.name || row.symbol || '标的')}</div><div className="text-xs text-muted-text">{row.symbol}</div></td>
-                    <td className="py-4 pr-5 text-secondary-text">{readerPrice(row.lastPrice, row.currency)}<div className="mt-1 text-xs text-muted-text">1日 {signedPct(row.return1dPct)} / 20日 {signedPct(row.return20dPct)}</div></td>
-                    <td className="py-4 pr-5 text-secondary-text">{displayText(row.trend || '趋势待确认')}<div className="mt-1 max-w-xs text-xs text-muted-text">{displayText(row.watchLevels || '')}</div></td>
+                    <td className="py-4 pr-5"><div className="font-medium text-foreground">{displayText(row.name || row.symbol || '标的')}</div><div className="text-sm text-secondary-text">{row.symbol}</div>{row.historyRecordId ? <Link className="mt-2 block text-xs text-info hover:underline" to={`/reports/history:${row.historyRecordId}`}>原 DSA 短线分析 →</Link> : null}</td>
+                    <td className="py-4 pr-5 text-secondary-text">{readerPrice(row.lastPrice, row.currency)}<div className="mt-1 text-xs text-secondary-text">截至 {readerDataAsOf(row.asOf)}</div><div className="mt-1 text-sm text-secondary-text">1日 {signedPct(row.return1dPct)} / 20日 {signedPct(row.return20dPct)}</div></td>
+                    <td className="py-4 pr-5 text-secondary-text">{displayText(row.trend || '趋势待确认')}<div className="mt-1 max-w-xs text-sm text-secondary-text">{displayText(row.watchLevels || '')}</div></td>
                     <td className="max-w-xs py-4 pr-5 leading-6 text-secondary-text">{displayText(row.fundamental || '结构化基本面待补强')}</td>
                     <td className="max-w-xs py-4 pr-5 leading-6 text-secondary-text">{displayText(row.valuation || '当前估值与历史样本待补')}</td>
-                    <td className="max-w-xs py-4 pr-5 leading-6 text-secondary-text">{validSourceUrl(row.eventUrl) ? <a className="text-info hover:underline" href={validSourceUrl(row.eventUrl) || undefined} target="_blank" rel="noreferrer">{displayText(row.latestEvent || '官方事件')}</a> : displayText(row.latestEvent || '暂无近期官方事件摘要')}<div className="text-xs text-muted-text">{row.eventDate}</div></td>
-                    <td className="py-4"><span className="rounded-full bg-info/10 px-2.5 py-1 text-xs font-medium text-info">{displayText(row.stance || '观察')}</span></td>
+                    <td className="max-w-xs py-4 pr-5 leading-6 text-secondary-text">{validSourceUrl(row.eventUrl) ? <a className="text-info hover:underline" href={validSourceUrl(row.eventUrl) || undefined} target="_blank" rel="noreferrer">{displayText(row.latestEvent || '官方事件')}</a> : displayText(row.latestEvent || '暂无近期官方事件摘要')}<div className="text-sm text-secondary-text">{row.eventDate}</div></td>
                   </tr>
                 ))}
               </tbody>
@@ -602,31 +587,13 @@ export const ReportArtifactView: React.FC<ReportArtifactViewProps> = ({ artifact
         </section>
       ) : null}
 
-      {marketGeo.length ? (
-        <section className="border-b border-border/70 pb-9">
-          <div className="text-[11px] font-semibold tracking-[0.16em] text-info">宏观与地缘</div>
-          <h2 className="mt-1 text-xl font-semibold text-foreground">市场与地缘</h2>
-          <ul className="list-disc space-y-2 pl-5 text-sm text-secondary-text">{marketGeo.map((item) => <li key={item}>{item}</li>)}</ul>
-        </section>
-      ) : null}
-
-      <section className="min-w-0 border-b border-border/70 pb-9">
+      <section id="report-departments" className="min-w-0 border-b border-border/70 pb-9">
         <div className="text-[11px] font-semibold tracking-[0.16em] text-info">部门观点</div>
         <h2 className="mt-1 text-xl font-semibold text-foreground">部门研究摘要</h2>
         <p className="mb-4 text-sm text-muted-text">摘要直接可见；依据、反证、待确认项和证据默认折叠。</p>
         {departments.length ? (
           <div className="grid min-w-0 gap-2">
-            {featuredDepartments.map((report) => <DepartmentDisclosure key={`${report.agent || report.label}`} report={report} />)}
-            {otherDepartments.length ? (
-              <details className="mt-2 rounded-xl border border-border/60 px-3 py-1">
-                <summary className="flex min-h-11 cursor-pointer items-center justify-between py-2 font-medium text-foreground">
-                  <span>其余 {otherDepartments.length} 个研究部门</span><span className="text-xs text-info">展开全部</span>
-                </summary>
-                <div className="grid gap-2 border-t border-border/50 py-3">
-                  {otherDepartments.map((report) => <DepartmentDisclosure key={`${report.agent || report.label}`} report={report} />)}
-                </div>
-              </details>
-            ) : null}
+            {visibleDepartments.map((report) => <DepartmentDisclosure key={report.agent || report.label} report={report} />)}
           </div>
         ) : <div className="text-sm text-muted-text">本轮未记录到分部门结论。</div>}
       </section>
@@ -634,6 +601,9 @@ export const ReportArtifactView: React.FC<ReportArtifactViewProps> = ({ artifact
       <details className="border-y border-border/70 py-1 text-sm">
         <summary className="cursor-pointer py-3 font-medium text-muted-text">数据与方法说明</summary>
         <div className="pb-4">
+          <p className="mb-3 text-secondary-text"><b>研究立场</b>：<span>{marketStance}</span> · <b>组合动作</b>：<span>{portfolioAction}</span></p>
+          <p className="mb-3 text-secondary-text"><b>覆盖</b>：<span>{dataCoverage}</span></p>
+          <p className="mb-3 text-secondary-text"><b>研究边界</b>：<span>{maxLimitation}</span></p>
           <p className="mb-3 leading-7 text-secondary-text">{displayText(reader?.dataConfidence || '本轮数据可用于投研复核，仍需人工判断。')}</p>
           <div className="grid gap-3 text-secondary-text sm:grid-cols-2 lg:grid-cols-5">
             <div>已验证：<span className="text-foreground">{stats?.verifiedFacts ?? 0}</span></div>

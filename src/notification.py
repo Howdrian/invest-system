@@ -41,6 +41,7 @@ from src.core.run_context import report_filename_for_date
 from src.report_language import (
     get_localized_stock_name,
     get_report_labels,
+    get_no_data_text,
     get_signal_level,
     get_chip_unavailable_reason,
     is_chip_structure_unavailable,
@@ -1460,9 +1461,14 @@ class NotificationService(
                         ])
                     # 量能分析
                     if vol_data:
+                        ratio = vol_data.get('volume_ratio')
+                        turnover = vol_data.get('turnover_rate')
+                        no_data = get_no_data_text(report_language)
+                        ratio_text = str(ratio) if ratio not in (None, '') else no_data
+                        turnover_text = f"{turnover}%" if turnover not in (None, '') else no_data
                         report_lines.extend([
-                            f"**{labels['volume_label']}**: {labels['volume_ratio_label']} {vol_data.get('volume_ratio', 'N/A')} ({vol_data.get('volume_status', '')}) | "
-                            f"{labels['turnover_rate_label']} {vol_data.get('turnover_rate', 'N/A')}%",
+                            f"**{labels['volume_label']}**: {labels['volume_ratio_label']} {ratio_text} ({vol_data.get('volume_status', '')}) | "
+                            f"{labels['turnover_rate_label']} {turnover_text}",
                             f"💡 *{vol_data.get('volume_meaning', '')}*",
                             "",
                         ])

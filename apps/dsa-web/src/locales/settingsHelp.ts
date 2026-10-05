@@ -15,6 +15,26 @@ export interface SettingsHelpContent {
 type SettingsHelpMap = Record<string, SettingsHelpContent>;
 
 const settingsHelpZhCN: SettingsHelpMap = {
+  'settings.ai_model.CODEX_CLI_MODEL': {
+    title: "Codex 文本分析模型",
+    summary: "留空使用 Codex 默认模型。研报可单独覆盖；型号由本机账户支持范围决定。",
+  },
+  'settings.ai_model.CODEX_CLI_REASONING_EFFORT': {
+    title: "Codex 思考强度",
+    summary: "留空使用默认强度。不支持的模型和强度组合会报错，不会静默降档。",
+  },
+  'settings.ai_model.RESEARCH_GENERATION_BACKEND': {
+    title: "研报生成后端",
+    summary: "部门日报独立选择 Codex CLI 或已有 API 后端；不改变交互问股后端。",
+  },
+  'settings.ai_model.RESEARCH_CODEX_MODEL': {
+    title: "研报 Codex 模型",
+    summary: "只覆盖部门日报；留空继承 Codex 文本分析模型。",
+  },
+  'settings.ai_model.RESEARCH_CODEX_REASONING_EFFORT': {
+    title: "研报 Codex 思考强度",
+    summary: "只覆盖部门日报；留空继承文本分析强度。",
+  },
   'settings.base.STOCK_LIST': {
     title: '自选股列表',
     summary: '配置需要分析的股票代码列表，是手动分析、定时任务和通知报告的基础输入。',
@@ -1273,6 +1293,26 @@ const settingsHelpZhCN: SettingsHelpMap = {
 };
 
 const settingsHelpEnUS: SettingsHelpMap = {
+  'settings.ai_model.CODEX_CLI_MODEL': {
+    title: "Codex generation model",
+    summary: "Empty uses the Codex default. Research may override this; account model availability applies.",
+  },
+  'settings.ai_model.CODEX_CLI_REASONING_EFFORT': {
+    title: "Codex reasoning effort",
+    summary: "Empty uses the default. Unsupported model/effort combinations fail without silent downgrades.",
+  },
+  'settings.ai_model.RESEARCH_GENERATION_BACKEND': {
+    title: "Research generation backend",
+    summary: "Select a local CLI or existing API backend for department reports, independently of interactive Chat.",
+  },
+  'settings.ai_model.RESEARCH_CODEX_MODEL': {
+    title: "Research Codex model",
+    summary: "Overrides department reports only. Empty inherits the Codex generation model.",
+  },
+  'settings.ai_model.RESEARCH_CODEX_REASONING_EFFORT': {
+    title: "Research Codex reasoning effort",
+    summary: "Overrides department reports only. Empty inherits the generation reasoning effort.",
+  },
   'settings.base.STOCK_LIST': {
     title: 'Watchlist',
     summary: 'Defines the stock codes used by analysis jobs and notification reports.',
