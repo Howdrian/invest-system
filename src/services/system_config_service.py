@@ -138,6 +138,8 @@ class SystemConfigService:
         "GENERATION_BACKEND_MAX_CONCURRENCY",
         "LOCAL_CLI_BACKEND_MAX_CONCURRENCY",
         "OPENCODE_CLI_MODEL",
+        "CODEX_CLI_MODEL",
+        "CODEX_CLI_REASONING_EFFORT",
         "LITELLM_CONFIG",
         "LITELLM_MODEL",
         "LITELLM_FALLBACK_MODELS",
@@ -3681,6 +3683,15 @@ class SystemConfigService:
         effective_map: Dict[str, str],
         primary_check: Dict[str, Any],
     ) -> Dict[str, Any]:
+        if (effective_map.get("AGENT_BACKEND") or "").strip().lower() == "codex_app_server":
+            status = AgentBackendStatusService(effective_map=effective_map).get_status()
+            available = bool(status.get("available"))
+            return self._setup_check(
+                "llm_agent", "Agent 渠道", "agent", True,
+                "configured" if available else "needs_action",
+                ("已配置 Codex 本地问股；真实登录、模型与工具调用仍需试跑验证。"
+                 if available else str(status.get("message") or "Codex 本地问股暂不可用。")),
+            )
         generation_backend = normalize_backend_id(
             effective_map.get("GENERATION_BACKEND"),
             default=LITELLM_BACKEND_ID,

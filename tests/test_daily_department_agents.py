@@ -202,7 +202,10 @@ def test_run_llm_daily_department_agents_writes_llm_memos_and_runtime_ledger(tmp
     assert section_titles[:7] == ['市场状态', '宏观与地缘', '行业/风格', '候选观察', '重点个股', '持仓影响', '风险和反证']
 
 
-def test_run_llm_daily_department_agents_resumes_only_failed_downstream_agents(tmp_path):
+def test_run_llm_daily_department_agents_resumes_only_failed_downstream_agents(tmp_path, monkeypatch):
+    # Resume means unchanged inputs, not a second run after live enrichment
+    # has rebuilt source health. Keep this offline fixture immutable.
+    monkeypatch.setattr('src.daily_department_llm.run_cio_enrichment', lambda *a: {'requested': False})
     docs, reports, date = _daily_agent_fixture(tmp_path)
     first_backend = FakeDepartmentBackend()
     run_llm_daily_department_agents(
@@ -647,11 +650,12 @@ def test_cio_prompt_calibrates_systemic_risk_and_intraday_language(tmp_path):
     prompt = json.loads(_department_prompt(cio, context, {}, refs, previous_error=''))
 
     rules = '\n'.join(prompt['analysisRules'])
-    assert '至少两类直接证据' in rules
+    assert '至少两类直接证据' not in rules
+    assert '不机械数证据种类' in rules
     assert '红队不能因更悲观而自动胜出' in rules
-    assert 'session_phase=intraday' in rules
+    assert '盘中行情和完整交易日分清' in rules
     assert '当前更符合/基准解释是' in rules
-    assert 'range_position_pct=100' in rules
+    assert '区间位置不能当概率' in rules
     assert '必须消解部门冲突' in rules
     assert 'originalAnalysisRefs' not in prompt
     assert 'originalAnalysisSummary' not in prompt
@@ -1000,6 +1004,7 @@ def test_market_prompt_prioritizes_each_available_market_index_scope():
 def test_rejected_detail_claim_cannot_reenter_public_summary_through_all_memo_refs():
     spec = next(spec for spec in DEPARTMENT_SPECS if spec.agent == 'GeoPolicyAgent')
     memo = {
+        'confidence': 'high',
         'summary_for_reader': '美国商务部发布出口限制公告。该限制将直接导致AAPL下跌。',
         'key_claims': ['美国商务部发布出口限制公告。', '该限制将直接导致AAPL下跌。'],
         'evidence_ids': ['official:bis:1', 'subject:AAPL:quote'],
@@ -1017,6 +1022,10 @@ def test_rejected_detail_claim_cannot_reenter_public_summary_through_all_memo_re
     ]
 
     _apply_semantic_gate_to_memo(memo, spec, evidence)
+    # Model self-rating is not the per-claim evidence assessment. Do not
+    # rewrite every mixed result to medium (or promote an all-weak result).
+    assert memo['confidence'] == 'high'
+    assert memo['claim_assessment']['claims']
 
     assert '将直接导致' not in memo['summary_for_reader']
     assert '美国商务部发布出口限制公告' in memo['summary_for_reader']
@@ -1563,3 +1572,151 @@ def test_cio_enrichment_reuses_existing_portfolio_evidence(tmp_path):
     assert not any(row.get('origin') == 'CIO_REQUESTED' for row in rows)
     assert (run / 'cio_data_requests.json').exists()
     assert (run / 'cio_enrichment_runs.jsonl').exists()
+
+
+def test_department_resume_uses_interrupted_partial_log(tmp_path, monkeypatch):
+    monkeypatch.setattr('src.daily_department_llm.run_cio_enrichment', lambda *a: {'requested': False})
+    docs, reports, date = _daily_agent_fixture(tmp_path)
+    run_llm_daily_department_agents(docs, date, runtime_reports_dir=reports,
+                                    backend_factory=FakeDepartmentBackend, require_all_llm=True)
+    # Simulate interruption after per-agent checkpoints, before final log write.
+    (docs / 'run_status' / date / 'llm_agent_runs.jsonl').unlink()
+    retry = FakeDepartmentBackend()
+    result = run_llm_daily_department_agents(docs, date, runtime_reports_dir=reports,
+                                            backend_factory=lambda: retry, require_all_llm=True,
+                                            resume_successful=True)
+    assert result['resumedSuccessCount'] == len(DEPARTMENT_SPECS)
+    assert retry.calls == []
+
+
+def test_compact_department_memo_preserves_fourth_stock_instead_of_first_three_only():
+    from src.daily_department_llm import _compact_memo
+    memo = {'agent': 'FundamentalAgent', 'claim_evidence': [
+        {'subject': s, 'claim': f'{s}经营情况', 'evidence_ids': [f'e:{s}']}
+        for s in ['600519', '600519', '000001', 'AAPL', 'HK00700']]}
+    result = _compact_memo(memo)
+    assert {r['subject'] for r in result['key_claims'][:4]} == {'600519', '000001', 'AAPL', 'HK00700'}
+    assert len(result['key_claims']) <= 6
+
+
+def test_sector_context_preserves_all_proxy_rows_and_both_markets():
+    spec = next(s for s in DEPARTMENT_SPECS if s.agent == 'SectorAgent')
+    facts = [{'id': f'sector:{market}', 'metric': 'sector_performance', 'market': market,
+              'subject': f'market_{market}', 'domain': 'news_sentiment', 'fact_type': 'derived_fact',
+              'value': '行业表现', 'scope': '代理范围',
+              'records': [{'code': str(n), 'return_20d_pct': n} for n in range(size)]}
+             for market, size in [('hk', 6), ('us', 11)]]
+    result = _prompt_evidence_for_spec({'evidence': facts}, spec, {})
+    assert [len(row['records']) for row in result] == [6, 11]
+    assert all(row['scope'] == '代理范围' for row in result)
+
+
+@pytest.mark.parametrize('changed', [False, True])
+def test_cio_only_rewrites_when_its_actual_prompt_changes(tmp_path, monkeypatch, changed):
+    docs, reports, date = _daily_agent_fixture(tmp_path)
+    def enrich(*_args):
+        if changed:
+            path = docs / 'run_status' / date / 'evidence_ledger.jsonl'
+            rows = [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+            rows[0]['value'] += ' 新观察值20。'
+            _append_jsonl(path, rows)
+        return {'requested': True, 'requestCount': 1, 'reusedCount': 1,
+                'addedEvidenceIds': [], 'remainingGaps': []}
+    monkeypatch.setattr('src.daily_department_llm.run_cio_enrichment', enrich)
+    backend = FakeDepartmentBackend()
+    result = run_llm_daily_department_agents(docs, date, runtime_reports_dir=reports,
+                                             backend_factory=lambda: backend, require_all_llm=True)
+    assert backend.calls.count('CIOAgent') == (2 if changed else 1)
+    assert result['cioEnrichment']['secondPassPerformed'] is changed
+    assert result['generationCallCount'] == 11 + int(changed)
+
+
+def test_compatibility_market_cycle_refs_do_not_occupy_department_fact_slots():
+    from src.daily_department_llm import _evidence_for_spec, DEPARTMENT_SPECS
+    spec=next(s for s in DEPARTMENT_SPECS if s.agent=='MacroAgent')
+    rows=_evidence_for_spec([
+        {'id':'market_cycle:01_macro_review:0','domain':'macro','fact_type':'derived_fact','value':'fred:DGS10'},
+        {'id':'fred:DGS10','domain':'macro','fact_type':'verified_fact','value':'DGS10=4.77','source_url':'https://fred.stlouisfed.org/series/DGS10'},
+    ],spec)
+    assert [r['id'] for r in rows]==['fred:DGS10']
+
+
+def test_new_cio_rating_reaches_artifact_hero_and_actions_without_legacy_watch_fallback(tmp_path):
+    """End-to-end transport test with a fake model, not research-quality proof."""
+    class OpinionBackend(FakeDepartmentBackend):
+        def generate(self, prompt, generation_config, **kwargs):
+            result = super().generate(prompt, generation_config, **kwargs)
+            request = json.loads(prompt)
+            if request['agent'] != 'CIOAgent':
+                return result
+            body = json.loads(result.text)
+            claim = '我建议分批买入600519，未来两个月若价格趋势失效则退出。'
+            row = {'claim': claim, 'subject': '600519', 'domain': 'price', 'claimType': 'recommendation',
+                   'rating': '买入', 'timeScope': '未来两个月', 'entryCondition': '分批参与；趋势失效则退出',
+                   'evidence_ids': ['subject:600519:quote']}
+            body['key_claims'].insert(0, row)
+            body['evidence_ids'].append('subject:600519:quote')
+            body['summary_for_reader'] = claim
+            body['adjudication']['judgment'] = claim
+            body['next_action'] = {'现在建议': '分批参与600519', '改变意见的条件': '趋势失效则退出',
+                                   '下次复核什么': '两周后比较经营与价格变化'}
+            return GenerationResult(text=json.dumps(body, ensure_ascii=False), model='fake/model',
+                                    provider='fake', backend='fake', usage={})
+    docs, reports, date = _daily_agent_fixture(tmp_path)
+    result = run_llm_daily_department_agents(docs, date, runtime_reports_dir=reports,
+                                            backend_factory=OpinionBackend, require_all_llm=True)
+    assert result['llmSuccessCount'] == 11 and result['fallbackCount'] == 0
+    artifact = build_daily_report_artifact(docs, date)
+    reader = artifact['readerV3']
+    stock = next(row for row in reader['focusList']['stocks'] if row['symbol'] == '600519')
+    assert stock['priority'] == '买入'
+    assert reader['hero']['action'] == '选择性参与'
+    assert reader['nextSteps'][0] == '现在建议：分批参与600519'
+    assert any('买入600519' in text for text in reader['keyReasons'])
+
+
+def test_real_runner_transmits_flexible_horizons_from_universe_to_all_departments(tmp_path):
+    """Fake transport proves wiring, not live model quality or market predictions."""
+    from src.source_health.daily_universe import research_window
+    docs, reports, date = _daily_agent_fixture(tmp_path)
+    path = docs / 'run_status' / date / 'daily_universe.json'
+    universe = json.loads(path.read_text())
+    window = research_window(date, recent_change_months=3, outlook_months=6)
+    universe['researchWindow'] = window
+    _write_json(path, universe)
+    prompts = []
+
+    class HorizonBackend(FakeDepartmentBackend):
+        def generate(self, prompt, generation_config, **kwargs):
+            payload = json.loads(prompt)
+            if payload.get('agent'):
+                assert payload['researchWindow'] == window
+                assert payload['departmentInputProfile']['historicalContext']
+                prompts.append(payload['agent'])
+            return super().generate(prompt, generation_config, **kwargs)
+
+    result = run_llm_daily_department_agents(docs, date, runtime_reports_dir=reports,
+        backend_factory=HorizonBackend, require_all_llm=True)
+    assert result['llmSuccessCount'] == 11 and result['fallbackCount'] == 0
+    assert set(prompts) == {spec.agent for spec in DEPARTMENT_SPECS}
+    artifact = build_daily_report_artifact(docs, date)
+    assert artifact['readerV3']['focusList']['researchWindow'] == window
+
+
+def test_paraphrased_reader_summary_is_validated_without_becoming_first_long_claim():
+    spec = next(spec for spec in DEPARTMENT_SPECS if spec.agent == 'TechnicalAgent')
+    summary = '短期整理尚未结束，选择回调后的参与机会，不追日内反弹。'
+    long_claim = 'AAPL处于短期震荡整理，趋势尚未转弱，价格结构需要结合成交量变化比较。'
+    memo = {'summary_for_reader': summary, 'confidence': 'medium', 'key_claims': [long_claim],
+            'claim_evidence': [{'claim': long_claim, 'subject': 'AAPL', 'domain': 'price',
+                                'evidence_ids': ['price:aapl']}],
+            'evidence_ids': ['price:aapl'], 'counterpoints': ['若放量突破，当前整理判断失效。'],
+            'next_action': '回调后结合量价决定参与节奏。', 'data_gaps': []}
+    evidence = [{'id': 'price:aapl', 'fact_type': 'derived_fact', 'domain': 'price',
+                 'subject': 'AAPL', 'metric': 'daily_data', 'raw_path': 'prices.json',
+                 'value': 'AAPL日线与量价历史'}]
+    _apply_semantic_gate_to_memo(memo, spec, evidence)
+    assert memo['summary_for_reader'] == summary
+    assert memo['semantic_validation']['summary']['originalText'] == summary
+    assert memo['semantic_validation']['summary']['sentences']
+    assert memo['summary_for_reader'] != long_claim

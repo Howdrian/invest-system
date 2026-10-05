@@ -11,6 +11,7 @@ fallback memos are explicitly marked so they cannot be mistaken for LLM output.
 from __future__ import annotations
 
 import json
+import hashlib
 import multiprocessing
 import os
 import re
@@ -36,12 +37,15 @@ from src.daily_department_agents import (
     run_daily_department_agents,
 )
 from src.llm.backend_factory import create_generation_backend
-from src.llm.backend_registry import LITELLM_BACKEND_ID, resolve_agent_generation_backend_id
+from src.llm.backend_registry import (
+    LITELLM_BACKEND_ID, LOCAL_CLI_GENERATION_BACKEND_IDS, resolve_agent_generation_backend_id,
+)
 from src.llm.generation_backend import GenerationBackend, GenerationError, GenerationErrorCode, GenerationResult
 from src.cio_enrichment import run_cio_enrichment
 from src.department_data_profiles import department_profile_payload, filter_original_refs_for_agent
 from src.original_analysis_adapter import build_original_analysis_bundle, load_original_analysis, load_original_analysis_refs
-from src.research_core import ClaimStatus, validate_claim_dicts
+from src.source_health.daily_universe import research_window
+from src.research_core import ClaimStatus, build_claim_assessment, validate_claim_dicts
 from src.safe_diagnostics import sanitize_diagnostic_text
 from src.source_health.run_matrix import sha256_file, upsert_run_matrix_stage
 
@@ -142,7 +146,8 @@ DEPARTMENT_SPECS: tuple[DepartmentSpec, ...] = (
         "基本面部门",
         "daily",
         "判断财务、估值、公告、SEC/CNINFO 等事实是否支持当前候选。",
-        ("fundamentals", "filings_events"),
+        ("fundamentals", "filings_events", "price"),
+        depends_on=("SectorAgent",),
     ),
     DepartmentSpec(
         "market/07_technical_review",
@@ -151,6 +156,7 @@ DEPARTMENT_SPECS: tuple[DepartmentSpec, ...] = (
         "daily",
         "判断指数和重点标的的趋势、量价、支撑压力和风险节奏。",
         ("price",),
+        depends_on=("SectorAgent",),
     ),
     DepartmentSpec(
         "market/08_intel_review",
@@ -159,6 +165,7 @@ DEPARTMENT_SPECS: tuple[DepartmentSpec, ...] = (
         "daily",
         "区分公告事实、新闻线索和搜索 discovery，提炼事件影响。",
         ("filings_events", "news_sentiment"),
+        depends_on=("SectorAgent",),
     ),
     DepartmentSpec(
         "market/09_risk_review",
@@ -174,7 +181,7 @@ DEPARTMENT_SPECS: tuple[DepartmentSpec, ...] = (
         "RedTeamAgent",
         "红队反证",
         "daily",
-        "专门反驳前面部门结论，找证据跳跃、单股污染、过度乐观和 discovery 误用。",
+        "专门反驳前面部门结论，找证据跳跃、单股污染、过度乐观或过度悲观，以及 discovery 误用。",
         ("price", "fundamentals", "filings_events", "macro", "news_sentiment", "portfolio"),
         depends_on=("MacroAgent", "GeoPolicyAgent", "MarketAgent", "SectorAgent", "FundamentalAgent", "TechnicalAgent", "IntelAgent", "PortfolioAgent", "RiskAgent"),
     ),
@@ -192,148 +199,79 @@ DEPARTMENT_SPECS: tuple[DepartmentSpec, ...] = (
 
 DEPARTMENT_PLAYBOOKS: Dict[str, Dict[str, Any]] = {
     "MacroAgent": {
-        "role": "宏观策略师，不做个股结论，只判断全球/中国市场所处宏观风向。",
-        "mustAnswer": [
-            "当前风险偏好、利率、信用、通胀、增长分别给市场什么约束",
-            "哪些宏观信号适用于 A/H/US，哪些只能作为外部背景",
-            "未来 1-3 个最重要的宏观触发条件",
-        ],
-        "avoid": [
-            "不要把美国宏观指标直接等同于中国市场结论",
-            "不要重复待确认项，必须先提炼可用信号",
-        ],
-        "readerStyle": "像晨会宏观策略摘要：短、锋利、讲传导链。",
+        "role": '宏观策略师：结合周期背景，解释近期变化如何改变本期的机会与风险。',
+        "mustAnswer": ['利率、通胀、增长与信用近期的变化及主导矛盾', '对A/H/US分别偏利好还是偏利空，优先受益/受损行业是什么', '给出基准判断与改变判断的信号；指数水平不能代替增速'],
+        "avoid": ['美国数据不能代替中国经济；已有历史先计算比较，不复读缺口'],
+        "readerStyle": "先给意见，再给理由、最强反证和改变意见的条件；不以继续观察代替取舍。",
     },
     "GeoPolicyAgent": {
-        "role": "地缘政策分析师，负责贸易、制裁、冲突、监管、供应链和政策事件传导。",
-        "mustAnswer": [
-            "哪些事件是 verified fact，哪些只是 discovery 线索",
-            "事件影响到哪些市场、行业、供应链或标的",
-            "需要回跳哪个官方源或公司 IR 才能升级判断",
-            "逐项回应上下文中的最新地缘 discovery；有事件线索时不得笼统写成“未见重大事件”",
-        ],
-        "avoid": [
-            "没有重大事件时不要硬编地缘风险",
-            "不要把与本轮市场、行业、标的或传导链无关的全球新闻塞进结论",
-        ],
-        "readerStyle": "像政策/地缘风险简报：事件事实 -> 传导机制 -> 受益/受损资产 -> 失效条件。",
+        "role": '地缘政策研究员：研究贸易、制裁、冲突与政策的投资影响，而不是新闻审核员。',
+        "mustAnswer": ['本期哪些事件有增量，哪些只是重复消息；必要时沿历史事件链定位变化', '将事件、已发生影响和预期传导分开，明确受益/受损行业、影响期限与潜在催化', '选择当前最合理解释，与最强竞争解释比较；说明事态缓和时谁受益'],
+        "avoid": ['转载不是独立确认；搜索正文不能冒充官方核验；不因未完全证实而回避合理情景判断'],
+        "readerStyle": "先给意见，再给理由、最强反证和改变意见的条件；不以继续观察代替取舍。",
     },
     "MarketAgent": {
-        "role": "市场策略师，先看指数、宽度、资金面、风险偏好，再看个股异动。",
-        "mustAnswer": [
-            "今日市场是趋势、震荡、轮动还是风险收缩",
-            "单股异动是否污染了市场结论",
-        ],
-        "avoid": ["不要让 AAPL 或单一股票主导日报总判断", "不要把热点等同于趋势"],
-        "readerStyle": "像交易台市场复盘：结构判断优先，个股只作证据。",
+        "role": '市场策略师：判断市场环境与参与节奏，不用单股代替市场。',
+        "mustAnswer": ['A/H/US近期趋势、宽度、成交与风格如何变化，与相关历史阶段相比如何', '在本期建议适用期内倾向积极参与、选择性参与还是回避，理由是什么', '区分短线波动与本期主判断，明确基准和翻转条件'],
+        "avoid": ['不给所有市场套同一个中性模板；没有资金数据不声称实测资金流'],
+        "readerStyle": "先给意见，再给理由、最强反证和改变意见的条件；不以继续观察代替取舍。",
     },
     "SectorAgent": {
-        "role": "行业/风格研究员，负责行业强弱、风格、候选池和热点持续性。",
-        "mustAnswer": [
-            "哪些行业/风格正在占优，持续性证据是什么",
-            "候选清单里哪些只是热度，哪些有公告/价格/基本面支撑",
-            "下一步筛选条件是什么",
-        ],
-        "avoid": [
-            "不要把 hot_stocks 当交易结论",
-            "concept_rankings 为空时用已拿到的 sector/hot/candidate 证据分析，不要整段阻断",
-        ],
-        "readerStyle": "像行业晨会：强弱排序、为什么、持续性、触发条件。",
+        "role": '行业研究员：主动发现方向并提出公司研究候选，不受用户自选池限制。',
+        "mustAnswer": ['分别比较A/H/US行业，给出看好/中性/看淡、优先级及催化或估值/趋势/预期差理由', '每个首选方向聚焦1–2项最有区分度的供需、定价、盈利或政策材料；只有行情时明确是趋势策略，解释延续理由及机会成本，不重复为每个行业写缺催化', '从已提供的候选/行业成分资料选择具体公司、给纳入理由；未覆盖成分时仍给行业意见，不编股票归属'],
+        "avoid": ['热股名单不是买入评级；系统研究候选不自动写入用户自选；无优势时明确回避，不硬凑数量'],
+        "readerStyle": "先给意见，再给理由、最强反证和改变意见的条件；不以继续观察代替取舍。",
     },
     "FundamentalAgent": {
-        "role": "基本面分析师，负责财报、估值、公告、SEC/CNINFO/HKEX 和公司质量。",
-        "mustAnswer": [
-            "哪些标的有可追源基本面/公告/法披证据",
-            "基本面证据支持还是反驳价格表现",
-            "缺的是结构化财务模型、估值同业，还是公告事实",
-        ],
-        "avoid": [
-            "不要因为某个 provider not_supported 就否定已有 SEC/CNINFO/HKEX/YFinance 事实",
-            "不要编盈利预测",
-        ],
-        "readerStyle": "像基本面 memo：事实、解释、估值约束、缺口分清。",
+        "role": '公司研究员：先理解业务和盈利质量，再判断价格是否值得参与，不从股价倒推财报。',
+        "mustAnswer": ['公司靠什么赚钱，收入和利润的主要变化来自什么；先用财报正文中的经营解释，再用同口径历史检验，不停留于同比复述', '利润与经营现金流的差异先读已给附注，解释最重要的营运资本、金融子公司或非经常因素；已有定性主因不等于完整量化分解，但不能说完全没有解释', '单季/累计/TTM、币种和财年日期先对齐；用已有历史勾稽，不能把已提供期间报成缺失', '给买入/中性/卖出研究意见，并说明支撑此评级的正向驱动、当前价格隐含要求与替代机会；没有同业一致预期可提出自己的明确假设，不以跨行业PE大小或尚未证伪代替买入理由'],
+        "avoid": ['现金流大增不能未经拆解当主营改善；缺估值比较时可给经营/催化判断，不虚构安全边际；允许明确假设的预测，不把预测当已披露数字'],
+        "readerStyle": "先给意见，再给理由、最强反证和改变意见的条件；不以继续观察代替取舍。",
     },
     "TechnicalAgent": {
-        "role": "技术交易员，负责趋势、量价、支撑压力、节奏和失效条件。",
-        "mustAnswer": [
-            "每个重点标的的短期结构和方向风险",
-            "哪些信号需要成交量/后续 K 线确认",
-            "最清晰的触发价位或观察条件；没有价位就给条件",
-        ],
-        "avoid": ["不要只说上涨/下跌，要说是否可持续", "不要把 40 日数据说成长期结论"],
-        "readerStyle": "像交易员复盘：结构、触发、失效、等待什么。",
+        "role": '技术研究员：为本期投资判断提供参与节奏和失效位置，而非只报涨跌。',
+        "mustAnswer": ['近期趋势、量价与相对行业强弱，放在可用的中期趋势中比较', '区分短线节奏与主判断，倾向现在参与、回落参与、持有还是回避，说明价位或条件', '技术意见和经营意见分开；短线弱不能自动否定中期机会'],
+        "avoid": ['价位必须来自行情或明确计算；不把样本区间位置当胜率'],
+        "readerStyle": "先给意见，再给理由、最强反证和改变意见的条件；不以继续观察代替取舍。",
     },
     "IntelAgent": {
-        "role": "新闻情报分析师，负责公告、新闻、搜索线索、催化剂和舆情噪音过滤。",
-        "mustAnswer": [
-            "官方公告/法披里有什么实质事件",
-            "新闻/搜索里有什么线索但尚未证实",
-            "哪些事件可能成为催化剂，哪些是噪音",
-        ],
-        "avoid": [
-            "不要堆新闻标题",
-            "过滤个人理财、健康、生活方式和与本轮 universe 无关的监管杂讯",
-        ],
-        "readerStyle": "像情报 brief：事实、线索、噪音、后续核验。",
+        "role": '事件研究员：把消息消化为催化、影响与反向机会，不只列标题。',
+        "mustAnswer": ['公告正文已确认什么：主体、日期、金额、行为性质及相对历史是否异常', '本期及后续哪些事件可能改变收入、成本、供需或估值预期，哪些只是常规披露', '给出值得参与/不值得追逐的事件判断；只有入口未读正文时明确限制，不谎称已查完'],
+        "avoid": ['过滤无关导航和同源转载；不要把常规申报等同利空，不用未确认等同不存在'],
+        "readerStyle": "先给意见，再给理由、最强反证和改变意见的条件；不以继续观察代替取舍。",
     },
     "PortfolioAgent": {
-        "role": "组合经理助理，负责持仓、自选股、候选池和组合暴露。",
-        "mustAnswer": [
-            "本轮真实持仓是否为空；若为空，明确只看 watchlist/候选",
-            "观察标的对组合风格暴露的潜在影响",
-            "如果要补持仓，需要什么字段",
-        ],
-        "avoid": [
-            "不要假设用户真实持仓",
-            "不要因为持仓为空否定日报价值",
-        ],
-        "readerStyle": "像组合复盘：持仓事实、观察池影响、待补字段。",
+        "role": '组合研究员：有持仓才分析真实组合；否则只说明本轮未覆盖组合。',
+        "mustAnswer": ['有持仓时结合各持仓论点的期限解释行业暴露、集中度、替代选择及调整建议', '自选和系统候选不是持仓；无持仓不生成虚构组合收益或长篇假设性持仓报告'],
+        "avoid": ['不得自动修改自选或持仓；没有用户成本和持仓不编实际盈亏'],
+        "readerStyle": "先给意见，再给理由、最强反证和改变意见的条件；不以继续观察代替取舍。",
     },
     "RiskAgent": {
-        "role": "风险负责人，负责把所有可用证据转成风险清单和不应行动条件。",
-        "mustAnswer": [
-            "最大风险是什么，为什么重要",
-            "哪些乐观结论最容易错",
-            "什么信号出现会让风险判断升级/解除",
-        ],
-        "avoid": ["不要只重复各部门待确认项", "不要把局部待确认项写成系统不可用", "不要替代红队编造相反叙事"],
-        "readerStyle": "像风控会：主风险、反证、触发条件。",
+        "role": '风险研究员：评估判断出错的代价与可控方式，不以悲观代替风控。',
+        "mustAnswer": ['最重要两三条建议可能错在哪里，损失通过什么渠道发生', '把高概率小风险与低概率大风险分开，也评估错过机会的代价', '给缩小风险、替代选择和改变意见的条件；风险能管理时保留推荐'],
+        "avoid": ['不复读所有部门缺口；不把未证实的风险当已发生，不自动否决建议'],
+        "readerStyle": "先给意见，再给理由、最强反证和改变意见的条件；不以继续观察代替取舍。",
     },
     "RedTeamAgent": {
-        "role": "红队，提出能解释同一组事实的最强竞争假设，不负责给最终建议。",
-        "mustAnswer": [
-            "是否存在单股污染、跨市场错配、过度外推、discovery 误用",
-            "最强竞争解释是什么，它能解释哪些相同事实",
-            "哪条证据或触发条件可以区分基准判断与竞争解释",
-            "CIO 写结论时必须避开的陷阱",
-        ],
-        "avoid": [
-            "不要重写一遍日报",
-            "不要把所有结论都否定成无效",
-        ],
-        "readerStyle": "像投资委员会反方：直接、尖锐、有证据。",
+        "role": '红队研究员：检验最重要投资判断，提出最强竞争解释，不负责最终评级。',
+        "mustAnswer": ['选取最可能改变推荐的判断，引用具体claimId并解释挑战', '用同一组事实说明另一种解释及可区分的观察', '同时挑战过度乐观和过度悲观；正确判断可以保留，不强行凑反面'],
+        "avoid": ['不能因为更保守而自动胜出；别把缺证据当相反结论的证据'],
+        "readerStyle": "先给意见，再给理由、最强反证和改变意见的条件；不以继续观察代替取舍。",
     },
     "CIOAgent": {
-        "role": "CIO/主编，只写最终读者报告，不暴露工程字段。",
-        "mustAnswer": [
-            "今日一句话总判断，不能只是可用/中性",
-            "3-5 条核心理由，覆盖宏观、市场、行业/风格、个股、风险",
-            "最大反证、下一步触发条件、哪些事不要做",
-        ],
-        "avoid": [
-            "不要写 provider/run/ledger/error_type 这类工程词",
-        ],
-        "readerStyle": "像资深投研负责人给老板的晨会摘要：结论先行、依据清楚、反证强、下一步可执行。",
+        "role": '投研负责人：做取舍，给老板明确的行业和个股研究意见，不写会议纪要。',
+        "mustAnswer": ['开篇直接说本期优先推荐及回避的具体方向，再解释主线；不要以行业分化、选择性参与等空泛句单独作摘要', '对已完成公司研究的重点自选/系统候选给买入/中性/卖出等研究评级，另列当前入场节奏；短线观望与中期看好可以同时成立，解释两者关系', '按重要主题裁决分歧：正向理由、最强反证、当前取舍、改判条件；没有证伪不能独自成为推荐理由，不把几个独立主题拼成同时成立的反面世界', '写清优先事项、适用窗口及改变意见的条件；下次复核只列最重要的三件事，其余条件放到对应主题，不把全部标的揉进一个长句'],
+        "avoid": ['不自动交易、不自动改用户自选；不强制每日凑买入，明确回避也有价值；不写内部工程词'],
+        "readerStyle": "先给意见，再给理由、最强反证和改变意见的条件；不以继续观察代替取舍。",
     },
 }
 
-
 GLOBAL_ANALYSIS_RULES: tuple[str, ...] = (
-    "只使用本次 Context Pack；事实、解释、情景和建议分开写，每条核心判断绑定直接 evidence id。",
-    "verified_fact/derived_fact 可支持事实；discovery、研报和原系统分析只能提出待验证假设。",
-    "数字、主体、单位、报告期和时点必须逐字对账；不得估算、换算或把盘中数据写成收盘事实。",
-    "判断范围跟随 dailyUniverse 动态变化；观察标的不能外推为整个市场。",
-    "结论可以明确，但因果必须写传导机制和失效条件，相关性不得冒充已证实因果。",
+    "事实以本次材料为准；允许主观判断、预测和买入/卖出评级，核心理由引用直接evidence，假设明确标明。",
+    "官方/计算材料支持对应事实；新闻、研报、原分析可以支持观点和研究方向，但不冒充独立核实事实。",
+    "数字、主体、单位、报告期和时点须与证据一致；使用已提供的历史比较，不编造数值或把盘中数据写成收盘事实。",
+    "行业研究覆盖本轮市场而非只看自选；系统候选与手动自选分开，个股样本不代替全市场。",
+    "研究观点应明确，不必每句写可能/待验证；说明机制、适用周期和改变意见的条件，不声称假设已被证明。",
     "只有会改变当前结论且现有证据未覆盖的内容才进入 data_gaps；否则返回空数组。",
 )
 
@@ -344,16 +282,18 @@ AGENT_ANALYSIS_RULES: Dict[str, tuple[str, ...]] = {
         "高位、低位、走陡、走平、加速或放缓必须有历史分布或跨期比较。",
     ),
     "GeoPolicyAgent": (
-        "逐项检查最新地缘 discovery，并回跳官方制裁、政策、公司或交易所来源。",
-        "输出事件事实、传导链、受影响资产和失效条件；没有直接传导证据时不得解释价格。",
+        "优先分析时间最近、影响范围大且存在资产传导渠道的地缘线索；只使用上下文实际提供的原文，不声称自己联网核验。",
+        "区分事件、合理的传导假设和已观测市场反应；可提出有机制的情景，不把假设写成已证实因果。例行旧月报不抢占重大近期事件的摘要位置。",
     ),
     "MarketAgent": (
         "整体市场判断必须引用市场指数、宽度、成交、资金或行业排行；只有观察池时必须明确范围。",
         "跨市场比较必须使用对应市场级证据，不能用单只股票代替市场。",
     ),
     "SectorAgent": (
-        "单日行业排行和 hot_stocks 只能说明当日相对强弱；持续性必须引用多日历史、资金、基本面或催化证据。",
-        "没有行业资金证据时不得使用资金抱团、主动流入等因果措辞。",
+        "分开给A股、港股、美股的行业/主题关注方向，引用对应市场材料；有数据就给具体强弱及观察条件，不只概括单只股票。",
+        "sector_performance含同日期基准比较；区分1/5/20/60交易日、百分点超额和指数/ETF覆盖范围。主题代理不能说成全行业排名。",
+        "单日行业排行和 hot_stocks 只能说明当日相对强弱；预测持续性时解释历史、经营或催化逻辑；没有证明持续上涨也可作出主观行业判断。",
+        "资金流观测与基于价格的资金偏好推断分开；缺资金明细不阻止行业评级。",
     ),
     "FundamentalAgent": (
         "财务判断必须标明报告期和比较期；只有单期同比时不得写加速、放缓、筑底或回暖。",
@@ -366,14 +306,14 @@ AGENT_ANALYSIS_RULES: Dict[str, tuple[str, ...]] = {
     ),
     "IntelAgent": (
         "先过滤与 universe 和传导链无关的标题；公告事实、新闻线索和噪音分开。",
-        "未回跳权威源的搜索结果只能作为 discovery，不得进入确定性结论。",
+        "搜索报道可参与事件分析和情景判断，但不能冒充官方原文或独立多源确认。",
     ),
     "PortfolioAgent": (
-        "portfolio 为空时只描述观察池的假设性暴露，不得声称已经影响、对冲或改善真实组合。",
-        "没有真实持仓快照时不得使用持有、加仓、减仓等用户动作。",
+        "portfolio 为空时简要说明未覆盖真实组合，不写长篇假设性持仓分析，也不得声称已经影响、对冲或改善组合。",
+        "没有持仓时不假定用户已持有；仍可给买入/中性/卖出研究评级，或说明若已持有应如何调整。",
     ),
     "RiskAgent": (
-        "系统性风险必须同时有市场宽度、流动性/成交、信用或跨市场共振中至少两类直接证据。",
+        "判断系统性风险时比较宽度、流动性、信用与跨市场影响；说明哪些是观测、哪些是预判，不机械要求两类齐备才准提出风险。",
         "区分主风险、竞争解释和升级/解除触发条件，不复读各部门待确认项。",
     ),
     "RedTeamAgent": (
@@ -383,7 +323,7 @@ AGENT_ANALYSIS_RULES: Dict[str, tuple[str, ...]] = {
     "CIOAgent": (
         "先列双方共同事实，再裁决基准解释与最强竞争解释；红队不能因更悲观而自动胜出。",
         "必须消解部门冲突；当前更符合/基准解释是可以明确，但要写翻转条件。",
-        "系统性风险需至少两类直接证据；session_phase=intraday 必须写盘中，range_position_pct=100 仅代表区间上沿。",
+        "对未来风险与机会作主动取舍，不机械数证据种类；盘中行情和完整交易日分清，区间位置不能当概率。",
     ),
 }
 
@@ -404,6 +344,7 @@ def run_llm_daily_department_agents(
     """Run LLM department agents with deterministic fallback memos."""
 
     stage_started = time.perf_counter()
+    implementation_hash = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
     docs = Path(docs_dir)
     runtime_reports = Path(runtime_reports_dir)
     out = docs / "agent_memos" / run_date
@@ -448,10 +389,23 @@ def run_llm_daily_department_agents(
     downstream = [spec for spec in DEPARTMENT_SPECS if spec.depends_on and spec.agent != "CIOAgent"]
     cio_spec = next(spec for spec in DEPARTMENT_SPECS if spec.agent == "CIOAgent")
 
+    def input_fingerprint(spec: DepartmentSpec) -> str:
+        dependencies = previous_outputs if spec.depends_on else {}
+        refs = _valid_refs_for_spec(context, spec, dependencies)
+        prompt = _department_prompt(spec, context, dependencies, refs, previous_error="")
+        config = getattr(backend, "_config", None)
+        routing = {name: getattr(config, name, None) for name in (
+            "codex_cli_model", "codex_cli_reasoning_effort", "codex_cli_isolated",
+            "agent_litellm_model", "opencode_cli_model",
+        )}
+        routing["implementationHash"] = implementation_hash
+        return _department_input_fingerprint(prompt, _system_prompt(), routing, model_selection)
+
     def record(result: Mapping[str, Any]) -> None:
         memo = result["memo"]
         run_row = result["run"]
         spec = result["spec"]
+        run_row["inputFingerprint"] = input_fingerprint(spec)
         _write_memo(out, spec.rel, memo)
         previous_outputs[spec.agent] = memo
         runs.append(run_row)
@@ -461,6 +415,9 @@ def run_llm_daily_department_agents(
     def restore(spec: DepartmentSpec) -> bool:
         state = resumed.get(spec.agent)
         if not state:
+            return False
+        if state["run"].get("inputFingerprint") != input_fingerprint(spec):
+            rerun_agents.add(spec.agent)
             return False
         if any(dependency in rerun_agents for dependency in spec.depends_on):
             rerun_agents.add(spec.agent)
@@ -501,12 +458,21 @@ def run_llm_daily_department_agents(
                 record(result)
                 rerun_agents.add(str(result["spec"].agent))
 
-    for spec in downstream:
-        if restore(spec):
-            continue
-        result = _run_department_spec(spec, out, backend, backend_error, context, previous_outputs, max_retries)
-        record(result)
-        rerun_agents.add(spec.agent)
+    pending = list(downstream)
+    while pending:
+        ready = [spec for spec in pending if all(dep in previous_outputs for dep in spec.depends_on)]
+        if not ready:
+            raise RuntimeError("Department dependency cycle or missing upstream output")
+        runnable = [spec for spec in ready if not restore(spec)]
+        snapshot = dict(previous_outputs)
+        with ThreadPoolExecutor(max_workers=max(1, min(max_concurrency, len(runnable)))) as executor:
+            futures = [executor.submit(_run_department_spec, spec, out, backend, backend_error,
+                                       context, snapshot, max_retries) for spec in runnable]
+            for future in as_completed(futures):
+                result = future.result()
+                record(result)
+                rerun_agents.add(result["spec"].agent)
+        pending = [spec for spec in pending if spec not in ready]
 
     if restore(cio_spec):
         enrichment_summary = dict(previous_outputs[cio_spec.agent].get("cioEnrichment") or {})
@@ -514,8 +480,17 @@ def run_llm_daily_department_agents(
     else:
         initial_cio = _run_department_spec(cio_spec, out, backend, backend_error, context, previous_outputs, max_retries)
         enrichment_summary = run_cio_enrichment(docs, run_date, initial_cio["memo"])
+    cio_second_pass = False
     if initial_cio is not None and enrichment_summary.get("requested"):
-        context = _build_context(docs, run_date, runtime_reports)
+        enriched_context = _build_context(docs, run_date, runtime_reports)
+        def cio_prompt(ctx):
+            return _department_prompt(cio_spec, ctx, previous_outputs,
+                                      _valid_refs_for_spec(ctx, cio_spec, previous_outputs), previous_error="")
+        cio_second_pass = cio_prompt(enriched_context) != cio_prompt(context)
+        enrichment_summary["secondPassReason"] = "context_changed" if cio_second_pass else "context_unchanged"
+        context = enriched_context
+    enrichment_summary["secondPassPerformed"] = cio_second_pass
+    if initial_cio is not None and cio_second_pass:
         final_cio = _run_department_spec(cio_spec, out, backend, backend_error, context, previous_outputs, max_retries)
         final_cio["memo"]["cioEnrichment"] = enrichment_summary
         record(final_cio)
@@ -536,6 +511,9 @@ def run_llm_daily_department_agents(
             "selectedModel": model_selection.get("selectedModel") or "",
             "modelSelection": model_selection,
             "cioEnrichment": enrichment_summary,
+            "preliminaryCioRun": dict(initial_cio["run"]) if initial_cio is not None and cio_second_pass else None,
+            "generationCallCount": sum(int(row.get("attempt") or 1) for row in runs if not row.get("resumed")) + (int(initial_cio["run"].get("attempt") or 1) if initial_cio is not None and cio_second_pass else 0),
+            "usageScope": "accepted_department_outputs_only; preliminary and failed attempts are not billing totals",
             "maxConcurrency": max_concurrency,
             "resumedSuccessCount": sum(1 for row in runs if row.get("resumed")),
         }
@@ -550,23 +528,40 @@ def run_llm_daily_department_agents(
     return summary
 
 
+
+def _department_input_fingerprint(prompt: str, system_prompt: str, routing: Mapping[str, Any], selection: Mapping[str, Any]) -> str:
+    """Hash effective inputs, never credentials or noisy smoke timestamps."""
+    try:
+        prompt_value = json.loads(prompt)
+    except (ValueError, TypeError):
+        prompt_value = prompt
+    payload = {
+        "version": 1, "prompt": prompt_value, "system": system_prompt, "routing": dict(routing),
+        "selection": {key: selection.get(key) for key in (
+            "policy", "backend", "requestedModel", "selectedModel", "reasoningEffort",
+        )},
+    }
+    return hashlib.sha256(json.dumps(payload, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+
+
 def _load_resumable_successes(out: Path, run_status: Path) -> Dict[str, Dict[str, Dict[str, Any]]]:
     """Load explicitly requested same-date LLM successes for a failed local rerun.
 
-    Resume is opt-in because the caller owns the guarantee that universe/evidence
-    inputs have not changed since the interrupted attempt.
+    Resume is opt-in. The caller additionally checks the exact prompt, system
+    instructions and configured model fingerprint before restoring each memo.
     """
 
+    logs = [run_status / name for name in ("llm_agent_runs.jsonl", "llm_agent_runs.partial.jsonl")]
+    logs = sorted((path for path in logs if path.exists()), key=lambda path: path.stat().st_mtime_ns)
     run_rows = {
         str(row.get("agent") or ""): row
-        for row in _load_jsonl(run_status / "llm_agent_runs.jsonl")
-        if row.get("status") == "success"
+        for path in logs for row in _load_jsonl(path)
     }
     states: Dict[str, Dict[str, Dict[str, Any]]] = {}
     for spec in DEPARTMENT_SPECS:
         run_row = run_rows.get(spec.agent)
         memo = _read_json(out / f"{spec.rel}.json")
-        if not run_row or memo.get("agent") != spec.agent:
+        if not run_row or run_row.get("status") != "success" or memo.get("agent") != spec.agent:
             continue
         if memo.get("agentRuntime") != "LLM" or memo.get("llm_status") != "success":
             continue
@@ -584,6 +579,8 @@ def build_default_llm_backend() -> GenerationBackend:
 
     config = _load_lightweight_llm_config()
     backend_id = resolve_agent_generation_backend_id(config)
+    if backend_id in LOCAL_CLI_GENERATION_BACKEND_IDS:
+        return create_generation_backend(backend_id, config=config)
     if backend_id != LITELLM_BACKEND_ID:
         raise GenerationError(
             error_code=GenerationErrorCode.BACKEND_NOT_CONFIGURED,
@@ -605,6 +602,17 @@ def build_default_llm_backend_with_selection(*, model_policy: str = "best") -> t
     """Select the best usable Agent model, then build the LiteLLM backend."""
 
     base_config = _load_lightweight_llm_config()
+    backend_id = resolve_agent_generation_backend_id(base_config)
+    if backend_id in LOCAL_CLI_GENERATION_BACKEND_IDS:
+        return create_generation_backend(backend_id, config=base_config), {
+            "schema": MODEL_SELECTION_SCHEMA,
+            "policy": "configured_local_backend",
+            "backend": backend_id,
+            "requestedModel": getattr(base_config, "codex_cli_model", ""),
+            "selectedModel": "",
+            "reasoningEffort": getattr(base_config, "codex_cli_reasoning_effort", ""),
+            "candidates": [],
+        }
     selection = _select_agent_model(base_config, model_policy=model_policy)
     selected = str(selection.get("selectedModel") or "").strip()
     if not selected:
@@ -820,7 +828,17 @@ def _load_lightweight_llm_config(
         if env(key).strip()
     }
     return SimpleNamespace(
-        agent_generation_backend=env("AGENT_GENERATION_BACKEND", "auto").strip().lower() or "auto",
+        agent_generation_backend=(env("RESEARCH_GENERATION_BACKEND").strip()
+                                  or env("AGENT_GENERATION_BACKEND", "auto").strip()).lower() or "auto",
+        codex_cli_model=env("RESEARCH_CODEX_MODEL").strip() or env("CODEX_CLI_MODEL").strip(),
+        codex_cli_reasoning_effort=(env("RESEARCH_CODEX_REASONING_EFFORT").strip()
+                                    or env("CODEX_CLI_REASONING_EFFORT").strip()),
+        codex_cli_isolated=True,
+        generation_backend_timeout_seconds=env("GENERATION_BACKEND_TIMEOUT_SECONDS", "300"),
+        generation_backend_max_output_bytes=env("GENERATION_BACKEND_MAX_OUTPUT_BYTES", "1048576"),
+        generation_backend_max_concurrency=env("GENERATION_BACKEND_MAX_CONCURRENCY", "1"),
+        local_cli_backend_max_concurrency=env("LOCAL_CLI_BACKEND_MAX_CONCURRENCY", "1"),
+        opencode_cli_model=env("OPENCODE_CLI_MODEL"),
         agent_litellm_model=agent_model,
         litellm_model=primary_model,
         litellm_fallback_models=fallback_models,
@@ -1296,6 +1314,16 @@ def _system_prompt() -> str:
     )
 
 
+def _prompt_research_window(context: Mapping[str, Any]) -> Dict[str, Any]:
+    """Upgrade only new prompt inputs; never rewrite historical artifacts."""
+    stored = (context.get("universe") or {}).get("researchWindow") or {}
+    if stored.get("schema") == "research_window_v2":
+        return dict(stored)
+    # Legacy universes use the original 1-month / 2-month research emphasis.
+    # Do not apply current environment overrides to a persisted run.
+    return research_window(str(context["runDate"]))
+
+
 def _department_prompt(
     spec: DepartmentSpec,
     context: Mapping[str, Any],
@@ -1311,6 +1339,20 @@ def _department_prompt(
         for agent, memo in previous_outputs.items()
         if agent in spec.depends_on
     }
+    transmitted_ids = _valid_evidence_ids(evidence_rows)
+    for memo in deps.values():
+        original_claims = list(memo.get("key_claims") or [])
+        memo["key_claims"] = [claim for claim in original_claims
+                              if claim.get("evidence_ids")
+                              and set(claim["evidence_ids"]) <= transmitted_ids]
+        omitted = [claim.get("claimId") for claim in original_claims if claim not in memo["key_claims"]]
+        if omitted:
+            memo["omittedClaimIds"] = omitted
+            memo["summary_for_reader"] = "；".join(claim["claim"] for claim in memo["key_claims"])
+        if memo.get("challenges"):
+            memo["challenges"] = [challenge for challenge in memo["challenges"]
+                                  if set(challenge.get("evidence_ids") or challenge.get("evidenceIds") or []) <= transmitted_ids]
+        memo["evidence_ids"] = sorted({ref for claim in memo["key_claims"] for ref in claim["evidence_ids"]})
     payload = {
         "agent": spec.agent,
         "mission": spec.mission,
@@ -1326,6 +1368,7 @@ def _department_prompt(
         ],
         "departmentInputProfile": department_profile_payload(spec.agent),
         "runDate": context.get("runDate"),
+        "researchWindow": _prompt_research_window(context),
         "dailyUniverse": _compact_universe_for_spec(context.get("universe") or {}, spec),
         "sourceHealth": _compact_source_health(context.get("health") or {}, spec),
         "evidence": evidence_rows,
@@ -1333,7 +1376,7 @@ def _department_prompt(
         # evidence.  Context handles (dailyUniverse/kind:*) and memo handles are
         # useful navigation aids, but presenting them as evidence ids causes the
         # model to create claims that the semantic gate can never substantiate.
-        "allowedEvidenceRefs": sorted(_valid_evidence_ids(evidence_rows))[:80],
+        "allowedEvidenceRefs": sorted(_valid_evidence_ids(evidence_rows)),
         "allowedMemoRefs": sorted(ref for ref in valid_refs if str(ref).startswith("memo:"))[:20],
         "previousDepartmentOutputs": deps,
         "modeGuidance": _mode_guidance(context.get("health") or {}),
@@ -1354,29 +1397,35 @@ def _department_prompt(
                 "先判断，后解释",
                 "不要暴露工程字段",
                 "不要堆 provider 状态；只讲这对投资判断意味着什么",
+                "摘要用约60–100字概括最重要取舍，不复制第一条长论据；详细数值和推理保留在key_claims",
+                "每个论点一个主题；限制只在影响结论的位置解释一次，无真实缺口不写缺口",
             ],
             "jsonExample": {
                 "agent": spec.agent,
                 "summary_for_reader": "一句或两句读者能看懂的专业结论，不得只写可用/中性",
                 "key_claims": [
                     {
-                        "claim": "3-5 条核心依据之一；每条要有驱动或传导链",
+                        "claim": "明确判断及理由；行业/个股推荐说明为何值得参与或回避",
+                        "rating": "推荐类可选：行业看好/中性/看淡；个股买入/中性/卖出",
+                        "target": "推荐的行业名称或个股代码；不能用不存在的材料编造标的",
+                        "timeScope": "本条判断的适用期限；默认参考 researchWindow，可另列短线或中长期期限并解释当前影响",
+                        "entryCondition": "现在参与、回落参与或回避；只使用有依据的价格/条件",
                         "claimType": "fact|interpretation|scenario|recommendation",
-                        "subject": "market|macro|标的代码",
+                        "subject": "行业判断填market_cn|market_hk|market_us；其他为market|macro|标的代码",
                         "domain": "price|fundamentals|filings_events|macro|news_sentiment|portfolio",
                         "metric": "可选；只有明确指标时填写",
                         "evidence_ids": ["该条依据直接使用的 allowedEvidenceRefs"],
                     }
                 ],
-                "evidence_ids": ["必须来自 allowedEvidenceRefs，可用 memo:Agent 引用已验证部门输出"],
+                "evidence_ids": ["证据必须来自 allowedEvidenceRefs；部门观点引用放在 dependency 关联，不冒充原始证据"],
                 "counterpoints": ["最强反证或风险，不要泛泛而谈"],
                 "data_gaps": ["只写会改变结论的待确认项；没有就空数组"],
                 "confidence": "low|medium|high",
                 "next_action": (
                     {
-                        "不做什么": "当前最应避免的误判或动作",
-                        "看什么": "1-2 个可观察信号及其风险含义",
-                        "下次复核什么": "下次报告要重新核对的数据或判断",
+                        "现在建议": "当前推荐/回避的行业和个股，优先级与参与节奏",
+                        "改变意见的条件": "哪项信号出现后上调/下调哪项判断",
+                        "下次复核什么": "具体复核日期或窗口、指标及比较基准",
                     }
                     if spec.agent == "CIOAgent"
                     else "下一步看什么信号，触发后如何改变判断"
@@ -1384,7 +1433,7 @@ def _department_prompt(
             },
         },
     }
-    if not spec.depends_on:
+    if spec.agent not in {"RiskAgent", "RedTeamAgent", "CIOAgent"}:
         payload["originalAnalysisSummary"] = _compact_original_analysis(context.get("originalAnalysis") or {}, spec)
         payload["originalAnalysisRefs"] = _compact_original_refs_for_prompt(
             filter_original_refs_for_agent(context.get("originalAnalysisRefs") or [], spec.agent, limit=8)
@@ -1393,7 +1442,7 @@ def _department_prompt(
         payload["outputContract"]["redTeamContract"] = {
             "challenges": [
                 {
-                    "targetClaimId": "被挑战的 claimId；没有则写部门名",
+                    "targetClaimId": "previousDepartmentOutputs 中被挑战的具体 claimId；多个判断分别写条目，不写部门名",
                     "issueType": "overreach|stale|alternative_cause|missing_evidence|scope_mismatch",
                     "opposingScenario": "最强竞争情景，必须能解释同一组事实并以条件式表述",
                     "evidence_ids": ["支持竞争情景的直接 evidence id"],
@@ -1410,10 +1459,10 @@ def _department_prompt(
             "adjudication": {
                 "sharedFacts": ["正反双方都承认的已验证事实，最多 3 条"],
                 "baseCase": "基准情景",
-                "strongestAlternative": "最强竞争情景，不是机械唱反调或泛泛风险",
+                "strongestAlternative": "对最重要主判断的最强竞争解释；其他主题的反证分别放counterpoints，不捆成一个必须同时成立的情景",
                 "judgment": "CIO 当前裁决",
                 "why": "为何采用该裁决；必须说明证据权重",
-                "invalidationTriggers": ["哪些信号会推翻当前裁决"],
+                "invalidationTriggers": ["按主题分别写明哪个信号会改变哪项判断；不要把不同市场与个股的相反方向混成一段"],
             },
             "discipline": (
                 "adjudication 不得引入 key_claims 之外的新事实或数字；"
@@ -1587,12 +1636,12 @@ def _complete_cio_adjudication(
 def _normalize_next_action(value: Any) -> str:
     if isinstance(value, Mapping):
         parts: List[str] = []
-        for key in ("不做什么", "看什么", "下次复核什么"):
+        for key in ("现在建议", "改变意见的条件", "不做什么", "看什么", "下次复核什么"):
             text = str(value.get(key) or "").strip()
             if text:
                 parts.append(f"{key}：{text}")
         for key, raw in value.items():
-            if key in {"不做什么", "看什么", "下次复核什么"}:
+            if key in {"现在建议", "改变意见的条件", "不做什么", "看什么", "下次复核什么"}:
                 continue
             text = str(raw or "").strip()
             if text:
@@ -1616,25 +1665,12 @@ def _clean_reader_punctuation(value: str) -> str:
 
 def _mode_guidance(health: Mapping[str, Any]) -> Dict[str, Any]:
     mode = str(health.get("overallMode") or "OBSERVE_ONLY").upper()
-    if mode == "FULL_REVIEW":
-        instruction = (
-            "数据条件支持完整复盘；必须给出明确但克制的投研结论、核心依据、反证和触发条件。"
-            "不要把 FULL_REVIEW 写成数据阻断；不要说“所有结论均不可靠”。"
-            "持仓为空、portfolio partial、publish_bundle missing、资金流缺项只能作为限制说明，不能否定行情、公告、基本面、宏观、新闻等已验证证据。"
-        )
-    elif mode == "LIMITED_REVIEW":
-        instruction = (
-            "数据条件支持有限复盘；必须输出可读的有限结论、可用依据、主要待确认项和下一步。"
-            "不要把 LIMITED_REVIEW 写成 BLOCKED；除非没有任何有效证据，否则不要说“无法生成任何有效结论”或“所有结论均不可靠”。"
-            "如果 evidenceStats 显示 missingCriticalFacts <= 1 且有 verified/derived evidence，必须保留有限但有用的市场/行业/标的观察。"
-            "可以说公告/事件缺失限制交易动作，但不能否定行情、宏观、基本面等已经有证据的观察。"
-        )
-    elif mode == "SCREEN_ONLY":
-        instruction = "只做筛选观察；可以给候选和风险排序，不给确定性行动口吻。"
-    elif mode == "BLOCKED":
-        instruction = "数据不足；只输出诊断和补数清单，不给投研结论。"
-    else:
-        instruction = "只做市场观察；给出能确认的观察和下一步，不要过度推断。"
+    instruction = (
+        "给出明确的研究判断与取舍，允许行业看好/看淡和个股买入/中性/卖出评级。"
+        "整体数据模式不是推荐开关：用已取得的相关证据分析，缺口只限制受影响的事实。"
+        "事实不可编造；确无该标的材料时说明未覆盖，不生成虚假推荐。"
+        "判断聚焦本期重点，可使用相关长期历史；尚无已确认催化不等于不能推荐，估值、趋势或预期差也可构成理由。"
+    )
     return {
         "analysisMode": mode,
         "evidenceStats": health.get("evidenceStats") if isinstance(health.get("evidenceStats"), Mapping) else {},
@@ -1757,7 +1793,7 @@ def _validate_memo(memo: Mapping[str, Any], spec: DepartmentSpec, valid_refs: Se
         if bad_claims:
             raise ValueError("CIO claim citations do not cover every stated subject, domain and number")
         if str(memo.get("next_action") or "").strip() == "继续复核证据、反证和触发条件。":
-            raise ValueError("CIO next_action must include do-not, watch and next-review guidance")
+            raise ValueError("CIO next_action must state a concrete recommendation and review conditions")
         if _string_list(memo.get("counterpoints")) == ["若证据过时、来源降级或关键事实缺失，结论需要下调置信度。"]:
             raise ValueError("CIO counterpoints must synthesize the strongest RedTeam challenge")
         adjudication = memo.get("adjudication") if isinstance(memo.get("adjudication"), Mapping) else {}
@@ -1802,6 +1838,9 @@ def _apply_semantic_gate_to_memo(
         status = validation.normalized_status()
         validation_rows.append({
             "claimId": validation.claim_id,
+            # Keep the model-authored mapping for deterministic revalidation;
+            # otherwise rejected text loses its subject/rating/entry metadata.
+            "originalClaim": dict(raw),
             "text": str(raw.get("claim") or raw.get("text") or ""),
             "safeText": validation.safe_text,
             "status": status.value,
@@ -1820,6 +1859,7 @@ def _apply_semantic_gate_to_memo(
             "subject": str(raw.get("subject") or ""),
             "domain": str(raw.get("domain") or ""),
             "metric": str(raw.get("metric") or ""),
+            **{key: raw[key] for key in ("rating", "target", "entryCondition", "timeScope") if raw.get(key)},
             "evidence_ids": list(validation.accepted_evidence_ids),
             "semanticStatus": status.value,
         })
@@ -1832,10 +1872,18 @@ def _apply_semantic_gate_to_memo(
             for mapping in safe_mappings
             for evidence_id in mapping.get("evidence_ids") or []
         )
+        rejected_claim_texts = [
+            str(row.get("text") or "") for row in validation_rows
+            if str(row.get("status") or "") == ClaimStatus.REJECTED.value
+        ]
         summary_sentences = [
             sentence
             for sentence in _split_summary_sentences(summary_text)
-            if _summary_sentence_matches_retained_claim(sentence, safe_claims)
+            # A summary is a paraphrase, not an exact substring of the body.
+            # Check it against the retained evidence below; only remove known
+            # rejected text here rather than replacing good prose with claim 1.
+            if not _summary_sentence_matches_retained_claim(sentence, rejected_claim_texts)
+            or _summary_sentence_matches_retained_claim(sentence, safe_claims)
         ]
         summary_claims = [
             {
@@ -1866,6 +1914,7 @@ def _apply_semantic_gate_to_memo(
                 key=lambda status: status_order[status],
             )
             summary_validation = {
+                "originalText": summary_text,
                 "status": composite_status.value if safe_sentences else ClaimStatus.REJECTED.value,
                 "sentences": [
                     {
@@ -1887,6 +1936,12 @@ def _apply_semantic_gate_to_memo(
                 for field in ("summary_for_reader", "readable_summary", "conclusion"):
                     memo[field] = safe_summary
         elif safe_claims:
+            summary_validation = {
+                "originalText": summary_text,
+                "status": ClaimStatus.PARTIAL.value,
+                "repairedFrom": "retained_claim_after_rejected_summary",
+                "sentences": [],
+            }
             for field in ("summary_for_reader", "readable_summary", "conclusion"):
                 memo[field] = safe_claims[0]
 
@@ -1992,11 +2047,10 @@ def _apply_semantic_gate_to_memo(
     }
     memo["semantic_warnings"] = _dedupe_strings(warnings)
     memo["semantic_repairs"] = semantic_repairs
-    statuses = {row["status"] for row in validation_rows}
-    if statuses and statuses <= {ClaimStatus.HYPOTHESIS.value, ClaimStatus.DISPUTED.value}:
-        memo["confidence"] = "low"
-    elif ClaimStatus.HYPOTHESIS.value in statuses or ClaimStatus.REJECTED.value in statuses:
-        memo["confidence"] = "medium"
+    # Keep the model's self-rating for compatibility/diagnostics. Reader uses
+    # support for each retained claim; a scenario is not a department-wide
+    # penalty, nor does one rejected claim justify upgrading low to medium.
+    memo["claim_assessment"] = build_claim_assessment(memo)
 
 
 def _neutral_next_review_action(spec: DepartmentSpec) -> str:
@@ -2427,9 +2481,15 @@ def _run_row(
 def _summarize_runs(runs: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
     success = sum(1 for row in runs if row.get("status") == "success")
     fallback = sum(1 for row in runs if row.get("status") != "success")
-    prompt_tokens = sum(_int_usage(row, "prompt_tokens") for row in runs)
-    completion_tokens = sum(_int_usage(row, "completion_tokens") for row in runs)
-    total_tokens = sum(_int_usage(row, "total_tokens") for row in runs)
+    def observed_total(key: str) -> Optional[int]:
+        observed = [row for row in runs if isinstance(row.get("usage"), Mapping)
+                    and isinstance(row["usage"].get(key), int) and not isinstance(row["usage"].get(key), bool)]
+        # An incomplete count is not the total; do not report missing usage as 0.
+        return sum(_int_usage(row, key) for row in observed) if len(observed) == len(runs) and observed else None
+
+    prompt_tokens = observed_total("prompt_tokens")
+    completion_tokens = observed_total("completion_tokens")
+    total_tokens = observed_total("total_tokens")
     total_attempts = sum(int(row.get("attempt") or 1) for row in runs)
     llm_elapsed = sum(float(row.get("durationSeconds") or 0.0) for row in runs)
     return {
@@ -2496,6 +2556,8 @@ def _valid_refs_for_spec(
 
 
 def _evidence_limit_for_spec(spec: DepartmentSpec) -> int:
+    if spec.agent in {"MacroAgent", "TechnicalAgent", "FundamentalAgent"}:
+        return 32
     if spec.agent in {"RiskAgent", "RedTeamAgent"}:
         return 8
     if spec.agent == "CIOAgent":
@@ -2591,6 +2653,11 @@ def _intelligence_context_priority(item: Mapping[str, Any], agent: str) -> int:
     provider = str(item.get("provider") or "").lower()
     if any(marker in provider for marker in ("cninfo", "sse", "szse", "hkex", "sec", "fred", "ofac", "bis")):
         score += 3
+    if agent == "GeoPolicyAgent":
+        if any(term in text for term in ("tariff", "sanction", "export control", "oil", "energy", "shipping", "hormuz", "关税", "制裁", "出口管制", "原油", "能源", "航运", "海峡")):
+            score += 8  # Direct transmission to trade, input costs or discount rates.
+        if any(term in text for term in ("monthly", "situation report", "月报", "例行汇总")):
+            score -= 4  # Background, not automatically a new market catalyst.
     markers = _INTELLIGENCE_GEO_MARKERS if agent == "GeoPolicyAgent" else _INTELLIGENCE_MARKET_MARKERS
     if any(marker in text for marker in markers):
         score += 6
@@ -2622,6 +2689,13 @@ def _evidence_for_spec(rows: Sequence[Mapping[str, Any]], spec: DepartmentSpec, 
         if domains and domain not in domains:
             continue
         fact_id = str(row.get("id") or "").strip()
+        if spec.agent == "FundamentalAgent" and domain == "price" and ":daily_data:" not in fact_id:
+            continue  # A comparable close is enough here; technical structure belongs to TechnicalAgent.
+        if fact_id.startswith(("provider_run:", "market_cycle:")):
+            # These compatibility rows contain status/ref names, not the source
+            # observations. Their positional ids can also change after rendering.
+            # Departments use the underlying official/subject evidence instead.
+            continue
         if fact_id and fact_id in seen_ids:
             continue
         if fact_id:
@@ -2641,6 +2715,19 @@ def _evidence_for_spec(rows: Sequence[Mapping[str, Any]], spec: DepartmentSpec, 
         )
         buckets.setdefault((market, domain, symbol), []).append(item)
 
+    if spec.agent in {"TechnicalAgent", "FundamentalAgent", "MacroAgent"}:
+        def material_rank(item: Mapping[str, Any]) -> int:
+            ref = str(item.get("id") or "")
+            if "history_comparison" in ref:
+                return 0
+            if ":daily_data:" in ref or ":fundamental:growth:" in ref or ":fundamental:earnings:" in ref:
+                return 1
+            if ":fundamental:valuation:" in ref or ref.startswith("fred:"):
+                return 2
+            return 3
+        for bucket in buckets.values():
+            bucket.sort(key=material_rank)
+
     if spec.agent in {"GeoPolicyAgent", "IntelAgent", "MarketAgent", "SectorAgent"}:
         for bucket in buckets.values():
             bucket.sort(
@@ -2652,7 +2739,12 @@ def _evidence_for_spec(rows: Sequence[Mapping[str, Any]], spec: DepartmentSpec, 
             )
 
     if spec.agent == "GeoPolicyAgent":
-        all_items = [item for bucket in buckets.values() for item in bucket]
+        all_items = sorted(
+            [item for bucket in buckets.values() for item in bucket],
+            key=lambda item: (_intelligence_context_priority(item, spec.agent),
+                              str(item.get("published_at") or item.get("event_time") or item.get("as_of") or "")),
+            reverse=True,
+        )
         official_markers = ("ofac", "bis", "eu sanctions", "sanctions map", "外交部", "商务部")
         discovery_markers = ("tavily", "gdelt", "reliefweb")
 
@@ -2682,6 +2774,39 @@ def _evidence_for_spec(rows: Sequence[Mapping[str, Any]], spec: DepartmentSpec, 
         return selected
 
     selected: List[Dict[str, Any]] = []
+    if spec.agent == "FundamentalAgent":
+        # Reserve each subject's core packet before filling with disclosures.
+        # A market/domain round-robin alone lets numerous HKEX filings crowd
+        # the final A-share valuation rows out even with a larger item budget.
+        def reserve_marker(marker: str) -> None:
+            for bucket in buckets.values():
+                candidate = next((item for item in bucket if marker in str(item.get("id") or "")), None)
+                if candidate is not None and len(selected) < limit:
+                    selected.append(candidate)
+                    bucket.remove(candidate)
+
+        for marker in (":fundamental:history_comparison:", ":fundamental:valuation:"):
+            reserve_marker(marker)
+        # Explanations of financial movements matter more than duplicate metric
+        # rows or a price quote. Reserve one financial excerpt per company,
+        # preferring full reports over summaries at the same disclosure date.
+        financial_terms = ("现金流", "利润", "财务", "年度报告", "季度报告", "半年度报告",
+                           "cash flow", "financial", "10-q", "10-k", "20-f", "annual report")
+        for (_, domain, _), bucket in buckets.items():
+            if domain != "filings_events":
+                continue
+            candidates = [item for item in bucket if item.get("document_excerpt") and
+                          any(term in (str(item.get("value") or "") + " " +
+                              str(item["document_excerpt"])).lower() for term in financial_terms)]
+            if candidates and len(selected) < limit:
+                candidate = max(candidates, key=lambda item: (
+                    str(item.get("published_at") or item.get("as_of") or ""),
+                    "摘要" not in str(item.get("value") or "")))
+                selected.append(candidate)
+                bucket.remove(candidate)
+        for marker in (":fundamental:earnings:", ":fundamental:growth:", ":daily_data:"):
+            reserve_marker(marker)
+        buckets = {key: bucket for key, bucket in buckets.items() if bucket}
     market_buckets: Dict[str, List[tuple[str, str, str]]] = {}
     for key in buckets:
         market_buckets.setdefault(key[0], []).append(key)
@@ -2718,13 +2843,17 @@ def _prompt_evidence_for_spec(
     rows = context.get("evidence") or []
     limit = _evidence_limit_for_spec(spec)
     selected = _evidence_for_spec(rows, spec, limit=limit)
-    if spec.agent in {"MarketAgent", "RiskAgent", "RedTeamAgent", "CIOAgent"}:
-        priority_markers = (":market:market_stats:", ":market:main_indices:")
+    if spec.agent in {"MarketAgent", "SectorAgent", "RiskAgent", "RedTeamAgent", "CIOAgent"}:
+        priority_metrics = {"market_stats", "main_indices"}
+        if spec.agent == "SectorAgent":
+            priority_metrics = {"sector_performance", "sector_rankings", "sector_history_comparison"}
         priority = [
             _compact_evidence_row(row, domain=str(row.get("domain") or ""))
             for row in rows
             if isinstance(row, Mapping)
-            and any(marker in str(row.get("id") or "") for marker in priority_markers)
+            and str(row.get("metric") or "") in priority_metrics
+            and str(row.get("evidence_scope") or "subject_evidence") == "subject_evidence"
+            and row.get("fact_type") != "missing"
         ]
         selected = [
             *priority,
@@ -2743,7 +2872,7 @@ def _prompt_evidence_for_spec(
         for row in rows
         if isinstance(row, Mapping) and str(row.get("id") or "").strip()
     }
-    for evidence_id in _dependency_evidence_ids(previous_outputs, spec, limit=24):
+    for evidence_id in _dependency_evidence_ids(previous_outputs, spec, limit=64 if spec.agent in {"RiskAgent", "RedTeamAgent", "CIOAgent"} else 16):
         if evidence_id in selected_ids or evidence_id not in by_id:
             continue
         row = by_id[evidence_id]
@@ -2758,30 +2887,48 @@ def _dependency_evidence_ids(
     *,
     limit: int,
 ) -> List[str]:
+    bundles = [
+        list((_compact_memo(previous_outputs[agent]).get("key_claims") or []))
+        + list((_compact_memo(previous_outputs[agent]).get("challenges") or []))
+        for agent in spec.depends_on if isinstance(previous_outputs.get(agent), Mapping)
+    ]
     out: List[str] = []
-    for agent in spec.depends_on:
-        memo = previous_outputs.get(agent)
-        if not isinstance(memo, Mapping):
-            continue
-        per_memo: List[str] = []
-        for mapping in memo.get("claim_evidence") or []:
-            if not isinstance(mapping, Mapping):
+    while any(bundles):
+        for bundle in bundles:
+            if not bundle:
                 continue
-            per_memo.extend(_string_list(mapping.get("evidence_ids")))
-            if len(_dedupe_strings(per_memo)) >= 4:
-                break
-        if not per_memo:
-            per_memo.extend(_string_list(memo.get("evidence_ids"))[:4])
-        for evidence_id in _dedupe_strings(per_memo)[:4]:
-            if evidence_id.startswith("memo:") or evidence_id in out:
-                continue
-            out.append(evidence_id)
-            if len(out) >= limit:
-                return out
+            claim = bundle.pop(0)
+            refs = [ref for ref in _string_list(claim.get("evidence_ids") or claim.get("evidenceIds")) if not ref.startswith("memo:")]
+            additions = [ref for ref in refs if ref not in out]
+            if len(out) + len(additions) <= limit:
+                out.extend(additions)
     return out
 
 
+def _compact_history(row: Mapping[str, Any], domain: str) -> tuple[List[Any], Dict[str, Any]]:
+    history = list(row.get("history") or [])
+    if not history:
+        return [], {}
+    cap = 24 if domain == "macro" else 12 if domain == "fundamentals" else 8
+    if domain == "macro" and len(history) > cap:
+        # Keep the recent sequence plus dated samples across the available tail.
+        # Never interpret gaps in this compact sample as consecutive periods.
+        indices = list(range(8)) + [8 + i * (len(history) - 9) // 15 for i in range(16)]
+        kept = [history[i] for i in indices]
+    else:
+        kept = history[:cap]
+    def period(item: Any) -> str:
+        return str(item.get("date") or item.get("report_date") or item.get("as_of") or "") if isinstance(item, Mapping) else ""
+    return kept, {
+        "availableObservations": len(history), "transmittedObservations": len(kept),
+        "sampleStart": period(history[-1]), "sampleEnd": period(history[0]),
+        "sampled": len(kept) < len(history),
+        "basis": "源序列按新到旧；按真实日期比较。抽样点不代表相邻期间；历史分位使用完整源样本，不是近月分位。",
+    }
+
+
 def _compact_evidence_row(row: Mapping[str, Any], *, domain: str) -> Dict[str, Any]:
+    history, history_coverage = _compact_history(row, domain)
     compact = {
         "id": row.get("id"),
         "domain": domain,
@@ -2792,14 +2939,32 @@ def _compact_evidence_row(row: Mapping[str, Any], *, domain: str) -> Dict[str, A
         "value": _clip(str(row.get("value") or row.get("id") or ""), 520),
         "measurements": dict(row.get("measurements") or {}),
         "unit": row.get("unit"),
+        "comparison": row.get("comparison"),
+        "period_start": row.get("period_start"),
+        "period_end": row.get("period_end"),
+        "fiscal_period": row.get("fiscal_period"),
+        "filing_form": row.get("filing_form"),
+        "currency": row.get("currency"),
+        "source_url": row.get("source_url"),
+        "history": history,
+        "historyCoverage": history_coverage,
+        "document_excerpt": _clip(str(row.get("document_excerpt") or ""), 4000),
+        "document_status": row.get("document_status"),
+        "document_scope": row.get("document_scope"),
+        "report_period": row.get("report_period"),
+        "comparison_period": row.get("comparison_period"),
         "as_of": row.get("as_of") or row.get("asOf"),
         "event_time": row.get("event_time") or row.get("eventTime"),
         "published_at": row.get("published_at") or row.get("publishedAt"),
         "fetched_at": row.get("fetched_at") or row.get("fetchedAt"),
+        "time_basis": row.get("time_basis"),
         "market": row.get("market"),
         "session_phase": row.get("session_phase") or row.get("sessionPhase"),
         "is_partial_bar": row.get("is_partial_bar") if "is_partial_bar" in row else row.get("isPartialBar"),
     }
+    if row.get("metric") == "sector_performance":
+        compact.update({"records": row.get("records") or [], "scope": row.get("scope"),
+                        "coverage": row.get("coverage"), "benchmark": row.get("benchmark")})
     return {key: value for key, value in compact.items() if value not in (None, "", {}, [])}
 
 
@@ -2982,16 +3147,31 @@ def _compact_official(official: Mapping[str, Any]) -> Dict[str, Any]:
 
 def _compact_memo(memo: Mapping[str, Any]) -> Dict[str, Any]:
     raw_claims = memo.get("claim_evidence") if isinstance(memo.get("claim_evidence"), list) else []
+    # Preserve subject coverage before taking more detail from the same stock.
+    buckets: Dict[str, List[Mapping[str, Any]]] = {}
+    for item in raw_claims:
+        if isinstance(item, Mapping):
+            buckets.setdefault(str(item.get("subject") or "market"), []).append(item)
+    selected_claims: List[Mapping[str, Any]] = []
+    while any(buckets.values()) and len(selected_claims) < 6:
+        for bucket in buckets.values():
+            if bucket and len(selected_claims) < 6:
+                selected_claims.append(bucket.pop(0))
     compact_claims: List[Dict[str, Any]] = []
-    for item in raw_claims[:3]:
+    for item in selected_claims:
         if not isinstance(item, Mapping):
             continue
         claim = _clip(str(item.get("claim") or ""), 360)
         if not claim:
             continue
         row = {
+            "claimId": item.get("claimId") or item.get("claim_id") or f"{memo.get('agent')}:{raw_claims.index(item) + 1}",
             "claim": claim,
-            "evidence_ids": _string_list(item.get("evidence_ids"))[:4],
+            "evidence_ids": _string_list(item.get("evidence_ids")),
+            "rating": item.get("rating"),
+            "target": item.get("target"),
+            "timeScope": item.get("timeScope"),
+            "entryCondition": item.get("entryCondition"),
             "claimType": item.get("claimType") or item.get("claim_type"),
             "subject": item.get("subject"),
             "domain": item.get("domain"),
@@ -3016,7 +3196,7 @@ def _compact_memo(memo: Mapping[str, Any]) -> Dict[str, Any]:
     if memo.get("challenges"):
         compact["challenges"] = [
             _compact_prompt_mapping(item, text_limit=320)
-            for item in list(memo.get("challenges") or [])[:3]
+            for item in list(memo.get("challenges") or [])[:8]
             if isinstance(item, Mapping)
         ]
     if memo.get("adjudication"):
@@ -3110,6 +3290,8 @@ def _claim_payload(value: Any) -> tuple[List[str], List[Dict[str, Any]], List[st
                         "domain": item.get("domain"),
                         "metric": item.get("metric"),
                         "timeScope": item.get("timeScope") or item.get("time_scope"),
+                        "rating": item.get("rating"), "target": item.get("target"),
+                        "entryCondition": item.get("entryCondition"),
                     }
                     mapping.update({key: str(raw) for key, raw in optional_fields.items() if raw not in (None, "")})
                     mappings.append(mapping)

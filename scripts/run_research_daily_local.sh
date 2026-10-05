@@ -80,7 +80,7 @@ fi
 "$PY" scripts/export_original_analysis_snapshot.py --date "$RUN_DATE" --docs-dir "$DOCS_DIR" --symbols "$SYMBOLS"
 "$PY" -m src.macro.official_sources --refresh --fred-only
 "$PY" scripts/collect_subject_evidence.py --date "$RUN_DATE" --docs-dir "$DOCS_DIR" --symbols "$SYMBOLS" --market "$MARKET"
-"$PY" scripts/fetch_official_event_sources.py --date "$RUN_DATE" --docs-dir "$DOCS_DIR" --symbols "$SYMBOLS"
+"$PY" scripts/fetch_official_event_sources.py --date "$RUN_DATE" --docs-dir "$DOCS_DIR"
 "$PY" scripts/write_source_health_ledgers.py --date "$RUN_DATE" --docs-dir "$DOCS_DIR"
 "$PY" scripts/run_daily_department_agents.py --date "$RUN_DATE" --docs-dir "$DOCS_DIR" --runtime-reports-dir "$REPORTS_DIR" --runtime "$RUNTIME"
 # Rebuild research health once after Agent/CIO enrichment. Publication health

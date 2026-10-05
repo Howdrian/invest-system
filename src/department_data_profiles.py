@@ -51,10 +51,10 @@ DEPARTMENT_DATA_PROFILES: tuple[DepartmentDataProfile, ...] = (
     DepartmentDataProfile(
         agent="SectorAgent",
         input_profile="sector_candidates",
-        source_kinds=("sector_rankings", "concept_rankings", "hot_stocks", "screening"),
+        source_kinds=("sector_rankings", "sector_performance", "concept_rankings", "hot_stocks", "screening"),
         original_kinds=("screening", "sector_candidates"),
         evidence_domains=("news_sentiment", "price", "filings_events"),
-        description="强弱行业、热点链条、候选池和持续性。",
+        description="强弱行业、热点链条、候选池和持续性。区分A股行业榜、港股主题指数、美股行业ETF；未进入本部门的财务材料不等于系统缺失，可交基本面部门核验。",
     ),
     DepartmentDataProfile(
         agent="FundamentalAgent",
@@ -114,6 +114,22 @@ DEPARTMENT_DATA_PROFILES: tuple[DepartmentDataProfile, ...] = (
     ),
 )
 
+# Guidance, not minimum data requirements or hard fetch/retention cutoffs.
+_HISTORICAL_CONTEXT = {
+    "MacroAgent": "可用时参照2–5年周期，突出近期变化；历史分位注明实际样本起止，12个观测值不自动等于一年。",
+    "GeoPolicyAgent": "优先本周及本期事件增量，必要时追溯冲突/制裁时间线；分清事件日期、披露日期和转载日期，旧背景不冒充新事件。",
+    "MarketAgent": "结合可用的3–6个月趋势及更长周期关键位置；跨市场按各自交易日和行情时点比较。",
+    "SectorAgent": "比较近期行业轮动与可用的3–6个月相对趋势；中长期逻辑说明如何影响本期选择，不要求每个方向都有确定催化。",
+    "FundamentalAgent": "使用可用的最近8–12个报告期，区分累计/单季/TTM并做同口径比较；必要时参考更长经营周期，最新已披露财报不因超出近期窗口而失效。",
+    "TechnicalAgent": "结合可用的3–6个月量价及长期关键位置；短线入场节奏和中期方向可以不同，标明各自期限。",
+    "IntelAgent": "优先本周及本期新增披露；更早事件用于基准和背景，分清发生、公布和采集时间，不将重复新闻当新增催化。",
+    "PortfolioAgent": "以当前持仓快照为准，结合每项持仓论点的实际期限；未提供的成本、交易历史不推造。",
+    "RiskAgent": "按各条建议的期限评估风险；短期波动与长期论点分开，不将期限不同的判断误作冲突。",
+    "RedTeamAgent": "在同一标的、同一时点和同一期限上检验竞争解释；短线看淡与长期看好可能同时成立。",
+    "CIOAgent": "历史用于解释而非占满报告；对照各部门观点期限裁决分歧，每项推荐标明期限和当前影响，不把短期与长期判断机械平均。",
+}
+
+
 _PROFILE_BY_AGENT = {profile.agent: profile for profile in DEPARTMENT_DATA_PROFILES}
 _DIRECT_ORIGINAL_ANALYSIS_AGENTS = {
     "MacroAgent",
@@ -149,6 +165,7 @@ def department_profile_payload(agent: str) -> Dict[str, Any]:
         "originalKinds": list(profile.original_kinds),
         "evidenceDomains": list(profile.evidence_domains),
         "description": profile.description,
+        "historicalContext": _HISTORICAL_CONTEXT[profile.agent],
     }
 
 

@@ -542,7 +542,7 @@ class MainScheduleModeTestCase(unittest.TestCase):
 
         def fake_run_full_analysis(cfg, a, stock_codes, **kwargs):
             calls.append(("parse", stock_codes, kwargs.get("analysis_targets")))
-            return 0
+            return True
 
         with patch("main.parse_arguments", return_value=args), \
              patch("main.get_config", return_value=config), \
@@ -959,7 +959,7 @@ class MainScheduleModeTestCase(unittest.TestCase):
             port=8000,
             config=config,
         )
-        run_with_lock.assert_called_once_with(config, args, None)
+        run_with_lock.assert_called_once_with(config, args, None, None)
         error_log.assert_any_call("启动时分析执行失败，Web/API 服务继续运行。")
 
     def test_standalone_futu_portfolio_failure_returns_nonzero(self) -> None:
