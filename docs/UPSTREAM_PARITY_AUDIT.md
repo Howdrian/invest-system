@@ -1,5 +1,10 @@
 # Upstream Parity Audit
 
+## 2026-09-06 本地更新
+
+已 fetch 到 upstream/main@303f4e1c，合入本地工作区前相差 35 个 upstream commits。采用可回退的 no-commit merge，原 dirty 修改已恢复；MERGE_HEAD 尚在，不能以 HEAD 的 ahead/behind 冒充已经提交合并。指数入口、结构化 research artifact 和原 Reports artifact 字段并存，不替换原业务入口。本轮修复及验收见 CURRENT_STATE.md 最新节。以下为历史点时记录。
+
+
 > Last verified: 2026-08-19 21:11 CST
 > Release branch: `codex/reports-v1-upstream-sync`
 > Validated code SHA: `5de0183abf2f`

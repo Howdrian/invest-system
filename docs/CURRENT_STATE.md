@@ -1,121 +1,71 @@
 # invest-system 当前状态
 
-> Document status: `CURRENT_TRUTH`
-> Last verified: 2026-08-19 21:11 CST
-> Active repo: `/Users/hac/AI-Studio/投研/invest-system-upstream-sync-20260812`
-> Validated code SHA: `5de0183abf2f`
+> 核验日期：2026-09-08；最新真实日报为 **2026-09-08**。通过本轮本地可用验收，不是云端发布或预测胜率认证。
+> 活跃目录：`/Users/hac/AI-Studio/投研/invest-system-upstream-sync-20260812`
+> 分支：`codex/codex-local-runtime-20260905`；HEAD `af917c7a`，上游 `303f4e1c` 的 MERGE_HEAD 仍在。270条既有/本轮dirty混合修改，未commit/push。
 
-## 一句话结论
+## 现在可直接使用
 
-```text
-LOCAL APPLICATION GATES PASS
-LOCAL RELEASE PACKAGING PARTIAL
-CLOUD RELEASE NO-GO
-```
+- 原DSA交互工作台保留。Reports是同一Web/API的新增产品线，不是iframe、独立抓数系统或另一套LLM报告。
+- 9/8重新采集数据、运行原个股/三市场分析、生成真实11部门日报；之后在同批材料上再生成一轮11部门。最终LLM success=11，fallback=0，1次重试，总12次生成调用。
+- 当前走本机Codex，配置请求 `gpt-6-astra/high`，可用参数覆盖模型/强度；不调用GCP。包装器未返回实际resolved模型及token明细，不把请求模型当作后台观测证明，也不声称免费/不消耗额度。
+- 首轮全链约47分钟；第二轮仅部门/CIO约29.5分钟。当前并发1。单次实测不是稳定延迟SLA；基本面曾接近300秒超时边界。
+- 本期5家公司：茅台、宁德时代、比亚迪、中国平安、招商银行；手动自选与系统研究候选分开。港股6行业/主题代理、美股11行业ETF，不冒称全市场个股财报覆盖。
+- 研究强调近期变化/未来1–2个月机会，但相关历史不截断；长期估值情景不伪装成两个月目标价。
 
-Reports 发布候选已完成最新 upstream 同步、人工 diff review、分包提交和最终本地回归。2026-08-19 fetch 后，验收代码相对 `upstream/main@cfd6b0a5fb9c` 为 `ahead 22 / behind 0`。这只证明本地点时 parity，不代表已推送、已通过托管 CI 或已发布。
+## 四轮审核后改了什么
 
-线上仍是旧 `main:/docs` legacy Pages，三条维护端原始产物仍公开；候选分支未 push、PR 0，云端 CI 仍被删除。因此不能称 production ready 或已发布。
+1. **内容与完整性**：静态独立部门页不再截前5条/180字；公司可展开同轮完整部门观点及证据。原DSA历史链接明确为独立短线分析，不冒充CIO综合意见。
+2. **真实研究质量**：SOP强调财报原文主因、正向驱动、估值要求与分主题反证。CIO现在能明确选取/否决部门建议，区分研究评级与短线入场，不再所有主题都“继续观察”。
+3. **后处理纠错**：摘要允许有据转述，不要求逐字复制正文；修复并列指数数字、否定放量及普通“组合”等误判。保留真正错数/错主体/不存在引用的检查，而非新增评级禁令。
+4. **呈现**：首屏CIO具体选择+三市场要点；行业比较图、公司全文、独立部门文章式阅读。价格财务表不另给规则型“观察”评级，候选显示公司名称。方法折叠、诊断独立；桌面/手机/明暗主题检查，工程字段不裸露。
 
-## 当前版本与 Git
+最后5条原句从保存的模型原文重新校验恢复，没有再调用LLM或人为改评级。旧拒绝记录结构不全，只恢复原文和引用，不重造目标价/入场字段；1条地缘旁支范围声明仍缺匹配引用，留在诊断。部门/红队/CIO没有在最后重校验后重新生成，详见[完整验收](../.local_archive/product-quality-20260908/FINAL_ACCEPTANCE.md)。
 
-| 项目 | 当前值 |
-|---|---|
-| Branch | `codex/reports-v1-upstream-sync` |
-| 验收代码 SHA | `5de0183abf2f` |
-| 当前同步基底 | `upstream/main@cfd6b0a5fb9c` |
-| Reports 历史建线基底 | `upstream/main@55946536a976` |
-| 验收代码点时 upstream parity | `5de0183a` 为 `ahead 22 / behind 0` |
-| origin/main | `7a8b4cf83e02`（旧线上主线，最后 push 2026-06-26） |
-| 外部动作 | 未 push、未建 PR、未切 Pages source、未触发候选日报或部署 |
+## 当前报告质量与验证
 
-## 本轮完成
+沿用同一六维自审量表：约 **70 → 82/100**。这是单期内容/产品质量评估，不是胜率、收益率或第三方评级。优点是明确推荐、财务口径/现金流归因、分主题反证裁决和全文下钻；行业经营数据与跨市场公司深度仍弱。
 
-- 在原 `upstream/main@5c964bf2` 收口基础上合并 Agent per-category tool timeout，当前基底前进到 `cfd6b0a5`；本地代码人工复核与语义矩阵未发现 P0/P1，外部云端门禁仍单列开放。
-- Agent 工具支持 data/search/analysis/action/market 类别默认超时、单工具超时和显式 per-run 覆盖；按 first-wins 解析，剩余 wall-clock 只作外层硬上限。
-- 工具超时返回结构化 non-retriable 结果，阻止同调用重入；支持协作取消、配置热重载、线程安全 registry 重建，并让排队调用从 worker 实际启动时计时。
-- 修复满池停滞：5 个已超时且不响应协作取消的 handler 占满 worker 时，先给 0.5 秒退出宽限；仍未退出则只取消尚未启动的 future，返回 `timeout + queued + retriable:false` 并写入 non-retriable cache。原 1.21 秒复现降至约 0.60 秒，正常第 6 个 fast 调用场景保持不变。
-- 保留上游内建 Screening、Responses API、Futu/Tushare、Desktop 分享图及通知能力，以及本地 Reports/Evidence/Agent/Reader 产品线。
-- 报告结果 fail-closed：缓存/回退大盘复盘也必须持久化报告；常规 one-shot 只要 `analysis_ok=false` 即非零退出。
-- YFinance TTM 现金股息窗口使用 `cutoff <= event <= as_of`，按事件时区执行包含边界判断，未来股息不计入 TTM。
-- Web authenticated Playwright 使用真实本地登录/后端与临时 DB，报告和聊天接口使用 hermetic fixture，不调用真实或付费 LLM/provider。
-- Desktop 安全基线为 Electron `41.10.3`、electron-builder `26.15.3`、electron-updater `6.8.9`，Desktop CI/Release Node 为 `22.12.0`。
-- 公网 bind/auth 继续 fail-closed；Reports LLM 配置继续复用 `YAML > Channels > legacy`；OpenAPI 继续由 runtime 确定性生成。
+- 最终Backend **7369 passed，4 deselected，42 warnings，661 subtests passed**。
+- Web **1229 passed，2 skipped**；lint 0错误/2条既有hooks警告；build通过。
+- Python3.11 compile、AI assets、working/index两侧diff whitespace通过。
+- Pages/snapshot/语义/时效/部门流审核通过；`legacy_public_files=[]`。
+- 报告latest/list/detail、health及原核心只读API共10项200；latest/detail的readerV3与磁盘完全相同。
+- 真实Web及静态各11部门、5公司、3市场要点；9个静态分报告200。全部保留论点可展开；目标工程字段0、页面JS异常0、390px横溢0。桌面/手机截图已目检。
+- 原9/7artifact SHA未变；本轮生成产物仍ignored，真实.env/DB/日志未新增入git。配置值私密比对未检出泄漏，不等于全能密钥扫描。
 
-## 本地验证
+## 数据边界：不是满市场“满血”
 
-- Backend gate（验收代码 `5de0183a`）：syntax、critical flake8、deterministic、offline 全通过；`6248 passed, 4 deselected, 40 warnings, 501 subtests passed`。
-- Agent timeout 目标回归：`536 passed / 1 warning / 8.86s`；合并语义矩阵：`557 passed`。
-- 当前工作树 `.venv311` 已新鲜安装依赖；`pip check` 通过，`pip-audit --local` 为 0 known vulnerabilities。
-- Authenticated Playwright：当前环境 `12/12 passed`；覆盖真实本地认证入口，但 Chat SSE、报告历史/API 为隔离 fixture，不是外部 provider、真实 LLM 或生产端到端证明。
-- Web（本轮无 Web 代码变更，沿用已验证证据）：lint、TypeScript、Vite build、prod/full audit 通过；Vitest `1108 passed / 2 skipped`。
-- Desktop（本轮无 Desktop 代码变更，沿用已验证证据）：50/50 tests、build、prod/full `npm audit` 0；仅为未签名 DMG 打包框架，未包含可交付 backend bundle，未验证 Windows、签名或公证。
-- OpenAPI：2026-08-19 生成器 `--check` PASS；runtime/static 全量相等，116 paths / 193 schemas。
-- Pages：2026-08-19 用当前 validator 重跑 **2026-07-17 历史产物**，source bundle 21 required / 30 links / 0 broken，Reader-only staging 11 files / 19 links / 0 broken；未生成新日报、未 publish。
-- AI assets：2026-08-19 PASS。
-- 结构审计：958 files / 430516 LOC / 223 个 500 行以上文件 / 614 个复杂定义 / 246 个 TODO-like hits / 5 个 import cycles；`legacyPublicFiles=0`，`readerLeakFiles={}`。扫描时仅 6 份本轮真相文档处于编辑态。
-- Docker：daemon 与 compose config PASS；build 仍卡在 `resolve image config for docker-image://docker.io/docker/dockerfile:1.7`。没有生成镜像，关键模块 import 与 health smoke 未验证。
+本期 `LIMITED_REVIEW`，42 verified facts、115 derived facts、14 discovery；critical missing计数0只是本期合同满足，不表示所有资料都齐全。
 
-## 历史真实日报
+- provider记录68 success、17 failed；单源失败仍可由其他源覆盖，失败在Diagnostics可查，没有把失败改绿。
+- 行情/财务等覆盖分数只针对本期5公司和规定资料，不代表财报每个经营变量都拆完。
+- 港美主要是行业层；港股全行业、港美公司财报、A股行业资金/多期历史尚不全面。
+- 宏观量化偏美国FRED；地缘的最新事件部分是搜索线索，真实通航、产量、库存与公司利润传导仍需针对性资料。
+- 无真实持仓，组合收益/实际敞口不虚构。CIO本次2项补数复用已有资料，新增抓取0，不冒称2次新源成功。
 
-最新完整日报仍是 `2026-07-17`，本轮没有调用付费模型重新生成：
+## 架构与仍未交付
 
-| 指标 | 结果 |
-|---|---|
-| analysisMode | `FULL_REVIEW` |
-| SourceHealth | `0.93` |
-| Evidence | verified 37 / derived 102 / discovery 117 / missing 0 |
-| Agent | 11/11 LLM success；fallback 0；`vertex_ai/gemini-3.5-flash` |
-| ResearchReliability | 中等可信，含待验证情景 |
+保留主干，不建议重建：
 
-入口位于同步前参考线的被忽略历史运行目录：
+`原数据/原分析 → Evidence → 部门Context → 部门研究 → 风险/红队 → CIO取舍 → Artifact → Web/静态Reader`
 
-- `/Users/hac/AI-Studio/投研/invest-system-release-candidate/docs/reports/2026-07-17.html`
-- `/Users/hac/AI-Studio/投研/invest-system-release-candidate/docs/reports/2026-07-17.artifact.json`
+1. **后续研究提升**：为重点行业补经营驱动和长期比较，扩大港美公司研究，连续复盘推荐/反证/失效条件。这些不是靠更多“安全门”解决。
+2. **工程债**：dirty merge仍待专门审查提交；大文件/循环依赖未清零，本轮未重扫此前全仓规模，不用旧P0口径宣称整个架构无债。
+3. **运行交付**：连续无人值守、睡眠恢复、远程Mac、Hermes/飞书、自动通知及云端Pages未验收。现在是本机可读/可生成，不是全天候服务。
+4. **质量边界**：单期复审不能证明长期投资效果；财报做了关键原文抽样，不是逐公司全量审计。
 
-这些是历史本地产物，不证明当前代码生成了新日报，也不代表云端已发布。
+## 怎么用
 
-## 线上 Pages：当前 P0
+- [本机报告中心](http://127.0.0.1:8135/reports)
+- [9/8正式日报](http://127.0.0.1:8135/reports/daily%3A2026-09-08)
+- [9/8诊断](http://127.0.0.1:8135/reports/daily%3A2026-09-08/diagnostics)
+- 手动生成：`scripts/run_research_codex_local.sh --date YYYY-MM-DD --market cn,hk,us --with-original-analysis`。使用本仓自选及模型配置，可附`--codex-model MODEL --reasoning-effort high`。每次会消耗本机Codex账号额度。
+- 服务未运行时：`WEBUI_HOST=127.0.0.1 WEBUI_PORT=8135 SCHEDULE_ENABLED=false .venv311/bin/python server.py`。当前8135已在运行，不重复启动。
+- 静态报告：`docs/reports/YYYY-MM-DD.html`；完整配置/模型/时间范围见[Codex运行说明](codex-research-runtime.md)。
 
-2026-08-19 20:35 CST 实时只读核验：
+源码/测试/长期文档与ignored报告/ledger/截图分开。旧release-candidate的.git仍被当前worktree共享，不可整目录删除；`.local_archive/codex-runtime`是活跃依赖。
 
-```text
-build_type=legacy
-status=built
-source=main:/docs
-deployed_commit=7a8b4cf83e02
-url=https://howdrian.github.io/invest-system/
-```
+[本轮四轮审核与最终验收](../.local_archive/product-quality-20260908/FINAL_ACCEPTANCE.md) / [Agent SOP](research-agent-sop.md) / [产品线](reports-product-line.md) / [技术债](TECH_DEBT_REGISTER.md)
 
-以下维护端路径仍为 HTTP 200：
-
-- `reports/2026-06-19.artifact.json`：12,325 bytes
-- `agent_memos/2026-06-19/market/02_macro_geopolitics.json`：6,317 bytes
-- `market_cycle/2026-06-19/13_source_health.json`：5,877 bytes
-
-本地 allowlist 不会自动清除旧站或 Git 历史。当前只确认维护原文公开，不能把它夸大为已确认密钥泄漏。
-
-## 仍未收口
-
-1. **线上 raw Pages exposure（P0 external）**：旧维护产物仍公开；必须经授权部署 Reader allowlist 并逐条验证旧 URL 404。
-2. **云端 CI/发布（P1 external）**：候选分支未 push、PR 0；`CI` workflow endpoint 为 `state=deleted`，active workflow 无 CI/required checks。
-3. **云端 false-green（P1 external）**：2026-08-19 Network Smoke #59 仍显示 success，但有效网络覆盖和 quick analysis 结果仍不满足发布门，而且只覆盖旧 main，不能作为候选验收。
-4. **GitHub 治理（P1 external）**：main 无 branch protection/ruleset；Actions 允许全部且不强制 SHA pin；secret scanning、push protection、Dependabot security updates 仍未启用，code scanning 无有效结果。
-5. **Docker/Desktop/live（P1）**：Docker 无成功 image/import/health；Desktop 无完整 backend bundle、Windows、签名或公证；真实外部 provider、新 LLM 日报与云端浏览器链未验。
-6. **API 权限分层（P1）**：完整 Reports artifact 仍依赖全局 admin auth；公开 Reader DTO 与私有维护 DTO 尚未拆开。
-7. **继承型技术债（P2）**：223 个大文件、614 个复杂定义、5 个 import cycles 后续独立治理，不在本轮强拆。
-
-## 下一步顺序
-
-1. 用户授权后 push `codex/reports-v1-upstream-sync` 并建立 PR。
-2. 恢复/启用云端 CI，跑 backend shards、Web、Docker、Desktop/Futu packaging、AI governance。
-3. 配置 main 保护、required checks、安全扫描和 Action SHA 策略。
-4. 将 Pages source 切到 GitHub Actions，部署 Reader allowlist，确认三条旧维护 URL 为 404。
-5. 云端验收后再恢复 Daily schedule；不在此前自动触发模型、通知或发布。
-
-## 维护规则
-
-- 当前代码、当次命令和线上实时状态优先于历史计划。
-- 本地测试、Git 可交付状态、云端发布状态必须分开汇报。
-- `.env`、DB、logs、cache、每日生成产物不进入源码提交。
-- 未经明确授权不 push、不切 Pages、不触发付费模型/通知/部署。
+本页是当前状态入口。上一份状态已保留在本轮本地验收备份；历史验收不是另一份当前真相源。

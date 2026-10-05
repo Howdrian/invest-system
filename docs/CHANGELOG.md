@@ -8,6 +8,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 > For user-friendly release highlights, see the [GitHub Releases](https://github.com/ZhuLinsen/daily_stock_analysis/releases) page.
 
 ## [Unreleased]
+
+- [修复] 价格财务表移除与CIO评级混淆的规则型“观察”定位，保留事实/趋势和原DSA入口；系统候选名称复用已有universe发现记录，手机目录锚点留出导航安全间距。
+
+- [修复] Reader优先使用已验证CIO摘要；摘要可转述而不要求逐字复制正文，修复否定放量、一般“组合”和并列指数数字误判，保留被拒原claim供审计。
+- [改进] 展开证据以类型化财务期间、同比与现金流入流出解释原数；个股分报告先显示CIO最终取舍，再完整展示部门分歧。
+- [文档] 更新9/8真实11部门新日报、四轮成品复审、本地验收与手动运行说明；不把单期质量分等同预测胜率或云端交付。
+
+- [改进] 日报首屏聚焦CIO与三市场具体选择；公司支持同轮多部门综合展开，行业比较增加相对表现图，研究范围与方法折叠，桌面和手机共用Reader。
+- [修复] 静态部门完整页不再截断后排观点、长反证或改判条件；原DSA历史入口明确为独立短线分析，不冒充CIO综合个股研究。
+- [改进] 基本面与行业SOP加强财报主因利用、正向驱动和估值要求；CIO分主题裁决反证、摘要避免万金油，不新增一刀切评级限制。
+- [改进] 日报区分近期变化、历史参照与建议期限，新增本地月份配置；11部门按相关历史分析、允许观点自定期限和无确定催化的明确意见，不改变原DSA分析口径。
+- [修复] 基本面输入保留12期历史并优先财报变动解释；宏观带日期压缩样本与全样本比较范围明确，不将短研究期当资料截止线。
+- [改进] Reader/Web/静态共用时间说明；港美已有行业序列可用时补算120交易日比较，旧报告及已生成AI结论不自动改写。
+
+- [修复] Reader保留CIO一条内的复合行业评级，同市场不再把被CIO否决的部门草稿混成最终关注清单；系统候选名称取真实发现记录，去掉首句重复的判断前缀。
+- [修复] 个股下钻晚绑定的公告引用随最终Reader一并收进artifact，证据摘要数量上限不再截掉真实引用；不存在的引用仍报错，不补造证据。
+- [修复] 财报核验保留历史比较期，单季度增速不再误比半年累计；并列收入/利润百分比不强行错配，OCF/TTM等财务缩写不再误当股票代码，否定放量与未来触发条件不再误判成既成事实。
+- [修复] 区域研究允许用宏观事实推导行业观点而不把观点升级为事实；官方原油价格补齐价格域语义，无真实组合的范围说明不再被持仓收益校验误删。
+
+- [修复] 对齐A股market/market_cn别名及跨市场宏观前提；FRED月季数据时效包含统计期和公布滞后，否定组合收益的表述不再误判为虚构持仓收益。
+
+- [修复] 日报采集解析逗号分隔的市场范围，港美行业研究不再依赖自选中有港美股票；盘前全零宽度、全零行业榜和零值指数不进入事实与历史强弱比较。
+
+- [修复] 本地日报最终审计取消“业绩下修”等词语黑名单和样例数字硬编码，保留已拒绝claim泄漏、引用闭合、结构和工程字段校验；防止正常风险条件被发布步骤误挡。
+
+- [改进] 日报研究窗口统一为回看近1个月、研判未来1–2个月；重写11部门岗位SOP，行业研究候选与用户自选分开，CIO输出明确研究评级和参与/调整条件。
+- [修复] 删除事后软化观点的字符串规则，保留事实错误校验；修复涨停家数被误读为上涨家数、直接证据/财报期在下游压缩丢失、红队异议自动降级评级。
+- [改进] 官方公告支持受限正文节选，保留经营现金流变动解释；Reader展示本期评级、研究窗口及自选/系统候选来源，旧报告不回填新观点。
+
+- [修复] 三地CIO结论不再因首句截取只剩A股；仅汇合已通过的各市场结论。行业比较表在手机上独立横向滚动，数字不再断行。
+
+- [改进] 通过现有DataFetcherManager补入美股11个行业ETF、港股6个行业/主题指数的免费历史表现，保留1/5/20/60交易日及同日期基准比较；进入行业部门完整Context与Web/静态Reader可展开行情表，不冒充全市场资金流。
+- [修复] 行业数值证据沿用新闻路由时被误判无价格依据；语义适配仅识别已知派生指标及明确列出的指数/ETF，搜索和无关公司事实仍不升级。单次A股行业榜可作当日观察，不依赖重复快照制造持续性。
+- [改进] 下游部门摘要按主体覆盖选择要点，避免第四标的被固定前三条截断；CIO补数后上下文不变时不再重复生成，有真实新增输入才二次总结。
+- [修复] 行业持续性、市场宽度和估值本地历史去除重复采集样本：同来源日期取最新版本，无来源日期的连续同内容不重复计数，不再将运行次数称为交易天数；同时修正美股周末晚间采集日期估算。
+- [改进] Reader 新增同轮板块/个股关注清单，展示研究分级、理由、观察条件和原个股详情入口；Web/静态报告共用文案，不额外调用模型。
+- [修复] 不再因一条推演或已剔除草稿把整个部门自动压成中等；逐条标明论据支持程度，并保留红队争议、兼容历史字段。
+- [测试] 覆盖关注清单主体绑定、无证据/撤回结论不恢复、红队争议、部门子页一致性和 Web 展开/历史入口；完成桌面/390px手机视觉复验。
+
+- [修复] Reader优先展示经核验的CIO简述；摘要审计为空时仅允许精确匹配已通过的原子结论，不把空对象误报成CIO失败，也不由其他通过结论替未验证摘要背书。
+- [修复] 原个股完整报告的缺失量比/换手率不再显示 None%；Web 情绪表盘明确标为 AI 情绪评分，避免被误认作外部恐惧贪婪指数。
+- [修复] 报告新闻查询按个股/地缘分开，限定七日检索并解析 RFC 发布日期；保留新闻摘要，未知日期不再冒充报告当日。基本面先保每标的经营/估值/收盘资料，再填公告；20日高低点使用日内 high/low，不再混用收盘极值。
+- [改进] 同步 upstream/main@303f4e1c 的 35 个提交，保留本地 Codex/Reports 产品线；上游指数入口、结构化研究报告、美股数据路由、Tavily 和 SearXNG 修复纳入本地集成验收，未提交或发布。
+- [修复] 部门输入不再让 provider 状态占用事实名额；保留技术/基本面逐标的资料、宏观历史比较、财报比较期与时间口径，修复有数据却提示缺失的适配问题。
+- [改进] CIO 默认直接给市场判断与依据，地缘优先资产传导相关事件；Reader 减少重复、单层展开全部部门，区分采集时点和行情日期，识别原数据源 PE/PB 字段。
+- [修复] 报告中心历史入口按稳定 ID 导航，区分个股和市场报告并复用原 DSA 完整正文；原股票与市场功能保留，Web 与静态 Reader 不再静默替换真实止损/减仓建议。
 - [修复] 入口分类的模式边界修复（PR3 review）：不消费个股列表的模式（`--backtest`/`--market-review`/`--serve-only`/`--webui-only`/`--portfolio`/`--schedule`/`config.schedule_enabled`）在模式分发前整体跳过 `--stocks` 与 GitHub Actions `STOCK_LIST` 的分类与索引刷新，未登记 `.CSI` 等坏 token 不再拦截这些模式（此前 `GITHUB_ACTIONS=true` 下 `--backtest`、`--portfolio futu`、`--schedule` 配坏 watchlist 会在进入模式主体前被整批拒绝）；`--schedule --stocks` 的"警告后忽略启动快照"语义保留；`--stocks` 与 GitHub Actions 入口的指数分类与整批拒绝契约不回归，文档同步把指数自选股配置收窄为仅这两类入口（本地 `.env`/Docker 无参数默认运行保持股票语义，分析指数请配 `--stocks`）。
 - [新功能] 指数注册表新增国证粮食（`sz399365`）与中证钢铁（`csi930606`）：已登记 seed（`scripts/stock_index_seeds/index_registry.csv`）与 bundled 指数清单（`apps/dsa-web/public/stocks.index.json`）由 31 项扩展到 33 项，已登记指数的 `sh`/`sz`/`csi` 前缀与 `.SH`/`.SZ`/`.CSI` 显式形态均可作为自选股指数目标；ETF 与美股指数不进 CN 注册表，路由语义不变。
 - [文档] 中英 full-guide 新增「指数自选股配置」小节：说明已登记指数前缀/显式后缀规则、未登记 `.CSI` 整批拒绝、裸码不自动提升为指数、NDX 等美股指数裸码即正确路由、ETF 走股票路径，并同步补充 README / DEPLOY 的 `STOCK_LIST` 提示；修正 full-guide 中已过期的「已登记 5 个沪深指数」表述。
@@ -16,6 +62,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - [测试] 新增 Bot 指数入口 transport-independent 在线 E2E smoke（`scripts/smoke_bot_index_entry.py`）：worker 子进程经真实 `CommandDispatcher.dispatch_async` 提交并在同进程轮询 `TaskService` 贯穿到 `StockAnalysisPipeline`，父进程只负责 deadline、进程树清理（Windows `taskkill /T /F`、POSIX 杀进程组）与退出码（0=成功/1=失败/124=超时），输出单行 `E2E_EVENT {json}` 事件（`phase=submitted|completed|failed|timeout`）；smoke 覆盖 `SH.000016`/`上证50`/`930955.CSI` 矩阵，期望 code/name 取脚本内置权威映射（不信任响应/结果自报身份，提交 code mismatch 输出含期望值与实际值的显式错误并携带结构化实际 `stock_code`，dispatcher 路由错误也失败），矩阵外 target 与非正 `--timeout` 在提交与 spawn 之前即被拒绝（退出码 2），completed 须 exact canonical code、exact 注册名称且 `analysis_summary`/`operation_advice`/`trend_prediction` 非空（仅空白视为空），失败或结果不完整即非零退出；超时清理进程树（Windows `taskkill /T /F`、POSIX 杀进程组），清理成功输出 `timeout` 事件并退出 124、清理失败输出含清理错误的 `failed` 事件并退出 1，不回滚 DB/报告/通知副作用；用户 Ctrl-C 中止时父进程同样先清理进程树，清理成功透传中断、清理失败输出含清理错误的 `failed` 事件并退出 1，绝不静默吞掉清理失败；worker 意外异常输出 `failed` 事件并退出 1（stderr 保留异常证据，`KeyboardInterrupt` 不按普通失败处理），父进程将 worker 任意其他退出码归一化为 1（运行时契约只暴露 0/1/124）；父进程以内部 `--worker` flag 显式拉起子进程（不依赖环境变量，防外部预置绕过硬超时）；不 mock 在线依赖、不 dry-run、不修 transport，不加入离线 gate。
 - [新功能] Bot `/analyze` 支持已登记指数入口：显式代码（`sh000016`）、CSI alias（`930955.CSI` 收敛为 `csi930955`）与注册中文名（`上证50`）均可提交，指数以结构化 `AnalysisTarget` 经 `TaskService` 贯穿到 Pipeline `process_single_stock`（`sh000016` 不再被改写为 `SH000016`）；注册名称查询独立于 parser identity alias（中文名不进入 `find_by_explicit_key`/`parse_analysis_target`），同名歧义返回明确错误并要求显式代码，未登记 CSI 与未知名称返回明确错误且不提交任务；个股代码（A/HK/US）保持既有 legacy code 路径不变，股票名称输入（如 `贵州茅台`）由本次 Bot 入口新暴露——复用既有名称解析器（`resolve_name_to_code`）解析后提交 legacy code，不携带结构化 target；提交成功响应在 `BotResponse.extra` 暴露内部任务 identity（`task_id`/`stock_code`）供在线验收等内部流程使用，文本与错误路径不变、平台适配器可忽略 `extra`。
 - [新功能] 新增最小 Agent 轨迹评估入口 `evals/agent_trajectory/`(Refs #1956):纯函数指标层只消费真实 `tool_calls_log + AgentResult`,冻结最小指标契约(工具命中、冗余/缓存、失败/重试、总步数/max_steps),`run_eval.py` 经 `build_agent_executor` 真实执行并输出文本摘要 + 结构化 JSON 报告;评估为 reporter 非 gate,零 `src/` 改动
+
+- [新功能] Reports 部门文本生成可显式选择已有 Codex/其他本地 CLI 后端，不再强制 LiteLLM；Codex 模型与思考强度可独立配置，保留原 API 后端选择能力。
+- [改进] Codex 原分析与 Reports 增加受控模型参数、独立配置运行及请求元信息；指定本地后端时不执行 Gemini/Vertex 候选 smoke。尚未完成整份日报与定时生产验收。
 
 - [修复] Reports 证据门拒绝 source-smoke、缺失、无来源、过期和未来穿越证据；SourceHealth 按日报日期计算新鲜度，过期数据不再获得完整覆盖或支撑 Agent/CIO 结论。
 - [修复] `main.py`、`server.py`、`webui.py` 与 API middleware 统一公网 bind guard；非 loopback 必须启用管理员认证并预先初始化密码，运行时关闭认证在公网监听下被拒绝。
@@ -2431,3 +2480,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - 原系统 `DataFetcherManager` subject evidence 参与日报 artifact。
 - Reader 文案去掉“禁用”口径，改成“未生成仓位建议”。
 - 本地生成并验证 2026-07-01 日报：`FULL_REVIEW`，health `0.901`，verified facts `25`。
+
+
+### 2026-09-05 Codex 本地实跑发现的回归
+
+- 修复跨市场复盘中指数涨跌幅 None/NaN 导致 prompt/表格/模板崩溃，未知不冒充零涨跌。
+- 部门断点恢复绑定实际输入/SOP/模型/思考强度/实现指纹，并支持 partial checkpoint。
+- Codex 本地入口新增 OS 生命周期运行锁；市场 context 单测锁不再干扰真实日报。
+- 项目专用 Codex 0.153.4 真实高/低思考强度 canary 通过；App Server Gate A 真实工具/多轮/隔离探针通过。不是五日生产验收。

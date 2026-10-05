@@ -108,3 +108,18 @@ docs/specs/
 # local generated artifact archive
 /.local_archive/
 .gstack/
+
+# 2026-10-05 prework: protect local credentials, sessions, and generated files
+.env*
+*.local
+runtime/
+.browser-data*
+login_only_sessions/
+.private/
+node_modules/
+out/
+*.pid
+*.log
+*.keystore
+*.jks
+local.properties
