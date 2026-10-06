@@ -1,8 +1,12 @@
 # invest-system 当前状态
 
+最后核对 2026-10-05（任务基准；执行复核：2026-10-06）。
+
+本轮只做Git收口与文档同步；ci_gate语法检查通过，因缺flake8停止（未安装依赖）。下方7369/1229等测试数、报告可用和截图均为09-08历史验收，不是本轮重跑；生产/Pages/无人值守未验收。
+
 > 核验日期：2026-09-08；最新真实日报为 **2026-09-08**。通过本轮本地可用验收，不是云端发布或预测胜率认证。
 > 活跃目录：`/Users/hac/AI-Studio/投研/invest-system-upstream-sync-20260812`
-> 分支：`codex/codex-local-runtime-20260905`；HEAD `af917c7a`，上游 `303f4e1c` 的 MERGE_HEAD 仍在。270条既有/本轮dirty混合修改，未commit/push。
+> 分支：`codex/codex-local-runtime-20260905`；阶段2代码锚点`c3794a50`，既有merge已完成并分用途提交/push；仅`.env.example`未暂存，不读取不修改。stash本体与`backup/stash-20260906`均保留。
 
 ## 现在可直接使用
 
@@ -51,7 +55,7 @@
 `原数据/原分析 → Evidence → 部门Context → 部门研究 → 风险/红队 → CIO取舍 → Artifact → Web/静态Reader`
 
 1. **后续研究提升**：为重点行业补经营驱动和长期比较，扩大港美公司研究，连续复盘推荐/反证/失效条件。这些不是靠更多“安全门”解决。
-2. **工程债**：dirty merge仍待专门审查提交；大文件/循环依赖未清零，本轮未重扫此前全仓规模，不用旧P0口径宣称整个架构无债。
+2. **工程债**：既有merge已提交备份，仍需独立审查；本轮ci_gate因缺flake8未完成，大文件/循环依赖未清零，本轮未重扫此前全仓规模，不用旧P0口径宣称整个架构无债。
 3. **运行交付**：连续无人值守、睡眠恢复、远程Mac、Hermes/飞书、自动通知及云端Pages未验收。现在是本机可读/可生成，不是全天候服务。
 4. **质量边界**：单期复审不能证明长期投资效果；财报做了关键原文抽样，不是逐公司全量审计。
 
@@ -61,7 +65,7 @@
 - [9/8正式日报](http://127.0.0.1:8135/reports/daily%3A2026-09-08)
 - [9/8诊断](http://127.0.0.1:8135/reports/daily%3A2026-09-08/diagnostics)
 - 手动生成：`scripts/run_research_codex_local.sh --date YYYY-MM-DD --market cn,hk,us --with-original-analysis`。使用本仓自选及模型配置，可附`--codex-model MODEL --reasoning-effort high`。每次会消耗本机Codex账号额度。
-- 服务未运行时：`WEBUI_HOST=127.0.0.1 WEBUI_PORT=8135 SCHEDULE_ENABLED=false .venv311/bin/python server.py`。当前8135已在运行，不重复启动。
+- 服务未运行时：`WEBUI_HOST=127.0.0.1 WEBUI_PORT=8135 SCHEDULE_ENABLED=false .venv311/bin/python server.py`。2026-10-06复查8135无监听；以上仅启动说明，本轮不启动服务。
 - 静态报告：`docs/reports/YYYY-MM-DD.html`；完整配置/模型/时间范围见[Codex运行说明](codex-research-runtime.md)。
 
 源码/测试/长期文档与ignored报告/ledger/截图分开。旧release-candidate的.git仍被当前worktree共享，不可整目录删除；`.local_archive/codex-runtime`是活跃依赖。
